@@ -185,6 +185,8 @@ At the end of each milestone:
   5. the next milestone to execute.
 - Then **stop and wait**. Do not automatically begin the next milestone in the same run.
 
-## 7. Start instruction
+## 7. Prompt-pack execution
 
-Start with **Milestone 0 only**. Inspect the actual repository, write the implementation plan and build status, and report evidence. Do not begin Milestone 1 until the user or orchestrator starts the next run.
+Detailed, copy-ready prompts for each stage are maintained in `docs/agent-prompts/README.md` and its milestone files. Before executing a milestone, read the matching prompt and treat its requirements and acceptance criteria as part of this master contract. The prompt pack is instructions for implementing the real application; do not treat adding Markdown files as implementation completion.
+
+The initial repository audit and implementation plan already exist. Start with `docs/agent-prompts/MILESTONE_01_FOUNDATION.md` to verify and stabilize the existing foundation. The current status records that runtime verification is pending and CI runs failed before visible steps; investigate that with actual logs and commands. Do not skip to Milestone 2 until Milestone 1 exit criteria pass. Continue one milestone per agent run, in order, and stop after each report.
