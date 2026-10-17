@@ -28,7 +28,7 @@ jobs:
         working-directory: backend
     env:
       ENVIRONMENT: test
-      DEBUG: "False"
+      DEBUG: "True"
       SECRET_KEY: "test-only-not-a-production-secret"
       ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
     steps:
