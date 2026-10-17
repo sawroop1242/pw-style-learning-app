@@ -1,67 +1,60 @@
 # StudySpace Build Status
 
-**Current stage:** Milestone 0 — repository audit and plan  
-**Status:** Partially complete — source inspection and planning documents committed; runtime baseline checks remain unexecuted  
+**Current stage:** Milestone 1 — reliable Django foundation  
+**Status:** Implementation changes committed; runtime verification is blocked and milestone is not yet complete  
 **Branch:** main  
 **Repository:** https://github.com/sawroop1242/pw-style-learning-app
 
-## Current result
+## Milestone 0 result
 
-The live main-branch tree was inspected through the GitHub repository API. The inspected tree SHA was 60fb03baa33fae901372a214dc1cadd1fda2d21d and was not truncated.
+- Repository tree and core source files were inspected.
+- docs/IMPLEMENTATION_PLAN.md and docs/BUILD_STATUS.md were created and verified.
+- The GitHub connector allows source reads/writes but does not provide a live repository shell in this session. Baseline commands remain not run; do not treat this as a green baseline.
 
-Documents added in this milestone:
-- docs/IMPLEMENTATION_PLAN.md — milestone sequence, acceptance criteria, test commands, dependencies and risk mitigations.
-- docs/BUILD_STATUS.md — this status and evidence log.
-- Existing docs/BUILD_MASTER_PROMPT.md remains the top-level instructions for coding agents.
+## Milestone 1 changes made
 
-Implementation status is not the same as documentation status. This milestone has not been treated as fully verified because the Django and JavaScript commands below could not be executed in a live checkout from the current GitHub connector session.
-
-## Repository inventory observed
-
-- Frontend: frontend/index.html, frontend/styles.css, frontend/app.js.
-- PWA: frontend/sw.js, frontend/manifest.webmanifest, frontend/assets/icon.svg.
-- Django project: backend/manage.py, backend/config/settings.py, urls.py, asgi.py, wsgi.py.
-- Django app: backend/courses/models.py, serializers.py, views.py, urls.py, admin.py, apps.py.
-- Migration: backend/courses/migrations/0001_initial.py.
-- Dependencies and deployment starter: backend/requirements.txt, backend/.env.example, backend/Procfile.
-- Root docs: README.md and docs/BUILD_MASTER_PROMPT.md.
-- No tests module, CI workflow, frontend test runner, or package manifest was visible in the inspected recursive tree.
-
-## Findings requiring implementation
-
-1. **Frontend does not default to the backend.** frontend/app.js declares an empty API_BASE, initializes demo-course data, and keeps notes and completed lessons in localStorage. This does not provide account-based syncing.
-2. **Learning flows are incomplete.** The current screen offers a simple course list, mark-done links and local notes. There is no complete account experience, lesson page or quiz attempt/result flow.
-3. **Quiz API does not score submissions.** The views expose read-only quiz data; no server-side quiz-attempt/submission endpoint was found. Question serialization includes an explanation in the current quiz payload. Correct choice flags are excluded from the ChoiceSerializer, but the overall attempt/scoring workflow is not implemented.
-4. **Service-worker caching needs redesign.** frontend/sw.js caches successful GET responses generally rather than limiting runtime caching to approved public/static resources. This risks caching API data and sends the app shell as the fallback for unrelated failed GET requests.
-5. **Production configuration requires hardening.** backend/config/settings.py has a development-only SECRET_KEY fallback and defaults DEBUG to true. Production startup validation and security settings need explicit tests.
-6. **Authorization needs regression tests.** The global DRF permission is AllowAny. Notes and progress viewsets require authentication and filter normal querysets to the current user, but edge cases, ownership behavior and mutation paths need tests.
-7. **No runtime test evidence yet.** Source files were read; code has not been run in this session. The repository README is not evidence that its commands work today.
+- Hardened backend/config/settings.py with explicit ENVIRONMENT handling, strict boolean parsing, production/staging requirements for SECRET_KEY and ALLOWED_HOSTS, and a guard against DEBUG=True in staging/production.
+- Configured explicit static-file storage with WhiteNoise's compressed manifest backend and retained environment-driven database/CORS configuration.
+- Added baseline security headers and environment-controlled HTTPS redirect, secure session/CSRF cookies and HSTS defaults when DEBUG is disabled.
+- Added GET-only /healthz/ liveness endpoint returning minimal JSON.
+- Added foundation tests for the health endpoint, rejection of non-GET methods and reachability of /api/.
+- Updated backend/.env.example with the expected production configuration.
+- Added WhiteNoise to backend/requirements.txt because the Django settings already reference its middleware/storage and it must be an explicit dependency.
 
 ## Verification record
 
 | Check | Result | Evidence |
 |---|---|---|
-| Repository tree inventory | Completed | Recursive Git tree read; response was not truncated |
-| Master prompt read | Completed | docs/BUILD_MASTER_PROMPT.md fetched from main |
-| Frontend source inspection | Completed | index.html, styles.css, app.js, sw.js and manifest inspected |
-| Backend source inspection | Completed | Settings, URL config, models, serializers, views, admin, migration and requirements inspected |
-| python -m pip install -r requirements.txt | Not run | No live repository shell/runtime available through this session |
-| python manage.py check | Not run | Requires executing backend in a Python environment |
-| python manage.py makemigrations --check --dry-run | Not run | Runtime/database validation not available |
-| python manage.py test | Not run | No test suite executed |
-| python -m compileall -q config courses | Not run | Requires executing Python in a checkout |
-| node --check frontend/app.js | Not run | No repository shell execution available in this session |
-| Browser / PWA checks | Not run | No browser session launched against this checkout |
+| GitHub source read/write | Completed | Changed files fetched/updated through GitHub connector |
+| Django system check | Not run | No shell/runtime attached to this repository session |
+| Migration consistency | Not run | No shell/runtime attached |
+| Django tests | Not run | Tests were added but not executed |
+| Python compileall | Not run | No Python execution in the repository checkout |
+| JavaScript syntax check | Not run | No Node execution in the repository checkout |
+| Deployment / HTTPS behavior | Not run | No deployment target or runtime smoke test performed |
 
-**Important:** “Not run” is not a pass or a failure. A coding agent or developer with shell access must execute the commands from docs/IMPLEMENTATION_PLAN.md and append the exact results before marking the baseline green.
+**Do not mark Milestone 1 complete until the commands below have actually run and failures are fixed.** These are implementation changes, not proof of runtime correctness.
 
-## Immediate next steps for Milestone 0
+## Commands required to finish Milestone 1
 
-1. Open a real checkout and run the listed baseline commands in docs/IMPLEMENTATION_PLAN.md.
-2. Record Python and Node versions, command exit codes and concise error output for any failure.
-3. Check whether model definitions and the initial migration are consistent, and verify the API root and representative endpoints with Django's test client.
-4. Update this file with the evidence. Do not begin Milestone 1 until the audit is complete or the remaining blocker has been explicitly accepted.
+From a clean checkout:
 
-## Next milestone after Milestone 0
+    cd backend
+    python --version
+    python -m pip install -r requirements.txt
+    python manage.py check
+    python manage.py makemigrations --check --dry-run
+    python manage.py test
+    python -m compileall -q config courses
 
-**Milestone 1 — Reliable Django foundation.** Begin only after the baseline execution results are recorded. Do not infer test success, deployment success or production readiness from this plan.
+Also verify configuration failure behavior in separate clean processes:
+- ENVIRONMENT=production with SECRET_KEY unset must fail clearly.
+- ENVIRONMENT=production with DEBUG=True must fail clearly.
+- ENVIRONMENT=production with ALLOWED_HOSTS empty must fail clearly.
+- ENVIRONMENT=development with no explicit variables should start with local development defaults.
+
+Record the exact command outputs and exit statuses here after execution.
+
+## Next step
+
+Finish Milestone 1 by running the checks above in a real checkout, fix any errors, and update this status with evidence. Stop before Milestone 2.
