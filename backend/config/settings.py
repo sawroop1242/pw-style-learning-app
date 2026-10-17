@@ -28,19 +28,23 @@ def env_bool(name, default):
 
 
 DEBUG = env_bool("DEBUG", ENVIRONMENT == "development")
+if ENVIRONMENT in {"staging", "production"} and DEBUG:
+    raise ImproperlyConfigured(
+        f"DEBUG must be false when ENVIRONMENT={ENVIRONMENT}."
+    )
 
 _secret_key = os.getenv("SECRET_KEY", "").strip()
 if not _secret_key:
-    if ENVIRONMENT == "production":
+    if ENVIRONMENT in {"staging", "production"}:
         raise ImproperlyConfigured(
-            "SECRET_KEY must be set when ENVIRONMENT=production."
+            f"SECRET_KEY must be set when ENVIRONMENT={ENVIRONMENT}."
         )
     _secret_key = "django-insecure-local-development-key-do-not-use-in-production"
-elif ENVIRONMENT == "production" and (
+elif ENVIRONMENT in {"staging", "production"} and (
     len(_secret_key) < 50 or "change-me" in _secret_key.lower()
 ):
     raise ImproperlyConfigured(
-        "Production SECRET_KEY must be a long, randomly generated secret (at least 50 characters)."
+        "Staging/production SECRET_KEY must be a long, randomly generated secret (at least 50 characters)."
     )
 SECRET_KEY = _secret_key
 
@@ -50,9 +54,9 @@ ALLOWED_HOSTS = [
     for host in os.getenv("ALLOWED_HOSTS", _default_hosts).split(",")
     if host.strip()
 ]
-if ENVIRONMENT == "production" and not ALLOWED_HOSTS:
+if ENVIRONMENT in {"staging", "production"} and not ALLOWED_HOSTS:
     raise ImproperlyConfigured(
-        "ALLOWED_HOSTS must list the production hostnames when ENVIRONMENT=production."
+        f"ALLOWED_HOSTS must list the deployed hostnames when ENVIRONMENT={ENVIRONMENT}."
     )
 
 INSTALLED_APPS = [
