@@ -44,7 +44,10 @@ These are audit findings, not claims that the backend has been executed or runti
 **Exit criteria:** Evidence-based inventory; commands and acceptance criteria documented; baseline commands executed or an explicit execution blocker recorded. No implementation work from Milestone 1 begins in this milestone.
 
 ### Milestone 1 — Reliable Django foundation
-- Confirm supported Python/Django versions and install dependencies in a clean environment.
+- [x] Harden environment configuration and production secret/host/debug checks (runtime verification pending).
+- [x] Add a minimal GET-only liveness endpoint and foundation endpoint tests (runtime verification pending).
+- [x] Add WhiteNoise as an explicit dependency and document production environment variables.
+- [ ] Confirm supported Python/Django versions and install dependencies in a clean environment.
 - Make configuration environment-driven; ensure production cannot silently start with the development secret or DEBUG=True.
 - Verify URL configuration, database settings, static-file handling, health/readiness behavior and startup checks.
 - Add foundation tests and document local setup.
