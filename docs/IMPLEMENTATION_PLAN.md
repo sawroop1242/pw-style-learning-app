@@ -4,6 +4,10 @@
 **Default branch:** main  
 **Scope:** Turn the current mobile-first HTML/CSS/JavaScript PWA prototype and Django starter into a tested learning platform, delivered in small, reviewable milestones.
 
+## Coding-agent prompts
+
+Detailed execution prompts are maintained in [`docs/agent-prompts/README.md`](agent-prompts/README.md). Use exactly one milestone prompt per agent run. The prompts define implementation tasks, tests, security requirements, acceptance criteria, and stop conditions; they are not substitutes for working code.
+
 ## Working rules
 
 1. Complete exactly one milestone per agent run. After reporting evidence and updating docs/BUILD_STATUS.md, stop.
