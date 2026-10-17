@@ -1,0 +1,1 @@
+{"name":"StudySpace Learning","short_name":"StudySpace","description":"Your personal learning space for courses and notes.","start_url":"./index.html","scope":"./","display":"standalone","orientation":"portrait-primary","background_color":"#faf9fd","theme_color":"#6d28d9","icons":[{"src":"assets/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
