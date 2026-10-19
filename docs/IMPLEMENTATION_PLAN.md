@@ -198,3 +198,6 @@ For later milestones, add tests specific to the changed behavior and run the com
 ## Dependencies and sequencing
 
 The order is intentional: secure and test the Django foundation before widening the API; establish auth and data ownership before syncing user data; build the frontend client before full learning journeys; review service-worker behavior after API integration; deploy only after automated and manual acceptance checks pass.
+## Mandatory cross-feature requirement — sub-admin-owned multi-account R2
+
+Before marking the Community posts or course thumbnail workflows complete, implement the storage capability defined in [FEATURE_SPEC_R2_STORAGE.md](FEATURE_SPEC_R2_STORAGE.md) and [the R2 storage coding-agent prompt](agent-prompts/FEATURE_R2_STORAGE.md). Each sub-admin must manage multiple Cloudflare R2 targets across different Cloudflare accounts from the sub-admin panel. Those targets must be selectable for Community post images and course thumbnails, with server-enforced tenant ownership, protected credential storage, private-media delivery, cleanup/retry behavior, and automated tests. Keep the existing milestone order: establish authentication and sub-admin/course ownership first, then implement storage APIs and UI before declaring image uploads complete.
