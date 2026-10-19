@@ -40,6 +40,7 @@ These are feature-level requirements integrated into the existing milestones, no
 - [Admin and sub-admin analytics](../FEATURE_SPEC_ADMIN_ANALYTICS.md) — [coding prompt](FEATURE_ADMIN_ANALYTICS.md). Uses real persisted data and strict ownership boundaries.
 - [PWA offline and low-data mode](../FEATURE_SPEC_PWA_OFFLINE.md) — [coding prompt](FEATURE_PWA_OFFLINE.md). Supplements Milestone 9; private API data and protected media must not enter shared caches.
 - [Study planner and reminders](../FEATURE_SPEC_STUDY_PLANNER.md) — [coding prompt](FEATURE_STUDY_PLANNER.md). Adds private user-owned tasks and best-effort browser reminders.
+- [Community posts](../FEATURE_SPEC_COMMUNITY_POSTS.md) — [coding prompt](FEATURE_COMMUNITY_POSTS.md). Adds a published student feed and main-admin/sub-admin post authoring with server-enforced scope and ownership.
 
 - [Production security, reliability, and operations](../FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md) — [coding prompt](FEATURE_PRODUCTION_SECURITY_RELIABILITY.md). Covers RBAC, audit logs, rate limits, backup/restore drills, CI gates, monitoring, secure deployment, private-cache rules, paid-media delivery, export safety, accessibility, and performance. Integrate into Milestones 1, 3, 10, and 11; it does not replace them.
 
