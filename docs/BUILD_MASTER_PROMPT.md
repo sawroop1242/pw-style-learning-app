@@ -34,6 +34,7 @@ The finished product should support:
 - Installable PWA, offline app shell, accessible controls, loading states, empty states, error states, and retry actions.
 - Admin workflows for managing courses, lessons, quizzes, questions, choices, publication status, and content ordering.
 - Automated tests, secure configuration, API documentation, and deployment instructions.
+- Production security and reliability controls covering RBAC, audit logging, endpoint throttling, verified backups/restores, CI release gates, structured monitoring, secure deployment, cache privacy, protected-resource delivery, safe exports, accessibility, and performance. Follow `docs/FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md`.
 
 Do not represent demo/localStorage data as a real account-backed feature. Demo content may be used only as clearly labelled fallback content during development.
 
@@ -50,6 +51,10 @@ Follow `docs/FEATURE_SPEC_TEST_SERIES.md` and `docs/agent-prompts/FEATURE_TEST_S
 ### Advanced analytics, revision, discovery, and planning
 
 Follow the feature specifications and matching prompts linked from `docs/agent-prompts/README.md`. Extend the existing course, notes/progress, and test models instead of creating parallel systems. Analytics must be derived from persisted server data, must obey result-release policies, and must enforce main-admin/sub-admin ownership. Notes, bookmarks, revision state, and planner tasks are private user-owned data. Course search may return published catalogue metadata only and must never reveal protected resources. Offline behavior must never cache authenticated API responses or protected media in shared Cache Storage. Browser notifications are opt-in and best-effort; do not promise guaranteed background delivery. Implement each part only in its authorized milestone and add real tests.
+
+### Production security and reliability
+
+Follow `docs/FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md` and its coding-agent prompt. Integrate the controls into the existing milestones: foundation and configuration checks in Milestone 1, authorization and throttling in Milestone 3, regression/security/accessibility/performance tests in Milestone 10, and verified deployment/backup/monitoring procedures in Milestone 11. Do not treat a written checklist as evidence of implementation. Never claim backups are working without a restore drill, monitoring is active without a verified target setup, or production is ready without real environment smoke tests.
 
 ### Backend
 Use the existing Django project and Django REST Framework unless the audit proves a concrete blocker. Prefer a clear modular app structure over a monolithic file. Keep the existing database models if sound; add migrations for every schema change.
@@ -159,6 +164,7 @@ Complete **only one milestone per agent run** unless the user explicitly asks fo
 - Exit criteria: installability and offline behavior are tested in supported browsers and documented.
 
 ### Milestone 10 — Quality, security, and performance
+- Follow `docs/FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md` for role/ownership regression coverage, endpoint throttling, audit-log redaction, CI release gates, private-cache inspection, safe exports, accessibility, and performance checks.
 - Add/complete unit, API, integration, and end-to-end tests where practical.
 - Verify privacy, permission scoping, metric correctness, export safety, planner timezone behavior, and offline cache rules for the new feature specifications.
 - Run formatters, linters, Django checks, migration checks, dependency/security checks, and production settings checks.
@@ -166,6 +172,7 @@ Complete **only one milestone per agent run** unless the user explicitly asks fo
 - Exit criteria: all required CI checks pass, or remaining failures are explicitly documented with reproducible evidence.
 
 ### Milestone 11 — Deployment and operations
+- Follow `docs/FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md` for HTTPS/host/origin configuration, least-privilege secrets, health/monitoring behavior, backup retention and an actual isolated restore drill, and rollback verification. Report unconfigured controls as gaps; do not claim production readiness without evidence.
 - Provide environment examples with placeholders only, backend deployment configuration, frontend hosting instructions, database migration instructions, health checks, logs, backup/restore notes, and rollback steps.
 - Document any real notification infrastructure or analytics collection only if approved, configured, and tested; browser reminders alone are best-effort.
 - Keep frontend hosting and Django API hosting clearly separate.
