@@ -68,10 +68,12 @@ These are audit findings, not claims that the backend has been executed or runti
 - **Acceptance:** fresh database migrates; model constraints behave as intended; admin registrations and key workflows are covered by tests.
 
 ### Milestone 3 — Authentication and authorization
-- Define registration/login/token refresh/logout or token invalidation behavior appropriate to the selected JWT implementation.
-- Enforce authenticated access for private user data and user ownership on every list/detail/create/update/delete path.
-- Validate payloads and add appropriate throttling and permission tests.
-- **Acceptance:** anonymous/private-access tests, cross-user isolation tests and token failure/expiry tests pass; no user can read or modify another user's notes/progress.
+- Follow [`docs/FEATURE_SPEC_AUTHENTICATION.md`](FEATURE_SPEC_AUTHENTICATION.md) and [`docs/agent-prompts/FEATURE_AUTHENTICATION.md`](agent-prompts/FEATURE_AUTHENTICATION.md).
+- Require unique normalized username, unique normalized email, and password on registration; use Django password hashing and validators.
+- Implement documented login/token refresh/logout behavior, authenticated password change, and forgot-password OTP sent to the registered email through environment-configured Gmail SMTP or another supported SMTP provider.
+- OTPs must be short-lived, single-use, securely hashed, rate-limited, purpose-bound, and consumed atomically; forgot-password responses must not reveal whether an account exists.
+- Enforce authenticated access for private user data and ownership on every list/detail/create/update/delete path. Keep SMTP credentials in deployment secrets, never source control.
+- **Acceptance:** registration uniqueness and password validation, OTP expiry/replay/concurrency/rate-limit, mocked email delivery/failure, token behavior, anonymous/private-access, and cross-user isolation tests pass; no user can read or modify another user's private records.
 
 ### Milestone 4 — Course and lesson API
 - Define stable response shapes, published-content filtering, ordering, pagination and course/lesson relationships.
