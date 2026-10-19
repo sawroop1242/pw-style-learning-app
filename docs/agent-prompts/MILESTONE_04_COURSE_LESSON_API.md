@@ -17,6 +17,14 @@ Read models, serializers, viewsets, router registration, current response format
 - Consistent not-found behavior for hidden/unpublished content where that avoids disclosure.
 - Predictable validation errors and API pagination metadata.
 
+## Required course content and code-access API behavior
+
+Follow `docs/FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md` and reuse existing API patterns. Support course cover image URL, free/paid mode and pricing validation, provider Telegram contact, subject folders, ordered titled video lessons with safe embed URLs, and titled chapter PDF download resources. Public catalog endpoints expose published courses only and must not leak drafts or staff-only metadata.
+
+Add authorized staff APIs for course/folder/resource CRUD and course-bound code generation/revocation. Sub-admin actions must be restricted to owned courses. Add student code redemption for a selected paid course; atomically redeem one-use-by-default codes, create a durable grant, rate-limit guessing, and return safe generic failures. Students must not read raw code data, hashes, or audit records. Free courses require no code; no payment endpoint or checkout path should be added. Every paid lesson/PDF delivery request must check the user's grant. Use an authenticated download endpoint or short-lived signed URL for private PDFs; do not claim a permanent public URL is protected.
+
+Validate Telegram usernames/links and media URL schemes/allowed providers. Never accept arbitrary iframe HTML or perform unsafe server-side fetches of supplied URLs.
+
 ## Tests
 Cover list/detail, anonymous behavior, publication filtering, search/filter/order, pagination, invalid parameters, URL validation, course/lesson relationships, lesson completion ownership, staff access, and draft leakage. Check query counts or use appropriate ORM loading to prevent obvious N+1 patterns.
 
