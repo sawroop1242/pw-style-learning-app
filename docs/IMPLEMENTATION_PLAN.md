@@ -8,6 +8,14 @@
 
 Detailed execution prompts are maintained in [`docs/agent-prompts/README.md`](agent-prompts/README.md). Use exactly one milestone prompt per agent run. The prompts define implementation tasks, tests, security requirements, acceptance criteria, and stop conditions; they are not substitutes for working code.
 
+## Split frontend/backend plans
+
+Use the dedicated plans alongside this shared milestone sequence:
+- [Frontend implementation plan](FRONTEND_IMPLEMENTATION_PLAN.md) — screens, navigation, API client, UX states, PWA/offline, accessibility and frontend acceptance.
+- [Backend implementation plan](BACKEND_IMPLEMENTATION_PLAN.md) — domain models, API capabilities, auth/roles, data ownership, scoring/import, operations and backend acceptance.
+
+These are complementary views of the same product, not competing roadmaps. This shared implementation plan defines the authoritative milestone order and exit criteria. Keep frontend and backend contracts aligned, and do not treat a feature as complete until its actual code and tests are verified.
+
 ## Product requirements addendum
 
 The course-management and access-code requirements are specified in [`docs/FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md`](FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md) and the execution wrapper is [`docs/agent-prompts/FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md`](agent-prompts/FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md). Apply the relevant subset during Milestones 2, 3, 4, and 8. The payment policy is code-only: no checkout or payment gateway. A public external PDF URL cannot be access-controlled; paid resources must use a protected delivery path or be explicitly documented as public.
