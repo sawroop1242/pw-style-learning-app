@@ -23,6 +23,16 @@ Add and test the following learner journey alongside the existing journeys:
 
 The frontend must not include a checkout, payment gateway, UPI collection, or any alternative in-app payment option. The app records code redemption and access only; it does not claim to verify off-platform payment.
 
+## Test-series learner and staff journeys
+
+Implement the end-to-end journeys in `docs/FEATURE_SPEC_TEST_SERIES.md`:
+
+12. Authorized admin/sub-admin creates a test series, adds tests/sections, configures scoring and timing, imports a CSV through template → upload → validation preview → confirmed import, and sees an accurate success/error report.
+13. Student browses a published series, starts a test, sees server-backed timer status (or no timer in untimed mode), navigates questions/sections, marks questions for review, and sees answer-save state.
+14. Student refreshes/reconnects and resumes the same attempt without deadline reset or randomized question order changing. The student can submit early or the backend finalizes an expired timed attempt safely.
+15. Student sees the score and answer review only when permitted by the result-release policy; test history and section-wise breakdown are accurate and private to that student.
+16. Staff can review aggregate results only within their permissions; students cannot access staff analytics or another student's attempt.
+
 ## UX requirements
 - Mobile-first layout, touch-friendly controls, clear progress, empty/loading/error/retry states.
 - No dead primary actions, placeholder buttons that look functional, or hidden failures.
