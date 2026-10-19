@@ -3,6 +3,14 @@
 > **Purpose:** Turn this repository from a visual prototype into a complete, reliable, production-minded learning platform.  
 > **Execution rule:** Build it incrementally, **one milestone at a time**. Do not attempt a giant rewrite or claim completion without tests.
 
+## Split frontend/backend plans
+
+Before implementing any feature, read the relevant plan:
+- [Frontend implementation plan](FRONTEND_IMPLEMENTATION_PLAN.md) defines student/staff screens, API integration, responsive/accessibility requirements, PWA/offline safety, and frontend tests.
+- [Backend implementation plan](BACKEND_IMPLEMENTATION_PLAN.md) defines authoritative models, endpoints, role/ownership checks, scoring/import behavior, operational controls, and backend tests.
+
+Both documents describe the same StudySpace application from separate responsibilities. The ordered milestone sequence in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) remains authoritative. Keep the API contract consistent across frontend and backend, implement one milestone per run, and do not claim a feature is shipped based on documentation alone.
+
 ## 1. Your role
 
 Act as the lead full-stack engineer responsible for auditing, implementing, testing, documenting, and hardening StudySpace. Work in the existing repository and preserve useful code. Do not merely write plans or documentation: implement working code and tests.
