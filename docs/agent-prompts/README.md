@@ -10,14 +10,18 @@ These files are **execution prompts for a coding agent**, not implementation del
 4. The agent must inspect current files and git status before editing, implement actual source changes, run tests, update `docs/BUILD_STATUS.md` and `docs/IMPLEMENTATION_PLAN.md`, and stop at the end of that milestone.
 5. If the current milestone fails its exit criteria, the agent must fix it or report the exact blocker. It must not skip ahead or mark it complete.
 
+## Product feature specification
+
+Read [Course management and code-based access](../FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md) for the required admin/sub-admin roles, course folders, video/PDF resources, free/paid course rules, Telegram provider contact, and secure access-code redemption. The execution wrapper is [Course-management coding-agent prompt](FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md). These requirements are integrated into the relevant existing milestones; do not skip the milestone order.
+
 ## Prompt sequence
 
 | Order | Prompt | Goal |
 |---|---|---|
 | 1 | [Milestone 1 — Foundation verification](MILESTONE_01_FOUNDATION.md) | Diagnose CI, verify Django startup, dependencies, migrations, and tests |
-| 2 | [Milestone 2 — Models and admin](MILESTONE_02_MODELS_ADMIN.md) | Durable course, lesson, quiz, note, progress, and attempt data |
-| 3 | [Milestone 3 — Auth and authorization](MILESTONE_03_AUTH.md) | Secure account lifecycle, ownership, throttling, and permissions |
-| 4 | [Milestone 4 — Course and lesson API](MILESTONE_04_COURSE_LESSON_API.md) | Published catalog, filters, lesson access, and completion API |
+| 2 | [Milestone 2 — Models and admin](MILESTONE_02_MODELS_ADMIN.md) | Durable learning models, course folders/resources, admin and code records |
+| 3 | [Milestone 3 — Auth and authorization](MILESTONE_03_AUTH.md) | Student/staff roles, sub-admin ownership, course access and throttling |
+| 4 | [Milestone 4 — Course and lesson API](MILESTONE_04_COURSE_LESSON_API.md) | Published catalog, folders/resources, code redemption, and access-checked APIs |
 | 5 | [Milestone 5 — Quiz engine](MILESTONE_05_QUIZZES.md) | Server-side scoring, answer secrecy, attempts, explanations |
 | 6 | [Milestone 6 — Notes and progress sync](MILESTONE_06_NOTES_PROGRESS.md) | Persistent per-user notes and learning progress |
 | 7 | [Milestone 7 — Frontend API foundation](MILESTONE_07_FRONTEND_API.md) | Real API client, auth UX, error handling, responsive shell |
