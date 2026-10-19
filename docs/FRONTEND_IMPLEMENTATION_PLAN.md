@@ -36,6 +36,7 @@ Follow [BUILD_MASTER_PROMPT.md](BUILD_MASTER_PROMPT.md), [IMPLEMENTATION_PLAN.md
 - Study planner: task list, daily/weekly view, create/edit/complete/delete tasks, goals if supported by the agreed API, and opt-in best-effort browser reminders.
 - Profile/security: account details, password change, sign-out, and relevant privacy controls.
 - PWA install guidance and safe offline/error states.
+- Community feed showing published announcements relevant to the student, with post detail and loading/empty/error/offline states.
 
 ### Main-admin and sub-admin experience
 - Staff navigation must be rendered only after server-confirmed role data; route guards are UX only and never replace backend authorization.
@@ -59,6 +60,7 @@ Follow [BUILD_MASTER_PROMPT.md](BUILD_MASTER_PROMPT.md), [IMPLEMENTATION_PLAN.md
 | Student analytics | Only persisted server-derived attempts and metrics; respect result-release and visibility rules |
 | Admin analytics | Aggregates from backend; display scope and date range; empty/error states; never calculate privileged global totals from partial client data |
 | Study planner | Private tasks, daily/weekly display, due dates/timezones, completion, and optional permission-based reminders |
+| Community | Authenticated published-post feed; staff-only create/edit/draft/publish/pin/delete controls, with sub-admin course scope enforced by the API |
 | Account/profile | Account details, password change, logout and safe auth-expiry behavior |
 | PWA/offline | Installable shell, offline banner/states, low-data preference, retry/reconnect handling, update notice |
 | Exports | Only authorized backend-generated/exportable data; warn appropriately; do not expose other users' data |
@@ -146,7 +148,7 @@ Frontend work depends on verified backend contracts and follows the shared miles
 
 1. **Milestone 1 — Foundation verification:** inspect and verify current repo/runtime/CI; do not start a UI rewrite.
 2. **Milestone 7 — Frontend API foundation:** API configuration/client, auth UX integration, errors, loading states and responsive shell after prior backend milestones are ready.
-3. **Milestone 8 — Complete learning experience:** course discovery, lessons, tests/results, notes/bookmarks/revision, dashboard, profile, planner and authorized analytics.
+3. **Milestone 8 — Complete learning experience:** course discovery, lessons, tests/results, notes/bookmarks/revision, dashboard, profile, planner, authorized analytics, and Community feed/post authoring.
 4. **Milestone 9 — PWA/offline:** installability, safe cache strategy, low-data and offline behavior.
 5. **Milestone 10 — Quality/security:** automated checks, accessibility, performance, security and full journey regression.
 6. **Milestone 11 — Deployment:** configure static frontend hosting separately from Django API hosting; verify HTTPS, API origin/CORS, caching and smoke tests.
