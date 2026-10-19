@@ -14,6 +14,10 @@ These files are **execution prompts for a coding agent**, not implementation del
 
 Read [Course management and code-based access](../FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md) for the required admin/sub-admin roles, course folders, video/PDF resources, free/paid course rules, Telegram provider contact, and secure access-code redemption. The execution wrapper is [Course-management coding-agent prompt](FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md). These requirements are integrated into the relevant existing milestones; do not skip the milestone order.
 
+## Authentication specification
+
+Read [Authentication and email OTP reset](../FEATURE_SPEC_AUTHENTICATION.md) and follow [the authentication coding-agent prompt](FEATURE_AUTHENTICATION.md). Registration requires unique username, email, and password; users can change their password and reset forgotten passwords with a short-lived email OTP. OTP mail uses owner-configured Gmail SMTP or another supported SMTP provider through deployment environment secrets. Never commit SMTP credentials.
+
 ## Test-series specification
 
 Read [Test series, CSV question bank, timers, and results](../FEATURE_SPEC_TEST_SERIES.md) and follow [the test-series coding-agent prompt](FEATURE_TEST_SERIES.md). CSV imports use an externally hosted CSV URL: backend stores the URL and minimal import metadata, never the CSV file/blob/raw contents; imported question data is stored as structured records. Apply SSRF-safe fetching and the existing milestone sequence.
