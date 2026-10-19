@@ -44,7 +44,7 @@ Each test has title/instructions, total duration or untimed mode, section rules,
 
 ## 4. CSV import and export
 
-Admin and authorized sub-admin must be able to upload a CSV file containing questions, options, and correct answers, using a documented template. Provide a downloadable sample CSV/template and explain accepted values.
+Admin and authorized sub-admins must provide a CSV HTTPS URL (a link to a CSV file in approved external storage) containing questions, options, and correct answers, using a documented template. **The backend must not accept or persist a CSV file upload and must not store the CSV file/blob or raw CSV contents.** Persist only the validated source URL and minimal import metadata (target test, uploader, status, timestamps, row counts, and safe error summary). Provide a downloadable sample CSV/template for staff to prepare and host externally. The imported question/option/answer records are persisted as normal structured database records so the test engine can query and score them; this does not mean the CSV file or its raw contents are stored.
 
 ### Recommended columns
 
@@ -74,7 +74,7 @@ Keep this schema versioned and documented. The template and importer must agree 
 7. Support re-import behavior intentionally: default to creating a new import or replacing a draft test only after explicit confirmation. Do not silently duplicate all questions or overwrite a published test.
 8. Provide CSV export for authorized staff where useful. Export must not include student attempt data unless explicitly authorized; protect against spreadsheet formula injection by escaping cells beginning with `=`, `+`, `-`, or `@`.
 
-CSV uploads are untrusted input. Prevent oversized files, parser abuse, formula injection in exports, cross-owner imports, and incorrect answer mapping. A correct answer must be validated against options present on that exact row.
+CSV URLs and fetched content are untrusted input. Prevent SSRF, unsafe redirects, DNS rebinding, oversized responses, parser abuse, formula injection in exports, cross-owner imports, and incorrect answer mapping. A correct answer must be validated against options present on that exact row. The backend stores the source URL and structured imported records only—not the CSV file or raw CSV contents.
 
 ## 5. Timer modes and section timing
 
