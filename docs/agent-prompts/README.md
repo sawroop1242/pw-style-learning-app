@@ -33,6 +33,8 @@ These are feature-level requirements integrated into the existing milestones, no
 - [PWA offline and low-data mode](../FEATURE_SPEC_PWA_OFFLINE.md) — [coding prompt](FEATURE_PWA_OFFLINE.md). Supplements Milestone 9; private API data and protected media must not enter shared caches.
 - [Study planner and reminders](../FEATURE_SPEC_STUDY_PLANNER.md) — [coding prompt](FEATURE_STUDY_PLANNER.md). Adds private user-owned tasks and best-effort browser reminders.
 
+- [Production security, reliability, and operations](../FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md) — [coding prompt](FEATURE_PRODUCTION_SECURITY_RELIABILITY.md). Covers RBAC, audit logs, rate limits, backup/restore drills, CI gates, monitoring, secure deployment, private-cache rules, paid-media delivery, export safety, accessibility, and performance. Integrate into Milestones 1, 3, 10, and 11; it does not replace them.
+
 ## Prompt sequence
 
 | Order | Prompt | Goal |
@@ -59,7 +61,8 @@ These are feature-level requirements integrated into the existing milestones, no
 - Treat every API input and user-generated string as untrusted.
 - Private records must be scoped to the authenticated user at the queryset and object-permission level.
 - Never reveal quiz answer keys before submission or trust a score supplied by the client.
-- Never cache authenticated API responses, tokens, notes, private progress, active tests, answer keys, or protected media in a shared service-worker cache.
+- Never cache authenticated API responses, tokens, notes, private progress, planner data, active tests, answer keys, or protected media in a shared service-worker cache.
+- Before claiming production readiness, verify RBAC, rate limits, audit-log redaction, backup restoration, CI gates, monitoring, deployment security, cache privacy, and export safety with actual evidence.
 - Only use course materials and video URLs that the project is authorized to use.
 - No payment processing, live streaming, chat, certificates, AI tutor, or recommendation engine until the core platform is accepted and the product owner prioritizes them.
 - A deployed service may be called production-ready only after real target-environment smoke tests and security checks.
