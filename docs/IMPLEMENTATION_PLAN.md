@@ -12,6 +12,19 @@ Detailed execution prompts are maintained in [`docs/agent-prompts/README.md`](ag
 
 The course-management and access-code requirements are specified in [`docs/FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md`](FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md) and the execution wrapper is [`docs/agent-prompts/FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md`](agent-prompts/FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md). Apply the relevant subset during Milestones 2, 3, 4, and 8. The payment policy is code-only: no checkout or payment gateway. A public external PDF URL cannot be access-controlled; paid resources must use a protected delivery path or be explicitly documented as public.
 
+## Additional product feature specifications
+
+The following are required product extensions, integrated into the existing milestones rather than separate parallel implementations:
+
+- [Advanced test analytics](FEATURE_SPEC_ADVANCED_TEST_ANALYTICS.md) extends the test series spec with personal trends, staff aggregates, documented formulas, release-policy enforcement and export safety.
+- [Notes, bookmarks and revision](FEATURE_SPEC_NOTES_BOOKMARKS_REVISION.md) extends the existing notes/progress system with private saved resources and revision states.
+- [Course discovery](FEATURE_SPEC_COURSE_DISCOVERY.md) extends the published course catalogue with bounded search, filters and sorting without leaking protected resources.
+- [Admin analytics](FEATURE_SPEC_ADMIN_ANALYTICS.md) provides main-admin platform aggregates and sub-admin owner-scoped metrics based only on persisted data.
+- [PWA offline and low-data mode](FEATURE_SPEC_PWA_OFFLINE.md) supplements Milestone 9 with a resource-class cache policy, safe offline states and no shared caching of private data.
+- [Study planner and reminders](FEATURE_SPEC_STUDY_PLANNER.md) adds private tasks/goals and opt-in best-effort browser reminders.
+
+Matching coding-agent prompts are indexed in [docs/agent-prompts/README.md](agent-prompts/README.md). The requested product features remain specifications until implemented and verified through the existing milestone sequence.
+
 ## Working rules
 
 1. Complete exactly one milestone per agent run. After reporting evidence and updating docs/BUILD_STATUS.md, stop.
@@ -81,20 +94,22 @@ These are audit findings, not claims that the backend has been executed or runti
 - Add API tests for normal, empty, invalid and permission-sensitive cases.
 - **Acceptance:** documented endpoints return predictable responses; published/unpublished visibility and filtering are tested; query behavior suits the expected catalog.
 
-### Milestone 5 — Quizzes, test series, CSV import and scoring
+### Milestone 5 — Quizzes, test series, CSV import, scoring and analytics
 
-Read [`docs/FEATURE_SPEC_TEST_SERIES.md`](FEATURE_SPEC_TEST_SERIES.md) and [`docs/agent-prompts/FEATURE_TEST_SERIES.md`](agent-prompts/FEATURE_TEST_SERIES.md). Extend the current quiz engine into test series with sections, CSV URL-based question import, configurable timed/untimed modes, per-section timing, immutable attempt snapshots, autosave/resume, scoring policy, retakes, result release, and staff/student result views. CSV source files stay in external storage: persist only the URL and minimal import metadata, never the CSV blob/raw body; store imported questions as structured records. The importer must mitigate SSRF and enforce host/redirect/IP, size, row-count, and timeout limits.
+Read [`docs/FEATURE_SPEC_TEST_SERIES.md`](FEATURE_SPEC_TEST_SERIES.md) and [`docs/agent-prompts/FEATURE_TEST_SERIES.md`](agent-prompts/FEATURE_TEST_SERIES.md). For advanced reporting, also follow [`docs/FEATURE_SPEC_ADVANCED_TEST_ANALYTICS.md`](FEATURE_SPEC_ADVANCED_TEST_ANALYTICS.md) and its linked coding prompt. Extend the current quiz engine into test series with sections, CSV URL-based question import, configurable timed/untimed modes, per-section timing, immutable attempt snapshots, autosave/resume, scoring policy, retakes, result release, and staff/student result views. CSV source files stay in external storage: persist only the URL and minimal import metadata, never the CSV blob/raw body; store imported questions as structured records. The importer must mitigate SSRF and enforce host/redirect/IP, size, row-count, and timeout limits.
 - Implement an authenticated or explicitly specified quiz-attempt/submission contract and server-side scoring.
 - Never accept client-provided correct answers or scores as authoritative.
 - Return questions and choices without answer keys before submission; return score and explanations according to the defined attempt flow.
 - Decide attempt history and retake behavior and test it.
-- **Acceptance:** correct/incorrect scoring, malformed submissions, duplicate choices, missing answers, unpublished quizzes and answer-key exposure are covered by tests.
+- Add documented student performance trends and role-scoped staff test analytics only from persisted, server-scored attempts; never leak unreleased results or other students' private data.
+- **Acceptance:** correct/incorrect scoring, malformed submissions, duplicate choices, missing answers, unpublished quizzes, answer-key exposure, analytics formulas, result-release restrictions, and cross-user/staff-scope boundaries are covered by tests.
 
-### Milestone 6 — Notes and progress synchronization
+### Milestone 6 — Notes, progress, bookmarks and revision
 - Connect notes and lesson progress to authenticated endpoints; preserve user isolation.
+- Extend the existing notes/progress system with private bookmarks and revision lists per [`docs/FEATURE_SPEC_NOTES_BOOKMARKS_REVISION.md`](FEATURE_SPEC_NOTES_BOOKMARKS_REVISION.md); do not create a parallel notes store.
 - Make create/update/delete behavior, validation and duplicate progress updates predictable.
 - Handle offline/failed requests without falsely reporting that server sync succeeded.
-- **Acceptance:** user data persists in the database across sessions/devices; network errors are visible and recoverable; ownership and uniqueness tests pass.
+- **Acceptance:** user data persists in the database across sessions/devices; network errors are visible and recoverable; notes/bookmarks/revision ownership, uniqueness and resource-availability tests pass.
 
 ### Milestone 7 — Frontend foundation and API client
 - Keep the vanilla frontend unless audit evidence justifies another approach.
@@ -102,21 +117,25 @@ Read [`docs/FEATURE_SPEC_TEST_SERIES.md`](FEATURE_SPEC_TEST_SERIES.md) and [`doc
 - Add loading, empty, error and signed-out states; avoid leaking tokens or rendering untrusted HTML.
 - **Acceptance:** frontend works with configured API base URL; API errors are surfaced; no demo fallback is presented as live server data.
 
-### Milestone 8 — Complete learning experience
-- Implement functional sign-up/sign-in, course catalog/search, course and lesson navigation, lesson playback/link opening, quiz attempt/results, notes management and synced progress.
+### Milestone 8 — Complete learning experience, discovery and planner
+- Implement functional sign-up/sign-in, searchable/filtered course discovery per [`docs/FEATURE_SPEC_COURSE_DISCOVERY.md`](FEATURE_SPEC_COURSE_DISCOVERY.md), course and lesson navigation, lesson playback/link opening, quiz attempt/results, notes/bookmarks/revision and synced progress.
+- Add personal study tasks, daily/weekly planner views and opt-in browser reminders per [`docs/FEATURE_SPEC_STUDY_PLANNER.md`](FEATURE_SPEC_STUDY_PLANNER.md), after required APIs exist.
+- Add student test-performance insights only from real persisted attempts and only when result policy allows.
 - Ensure every visible control has a real action and mobile layouts remain usable.
 - Use accessible labels, keyboard navigation, appropriate status messages and responsive states.
 - **Acceptance:** core learner journeys pass a documented manual checklist on a narrow mobile viewport and desktop viewport; no primary action is inert.
 
-### Milestone 9 — PWA and offline behavior
+### Milestone 9 — PWA, offline behavior and low-data mode
 - Scope precaching to versioned static assets only; exclude authenticated/API responses and sensitive data from Cache Storage.
-- Define offline behavior explicitly, including stale-shell behavior, cache upgrades and API failures.
+- Define offline behavior explicitly, including stale-shell behavior, cache upgrades, API failures and low-data mode per [`docs/FEATURE_SPEC_PWA_OFFLINE.md`](FEATURE_SPEC_PWA_OFFLINE.md).
+- Do not cache authenticated API responses, tokens, private notes/progress/planner data, active tests, answer keys or protected media in shared caches. Queue updates only where retry/conflict behavior is documented.
 - Validate manifest, installation and service-worker update behavior.
 - **Acceptance:** installability checks pass where supported; static shell works offline; private responses are not cached; service-worker upgrades remove obsolete app caches without deleting unrelated caches.
 
-### Milestone 10 — Quality, security and performance
+### Milestone 10 — Quality, security, analytics and performance
 - Add automated backend tests and practical frontend checks; add CI for repeatable checks.
 - Review CORS, hosts, HTTPS/cookie/security headers, secret handling, throttling, API serialization/query behavior and dependency updates.
+- Verify analytics formulas and staff scopes, spreadsheet-safe exports, private planner/notes/bookmark ownership, timezone handling, and offline cache privacy.
 - Check accessibility, safe DOM rendering, error handling, responsive behavior and service-worker privacy.
 - **Acceptance:** CI checks pass; high-risk security findings are resolved or documented with mitigation; performance and accessibility checks are recorded.
 
@@ -154,6 +173,9 @@ For later milestones, add tests specific to the changed behavior and run the com
 | Private learner data leaks through API permissions or caches | Add ownership regression tests; keep API responses out of service-worker caches |
 | Insecure production settings inherited from development defaults | Fail safely when production environment variables are missing; add deployment checks |
 | Quiz answers exposed before submission or scores trusted from the client | Keep answer keys server-side; calculate scores on the backend |
+| Analytics reveal unreleased results or cross-owner student data | Derive reports from server records; enforce role scopes in querysets and test result-release boundaries |
+| Offline cache leaks private data or stale access decisions | Cache only approved public assets; test logout, account switch, and protected-resource changes |
+| Planner reminders are presented as guaranteed | Use opt-in browser notifications and clearly document best-effort delivery and timezone behavior |
 | Frontend appears functional while using local demo data | Clearly signal demo/offline states; wire real API flows and test them |
 | Scope expands into a large rewrite | One milestone per run, focused changes, explicit acceptance criteria |
 | Deployment is described as complete without evidence | Require host-specific smoke-test outputs and verified configuration |
