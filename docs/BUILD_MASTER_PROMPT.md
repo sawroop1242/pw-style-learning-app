@@ -24,6 +24,12 @@ The finished product should support:
 - Quizzes with questions, answer submission, server-validated scoring, explanations, attempt history, and score summaries.
 - Student notes that persist to the authenticated user's account and sync across devices.
 - Progress tracking and dashboard statistics calculated from backend data.
+- Advanced test analytics based on persisted server-scored attempts, with student-only personal trends and role-scoped staff aggregates. Follow `docs/FEATURE_SPEC_ADVANCED_TEST_ANALYTICS.md`.
+- Private notes, bookmarks, saved questions/resources, and revision lists integrated with existing notes/progress. Follow `docs/FEATURE_SPEC_NOTES_BOOKMARKS_REVISION.md`.
+- Searchable/filterable course discovery using published catalogue data only. Follow `docs/FEATURE_SPEC_COURSE_DISCOVERY.md`.
+- Main-admin and sub-admin dashboards for real course, access-code, progress, and test metrics with strict ownership scoping. Follow `docs/FEATURE_SPEC_ADMIN_ANALYTICS.md`.
+- Safe offline PWA shell and low-data mode; private APIs, active tests, answer keys, tokens, notes, and protected media must not be stored in shared caches. Follow `docs/FEATURE_SPEC_PWA_OFFLINE.md`.
+- Personal study planner, goals, task reminders, and daily/weekly views with privacy-safe, best-effort browser notifications. Follow `docs/FEATURE_SPEC_STUDY_PLANNER.md`.
 - Responsive UI for small Android phones, tablets, and desktop browsers.
 - Installable PWA, offline app shell, accessible controls, loading states, empty states, error states, and retry actions.
 - Admin workflows for managing courses, lessons, quizzes, questions, choices, publication status, and content ordering.
@@ -40,6 +46,10 @@ Follow `docs/FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md` as a required product spe
 ### Test series, question banks, CSV, and timers
 
 Follow `docs/FEATURE_SPEC_TEST_SERIES.md` and `docs/agent-prompts/FEATURE_TEST_SERIES.md`. The main admin and authorized sub-admins must be able to create and manage owned test series, tests, sections, questions/options/correct answers, and CSV imports. Support timed, untimed, total-duration and section-duration modes; server-authoritative deadlines; autosave/resume; question navigation and mark-for-review; configured scoring/negative marking; attempt limits; randomized question/option order; result-release policies; and safe result review/analytics as defined by the spec. CSV imports must use a documented template and a CSV HTTPS URL hosted externally. The backend stores only the source URL and minimal import metadata—not the CSV file/blob or raw CSV contents—while imported questions/options/answers are stored as structured records. Fetch and parse in memory under strict size/row/time limits with SSRF-safe host, redirect, and IP validation; preview rows before confirmation and report errors safely. Never expose answer keys before release, trust client scores/timers, or allow question edits to change a historical attempt. Integrate with the existing quiz engine and implement one milestone per run.
+
+### Advanced analytics, revision, discovery, and planning
+
+Follow the feature specifications and matching prompts linked from `docs/agent-prompts/README.md`. Extend the existing course, notes/progress, and test models instead of creating parallel systems. Analytics must be derived from persisted server data, must obey result-release policies, and must enforce main-admin/sub-admin ownership. Notes, bookmarks, revision state, and planner tasks are private user-owned data. Course search may return published catalogue metadata only and must never reveal protected resources. Offline behavior must never cache authenticated API responses or protected media in shared Cache Storage. Browser notifications are opt-in and best-effort; do not promise guaranteed background delivery. Implement each part only in its authorized milestone and add real tests.
 
 ### Backend
 Use the existing Django project and Django REST Framework unless the audit proves a concrete blocker. Prefer a clear modular app structure over a monolithic file. Keep the existing database models if sound; add migrations for every schema change.
@@ -66,7 +76,7 @@ Required UI behavior:
 - Proper navigation and route/view behavior for dashboard, catalogue, course detail, lesson/video, notes, quiz, profile, login, and registration.
 - API client with centralized base URL, auth token handling, expiry/401 handling, loading, empty, offline, and error states.
 - Use the Django API as the source of truth when configured. Do not silently hide API errors behind fake success states.
-- Notes and progress must sync through authenticated API endpoints. Local storage may cache non-sensitive preferences and a carefully designed offline queue, but must not be treated as secure storage.
+- Notes, progress, bookmarks, revision state, and planner tasks must use authenticated APIs and server-side ownership checks. Local storage may cache non-sensitive preferences and a carefully designed offline queue, but must not be treated as secure storage.
 - Accessible labels, keyboard navigation, visible focus, semantic elements, and useful contrast.
 - Safe rendering of user/course text; do not inject untrusted HTML.
 - PWA manifest and service worker with versioned cache strategy. Do not cache authenticated API responses or private user data in a shared cache.
@@ -124,6 +134,7 @@ Complete **only one milestone per agent run** unless the user explicitly asks fo
 
 ### Milestone 6 — Notes and progress sync
 - Implement CRUD for the authenticated user's notes and progress.
+- Integrate private bookmarks and revision state using `docs/FEATURE_SPEC_NOTES_BOOKMARKS_REVISION.md`; reuse existing models and add ownership/duplicate-resource tests.
 - Add robust validation, pagination, update semantics, and conflict behavior as appropriate.
 - Exit criteria: data persists in the database and user-isolation tests pass.
 
@@ -134,24 +145,29 @@ Complete **only one milestone per agent run** unless the user explicitly asks fo
 - Exit criteria: frontend can register/login and display real API responses in a local end-to-end run.
 
 ### Milestone 8 — Complete learning experience
-- Implement catalogue/search, course detail, lesson playback/link handling, completion, quiz taking/results, notes, progress dashboard, and profile.
+- Implement catalogue/search and filters according to `docs/FEATURE_SPEC_COURSE_DISCOVERY.md`, course detail, lesson playback/link handling, completion, quiz taking/results, notes/bookmarks/revision, progress dashboard, and profile.
+- Add study planner and daily/weekly task views according to `docs/FEATURE_SPEC_STUDY_PLANNER.md` once the required account and resource APIs exist.
+- Add student-facing test performance insights from `docs/FEATURE_SPEC_ADVANCED_TEST_ANALYTICS.md` only when persisted attempts and result-release behavior are available.
 - Make every visible control work or clearly label it as unavailable; remove dead buttons and misleading placeholders.
 - Exit criteria: core learner journey works from login through course lesson, quiz, notes, and progress.
 
 ### Milestone 9 — PWA and offline behavior
-- Validate manifest, app icons, install flow, service worker updates, offline shell, and cache invalidation.
+- Validate manifest, app icons, install flow, service worker updates, offline shell, cache invalidation, and low-data mode per `docs/FEATURE_SPEC_PWA_OFFLINE.md`.
+- Add only explicitly approved offline queues with documented conflict/idempotency behavior; never cache private API data or protected media.
 - Cache only safe public static assets; do not cache private API payloads or tokens.
 - Provide clear offline messages and safe retry/sync behavior.
 - Exit criteria: installability and offline behavior are tested in supported browsers and documented.
 
 ### Milestone 10 — Quality, security, and performance
 - Add/complete unit, API, integration, and end-to-end tests where practical.
+- Verify privacy, permission scoping, metric correctness, export safety, planner timezone behavior, and offline cache rules for the new feature specifications.
 - Run formatters, linters, Django checks, migration checks, dependency/security checks, and production settings checks.
 - Fix accessibility issues, N+1 queries, avoidable frontend payloads, and mobile overflow.
 - Exit criteria: all required CI checks pass, or remaining failures are explicitly documented with reproducible evidence.
 
 ### Milestone 11 — Deployment and operations
 - Provide environment examples with placeholders only, backend deployment configuration, frontend hosting instructions, database migration instructions, health checks, logs, backup/restore notes, and rollback steps.
+- Document any real notification infrastructure or analytics collection only if approved, configured, and tested; browser reminders alone are best-effort.
 - Keep frontend hosting and Django API hosting clearly separate.
 - Document HTTPS, allowed hosts, CORS origins, secrets, database persistence, and post-deployment smoke tests.
 - Exit criteria: a fresh maintainer can deploy from documentation without guessing. Do not claim deployment until a real deployment is verified.
