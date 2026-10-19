@@ -8,6 +8,10 @@
 
 Detailed execution prompts are maintained in [`docs/agent-prompts/README.md`](agent-prompts/README.md). Use exactly one milestone prompt per agent run. The prompts define implementation tasks, tests, security requirements, acceptance criteria, and stop conditions; they are not substitutes for working code.
 
+## Product requirements addendum
+
+The course-management and access-code requirements are specified in [`docs/FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md`](FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md) and the execution wrapper is [`docs/agent-prompts/FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md`](agent-prompts/FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md). Apply the relevant subset during Milestones 2, 3, 4, and 8. The payment policy is code-only: no checkout or payment gateway. A public external PDF URL cannot be access-controlled; paid resources must use a protected delivery path or be explicitly documented as public.
+
 ## Working rules
 
 1. Complete exactly one milestone per agent run. After reporting evidence and updating docs/BUILD_STATUS.md, stop.
