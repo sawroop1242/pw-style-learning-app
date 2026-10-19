@@ -49,3 +49,6 @@ Implement the Community posts feature from `docs/FEATURE_SPEC_COMMUNITY_POSTS.md
 ## Acceptance and report
 
 Run the relevant backend and frontend tests, migration checks, lint/type checks if configured, and the core end-to-end smoke test. Record exact commands and actual outcomes. Update `docs/BUILD_STATUS.md` with files changed, evidence, failures/blockers and the next milestone. Stop after this scoped run and report what was genuinely completed. If prerequisite milestones are incomplete, stop and explain the dependency rather than falsely marking the feature done.
+## Mandatory media/storage integration
+
+Community image uploads are in scope and must use the sub-admin-owned multi-account R2 design in docs/FEATURE_SPEC_R2_STORAGE.md and docs/agent-prompts/FEATURE_R2_STORAGE.md. Each sub-admin can connect multiple R2 buckets across separate Cloudflare accounts in the sub-admin panel and choose an owned enabled target for Community post images. Course thumbnails use the same storage manager. Enforce tenant and course/post ownership server-side; keep secrets protected; store only object metadata in the database; validate image content and size; use private-media delivery; and test replacement/deletion cleanup and failure handling. Do not implement a one-off public upload path that bypasses the shared storage adapter.
