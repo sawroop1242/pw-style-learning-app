@@ -167,3 +167,13 @@ A frontend feature is done only when:
 - relevant docs and `docs/BUILD_STATUS.md` record actual results.
 
 **Current status:** Plan authored; no frontend source code, tests, or deployment are changed or verified by this document.
+## Mandatory sub-admin R2 storage panel and media uploads
+
+The sub-admin panel must let each sub-admin connect and manage multiple Cloudflare R2 storage targets, including buckets in different Cloudflare accounts. This is required for Community post images and course thumbnails.
+
+- Add a Storage / R2 Connections page with add/edit, test connection, status, enable/disable, set purpose-specific default, credential rotation/replacement and disconnect actions. Support multiple targets per sub-admin and show only sanitized metadata after credentials are saved.
+- Add image upload and target selection to Community post create/edit flows and course thumbnail create/replace flows. Use only targets returned as available to the authenticated sub-admin; the backend remains authoritative and must reject tampered target IDs.
+- Show upload progress, validation errors, connection/quota errors, retry states and persisted image previews. Do not show success until the API confirms storage and metadata persistence.
+- Never store R2 secrets in browser storage, frontend configuration, URLs, or logs. Do not cache authenticated media-management APIs or private media in shared service-worker caches.
+- Build responsive, keyboard-accessible states for no targets configured, testing, connected, failed, disabled, upload in progress, upload failed, and target has existing media references before disconnect.
+- Acceptance requires testing on mobile widths and an end-to-end upload/reload check for both Community images and course thumbnails.
