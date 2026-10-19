@@ -14,6 +14,10 @@ These files are **execution prompts for a coding agent**, not implementation del
 
 Read [Course management and code-based access](../FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md) for the required admin/sub-admin roles, course folders, video/PDF resources, free/paid course rules, Telegram provider contact, and secure access-code redemption. The execution wrapper is [Course-management coding-agent prompt](FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md). These requirements are integrated into the relevant existing milestones; do not skip the milestone order.
 
+## Test-series specification
+
+Read [Test series, CSV question bank, timers, and results](../FEATURE_SPEC_TEST_SERIES.md) and follow [the test-series coding-agent prompt](FEATURE_TEST_SERIES.md). These requirements extend the existing quiz engine and must be implemented in the relevant milestones, without skipping the sequence.
+
 ## Prompt sequence
 
 | Order | Prompt | Goal |
