@@ -49,6 +49,11 @@ Audit the existing schema first; reuse existing models when appropriate and avoi
 - Import-job metadata containing only the external CSV URL and minimal operational metadata; never persist the CSV blob or raw body. Persist successfully imported questions/options as structured records.
 - Analytics may be computed from persisted server-scored attempts; do not store unvalidated client-derived totals as authoritative.
 
+### Community posts
+- Community post with title, safely rendered body, author, timestamps, publication state, optional pinning, and global or course scope.
+- Main-admin global moderation; sub-admin ownership/assigned-course scope; student read-only visibility filtering.
+- Use the existing user, course, permission, audit and API infrastructure. Do not create a parallel role system.
+
 ### Personal learning data
 - Notes associated with the authenticated user and optionally a lesson/resource.
 - Progress/completion records unique to user and resource as appropriate.
@@ -76,6 +81,7 @@ Exact route names and response envelopes must be reconciled with the existing co
 | Progress | Authenticated read/update scoped to current user; idempotent completion semantics |
 | Bookmarks/revision | Authenticated create/list/update/delete; uniqueness and ownership; unavailable resource handling |
 | Study planner | Private task/goal CRUD, due dates, timezone policy, completion and bounded pagination |
+| Community | Paginated visible-post feed/detail; staff create/update/draft/publish/pin/delete with role and course-ownership checks |
 | Student analytics | Only the user's persisted attempts and released results; documented metrics and formulas |
 | Staff/admin analytics | Main-admin platform aggregates; sub-admin aggregates strictly limited to assigned/owned scope |
 | Exports | Explicit permission and bounded exports, privacy-safe fields, spreadsheet formula-injection mitigation |
