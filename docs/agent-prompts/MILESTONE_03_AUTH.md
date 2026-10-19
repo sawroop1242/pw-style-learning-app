@@ -7,7 +7,11 @@ Deliver a secure student account lifecycle and prove that private records cannot
 Review current JWT routes, serializers, permissions, throttling, settings, and all viewsets. Identify existing behavior and backward compatibility requirements. Keep Simple JWT unless there is evidence requiring a change.
 
 ## Required behavior
-- Registration with normalized/validated identity fields and Django password validation.
+- Follow `docs/FEATURE_SPEC_AUTHENTICATION.md` and `docs/agent-prompts/FEATURE_AUTHENTICATION.md` for registration, password changes, email OTP resets, SMTP configuration, and security acceptance.
+- Registration requires a unique normalized username, unique normalized email, and a Django-validated password. Enforce case-insensitive uniqueness where supported and protect against concurrent duplicate registration.
+- Forgot-password sends a short-lived, single-use OTP to the user's registered email using owner-configured SMTP (Gmail or another provider); store only an OTP hash/HMAC, never the plaintext OTP.
+- Authenticated change-password requires the current password and a validated new password. Reset OTPs must be rate-limited, expiry-checked, purpose-bound, atomically consumed, and protected against replay/concurrency.
+- Configure email delivery only through environment variables/deployment secrets; never commit credentials or ask for them in chat. For Gmail, document App Password setup where eligible, not the normal Google password.
 - Login and access-token refresh with predictable error responses.
 - Logout behavior documented honestly: if refresh-token blacklisting is selected, install/configure the required app and migrations; otherwise explicitly document the stateless JWT limitation and provide the chosen revocation strategy.
 - Current-user profile read/update endpoints with a strict allowlist of editable fields.
