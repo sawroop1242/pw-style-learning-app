@@ -18,7 +18,7 @@ Before changing anything:
 Build **StudySpace**, a mobile-first, installable learning platform inspired by the general usability of modern Indian ed-tech apps. It is an independent product and must not copy proprietary PW branding, assets, course content, or bypass paid-course protections.
 
 The finished product should support:
-- Student registration, login, logout, token refresh, and profile management.
+- Student registration with unique username, email, and password; login, logout, token refresh, profile management, authenticated password change, and forgot-password reset using email OTP sent through owner-configured Gmail SMTP or another supported SMTP provider. Follow `docs/FEATURE_SPEC_AUTHENTICATION.md`; never commit mail credentials.
 - Course catalogue, subject/category filters, search, course details, lesson lists, and lesson completion.
 - Video lesson links or authorized embeds, with graceful handling of unavailable or unsupported embeds. Never scrape or bypass DRM, authentication, paywalls, or access controls.
 - Quizzes with questions, answer submission, server-validated scoring, explanations, attempt history, and score summaries.
