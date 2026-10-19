@@ -22,6 +22,14 @@ Define whether unanswered questions count as wrong, whether multiple answers are
 - Ensure unpublished quizzes cannot be attempted by students.
 - Avoid duplicate submissions creating inconsistent attempts; define idempotency or a clear rejection behavior.
 
+## Test series and CSV import requirements
+
+Follow `docs/FEATURE_SPEC_TEST_SERIES.md`. Implement the test-taking engine with timed, untimed, total and section-level timing modes, server-authoritative deadlines, stable attempt snapshots, configurable question/option shuffling, autosave/resume, mark-for-review, navigation rules, early submit, timeout auto-submit, idempotent submission, attempt/retake limits, and result-release rules. Apply marks, negative marks, unanswered-question rules, and optional multiple-answer partial credit only when configured and fully tested.
+
+Provide a documented UTF-8 CSV template with section, question type/text, options, correct option key(s), explanation, marks, negative marks, difficulty and topic as supported. Validate and preview all rows before confirmation, report row-level errors, enforce upload limits, prevent cross-owner imports and unsafe exports, and define atomic/partial-failure and re-import behavior. Never accept a correct answer key that does not map to the row's options.
+
+The backend clock is authoritative. Persist deadlines and do not reset them on refresh. Untimed tests must not expire based only on elapsed time. Correct answers/explanations remain hidden until the test's release policy allows them. Use an immutable question/rule snapshot so edits cannot alter already-started or completed attempts.
+
 ## Tests
 Cover correct/incorrect/unanswered answers, malformed payloads, invalid or foreign question/choice IDs, duplicate entries, client score tampering, answer-key secrecy, explanation timing, publication rules, retakes/limits, anonymous access, and cross-user attempt isolation.
 
