@@ -12,6 +12,17 @@ Connect all core learning journeys to real backend behavior. A visually polished
 6. Create, edit, list, and delete notes; show whether changes are saved, pending, or failed.
 7. Navigate across views, refresh the page, and recover the appropriate signed-in/out state without leaking another user's data.
 
+## Additional course-access journey
+
+Add and test the following learner journey alongside the existing journeys:
+
+8. Browse course cards with cover image, title, subject, free/paid label and price; open course details and see the provider Telegram contact for paid courses.
+9. Open a free course without a code. For a paid course, see locked content and a code-entry form; explain that the learner should contact the listed Telegram provider to obtain a code.
+10. Submit the code and wait for the server result. Show a success/unlocked state only after a confirmed server response. Handle invalid, expired, revoked, already-used, throttled, and network-failure states without falsely claiming success.
+11. Once granted access, open folder/lesson lists, play supported embeds or use the external-open fallback, and download PDFs through the protected delivery endpoint. Confirm a different account cannot access those resources without a grant.
+
+The frontend must not include a checkout, payment gateway, UPI collection, or any alternative in-app payment option. The app records code redemption and access only; it does not claim to verify off-platform payment.
+
 ## UX requirements
 - Mobile-first layout, touch-friendly controls, clear progress, empty/loading/error/retry states.
 - No dead primary actions, placeholder buttons that look functional, or hidden failures.
