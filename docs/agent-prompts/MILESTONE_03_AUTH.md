@@ -17,6 +17,12 @@ Review current JWT routes, serializers, permissions, throttling, settings, and a
 - Authentication throttling and sensible request validation. Avoid logging credentials, JWTs, passwords, or private payloads.
 - Consistent 401/403 responses; do not rely on CORS to provide authorization.
 
+## Required role hierarchy and object ownership
+
+Implement and test three distinct permission levels: main admin, course-owning sub-admin, and student. Only the main admin can create/deactivate sub-admin accounts. Sub-admins can manage only their own courses, folders, lessons, PDF resources, access codes, and related grants within the explicitly allowed policy; they cannot create/promote staff or access another provider's records. Students cannot call any staff management or code-generation endpoints. Enforce ownership in querysets and object-level permissions on list, detail, create, update, delete, bulk generation, revoke, and publish actions. Do not rely on frontend visibility or a user-submitted owner ID.
+
+Paid course access must be represented by a server-side grant, not a client flag. Include access-code redemption throttling and fail-closed permissions. Follow the complete matrix in `docs/FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md`.
+
 ## Security cases to test
 - Anonymous user cannot read or mutate private data.
 - User A cannot list, read, edit, or delete User B's notes, progress, attempts, or profile.
