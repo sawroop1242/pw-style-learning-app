@@ -81,7 +81,7 @@ These are audit findings, not claims that the backend has been executed or runti
 
 ### Milestone 5 — Quizzes, test series, CSV import and scoring
 
-Read [`docs/FEATURE_SPEC_TEST_SERIES.md`](FEATURE_SPEC_TEST_SERIES.md) and [`docs/agent-prompts/FEATURE_TEST_SERIES.md`](agent-prompts/FEATURE_TEST_SERIES.md). Extend the current quiz engine into test series with sections, CSV question import, configurable timed/untimed modes, per-section timing, immutable attempt snapshots, autosave/resume, scoring policy, retakes, result release, and staff/student result views.
+Read [`docs/FEATURE_SPEC_TEST_SERIES.md`](FEATURE_SPEC_TEST_SERIES.md) and [`docs/agent-prompts/FEATURE_TEST_SERIES.md`](agent-prompts/FEATURE_TEST_SERIES.md). Extend the current quiz engine into test series with sections, CSV URL-based question import, configurable timed/untimed modes, per-section timing, immutable attempt snapshots, autosave/resume, scoring policy, retakes, result release, and staff/student result views. CSV source files stay in external storage: persist only the URL and minimal import metadata, never the CSV blob/raw body; store imported questions as structured records. The importer must mitigate SSRF and enforce host/redirect/IP, size, row-count, and timeout limits.
 - Implement an authenticated or explicitly specified quiz-attempt/submission contract and server-side scoring.
 - Never accept client-provided correct answers or scores as authoritative.
 - Return questions and choices without answer keys before submission; return score and explanations according to the defined attempt flow.
