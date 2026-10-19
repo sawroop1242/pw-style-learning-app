@@ -19,6 +19,10 @@ Ensure the model layer can represent:
 
 Do not add duplicate models if the existing schema already meets these needs. Do not store unnecessary sensitive data. Decide deletion behavior deliberately.
 
+## Additional required models and admin workflows
+
+Follow `docs/FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md`. Ensure the schema supports course owner/provider, cover image URL, free/paid pricing invariant, Telegram contact, ordered subject folders, video lessons with embed URLs, PDF resources, course-bound access codes (store hashes, not raw codes), durable course-access grants, code status/expiry/revocation, and audit events. Reuse existing models where suitable. Configure admin screens so main admins can manage sub-admins and all content; sub-admins can manage only their own courses/content/codes. Enforce ownership in admin querysets and save/delete paths, not only in UI. Generate codes using a cryptographically secure generator; show raw codes only once. Add constraints/indexes and migrations without data loss. Code redemption behavior and API permissions are implemented in their later authorized milestones.
+
 ## Database quality
 - Add appropriate foreign keys, uniqueness constraints, indexes, ordering, validation, and timestamps.
 - Use migrations for all schema changes; never edit migration history destructively without a clear migration plan.
