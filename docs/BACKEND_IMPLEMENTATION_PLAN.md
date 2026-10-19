@@ -193,3 +193,17 @@ A backend feature is done only when:
 - `docs/BUILD_STATUS.md` records evidence, failures and the next milestone.
 
 **Current status:** Plan authored; no backend source code, tests, database, or deployment are changed or verified by this document.
+## 10. Mandatory multi-account Cloudflare R2 storage
+
+The sub-admin panel must support each sub-admin connecting multiple Cloudflare R2 buckets across multiple Cloudflare accounts. This is required for Community post image uploads and course thumbnails; it is not just a future general-storage idea.
+
+- Model a storage target with a stable ID, tenant/sub-admin owner, display name, Cloudflare account ID, bucket, S3-compatible endpoint/region, purpose flags, enabled/health status, and timestamps. Keep credential references separate from ordinary configuration. Use a storage adapter so application features do not depend directly on one bucket.
+- Credentials must be stored in a deployment secret manager where available, or encrypted at rest using managed key material and a documented rotation process. Store no secret key in plaintext application tables. Never return secret values from APIs or log credentials/provider request signatures. Environment variable names/placeholders are allowed in docs; actual secrets are not.
+- Add sub-admin-scoped APIs to create/update target configuration, test connection, list sanitized target metadata, set defaults by purpose, enable/disable, rotate credentials, and disconnect. Validate account/bucket/endpoint fields and use a non-destructive bounded connection test.
+- Enforce ownership in querysets and object permissions for every operation. A sub-admin can use only their own targets and only for courses/posts they own or are assigned to. Main-admin oversight must be explicit and audited; it must not expose stored secrets.
+- Add media metadata records referencing the target ID and object key, with media type, detected MIME, size, safe filename, owner, related course/post, status and timestamps. The database stores metadata only, never file bytes.
+- Implement upload and cleanup workflows for Community post images and course thumbnail create/replace/delete. Validate detected file type, size and image dimensions; use collision-resistant object keys; reject path traversal and active formats by default. Keep buckets private and issue short-lived signed URLs or use an approved protected delivery endpoint.
+- Use safe transactional ordering or a durable cleanup/outbox strategy for database/object-store consistency. Handle partial upload, failed database writes, object deletion failure, expired credentials and quota errors without false success.
+- Disconnecting a target must not silently delete media. Identify existing references and require a documented keep/migrate/confirm-break policy. Failover or automatic routing across targets is opt-in and must prevent duplicate uploads and preserve the intended privacy policy.
+- Add audit events for connection changes, connection tests (without secrets), default/purpose changes, uploads, replacements, deletions, disconnections and privileged cross-tenant actions. Add redacted operational metrics and provider error classification.
+- Tests must cover multiple accounts per sub-admin, tenant isolation, secret redaction, invalid credentials, key rotation, upload validation, signed URL expiry, quota/failure recovery, media cleanup, course/post authorization and the prohibition on shared-cache storage of private media.
