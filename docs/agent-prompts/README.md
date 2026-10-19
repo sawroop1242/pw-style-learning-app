@@ -22,6 +22,17 @@ Read [Authentication and email OTP reset](../FEATURE_SPEC_AUTHENTICATION.md) and
 
 Read [Test series, CSV question bank, timers, and results](../FEATURE_SPEC_TEST_SERIES.md) and follow [the test-series coding-agent prompt](FEATURE_TEST_SERIES.md). CSV imports use an externally hosted CSV URL: backend stores the URL and minimal import metadata, never the CSV file/blob/raw contents; imported question data is stored as structured records. Apply SSRF-safe fetching and the existing milestone sequence.
 
+## Additional feature specifications and coding prompts
+
+These are feature-level requirements integrated into the existing milestones, not permission to skip the milestone sequence:
+
+- [Advanced test analytics](../FEATURE_SPEC_ADVANCED_TEST_ANALYTICS.md) — [coding prompt](FEATURE_ADVANCED_TEST_ANALYTICS.md). Extends the existing test engine; respect result-release rules and staff ownership.
+- [Notes, bookmarks, and revision](../FEATURE_SPEC_NOTES_BOOKMARKS_REVISION.md) — [coding prompt](FEATURE_NOTES_BOOKMARKS_REVISION.md). Extends existing notes/progress and avoids a parallel notes system.
+- [Course discovery and search](../FEATURE_SPEC_COURSE_DISCOVERY.md) — [coding prompt](FEATURE_COURSE_DISCOVERY.md). Extends the existing published course catalogue and preserves paid-content restrictions.
+- [Admin and sub-admin analytics](../FEATURE_SPEC_ADMIN_ANALYTICS.md) — [coding prompt](FEATURE_ADMIN_ANALYTICS.md). Uses real persisted data and strict ownership boundaries.
+- [PWA offline and low-data mode](../FEATURE_SPEC_PWA_OFFLINE.md) — [coding prompt](FEATURE_PWA_OFFLINE.md). Supplements Milestone 9; private API data and protected media must not enter shared caches.
+- [Study planner and reminders](../FEATURE_SPEC_STUDY_PLANNER.md) — [coding prompt](FEATURE_STUDY_PLANNER.md). Adds private user-owned tasks and best-effort browser reminders.
+
 ## Prompt sequence
 
 | Order | Prompt | Goal |
@@ -48,7 +59,7 @@ Read [Test series, CSV question bank, timers, and results](../FEATURE_SPEC_TEST_
 - Treat every API input and user-generated string as untrusted.
 - Private records must be scoped to the authenticated user at the queryset and object-permission level.
 - Never reveal quiz answer keys before submission or trust a score supplied by the client.
-- Never cache authenticated API responses, tokens, notes, or private progress in a shared service-worker cache.
+- Never cache authenticated API responses, tokens, notes, private progress, active tests, answer keys, or protected media in a shared service-worker cache.
 - Only use course materials and video URLs that the project is authorized to use.
 - No payment processing, live streaming, chat, certificates, AI tutor, or recommendation engine until the core platform is accepted and the product owner prioritizes them.
 - A deployed service may be called production-ready only after real target-environment smoke tests and security checks.
