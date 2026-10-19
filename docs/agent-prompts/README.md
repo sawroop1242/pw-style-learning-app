@@ -79,3 +79,4 @@ These are feature-level requirements integrated into the existing milestones, no
 ## Required end-of-run report
 
 For every milestone, report: source files changed; implementation decisions; exact tests/checks run and results; failures and remaining risks; updated status/plan links; and the next milestone. Stop after the report.
+- [Multi-account Cloudflare R2 storage](../FEATURE_SPEC_R2_STORAGE.md) — [coding prompt](FEATURE_R2_STORAGE.md). Mandatory sub-admin-owned storage connections across different Cloudflare accounts, used for Community post images and course thumbnails. Must preserve tenant isolation, protected credentials, private media delivery and object cleanup.
