@@ -16,7 +16,7 @@ Read [Course management and code-based access](../FEATURE_SPEC_COURSES_AND_ACCES
 
 ## Test-series specification
 
-Read [Test series, CSV question bank, timers, and results](../FEATURE_SPEC_TEST_SERIES.md) and follow [the test-series coding-agent prompt](FEATURE_TEST_SERIES.md). These requirements extend the existing quiz engine and must be implemented in the relevant milestones, without skipping the sequence.
+Read [Test series, CSV question bank, timers, and results](../FEATURE_SPEC_TEST_SERIES.md) and follow [the test-series coding-agent prompt](FEATURE_TEST_SERIES.md). CSV imports use an externally hosted CSV URL: backend stores the URL and minimal import metadata, never the CSV file/blob/raw contents; imported question data is stored as structured records. Apply SSRF-safe fetching and the existing milestone sequence.
 
 ## Prompt sequence
 
