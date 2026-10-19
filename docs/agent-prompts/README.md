@@ -10,6 +10,14 @@ These files are **execution prompts for a coding agent**, not implementation del
 4. The agent must inspect current files and git status before editing, implement actual source changes, run tests, update `docs/BUILD_STATUS.md` and `docs/IMPLEMENTATION_PLAN.md`, and stop at the end of that milestone.
 5. If the current milestone fails its exit criteria, the agent must fix it or report the exact blocker. It must not skip ahead or mark it complete.
 
+## Frontend and backend implementation plans
+
+Use the separate plans to clarify ownership while preserving the single ordered milestone sequence:
+- [Frontend implementation plan](../FRONTEND_IMPLEMENTATION_PLAN.md) — user journeys, screens, API client, UI states, PWA/offline, accessibility and browser checks.
+- [Backend implementation plan](../BACKEND_IMPLEMENTATION_PLAN.md) — models, API contracts, authentication/authorization, scoring, CSV URL imports, analytics, security and operations.
+
+These plans complement rather than replace the master prompt, shared implementation plan, feature specs, or milestone prompts. Start with Milestone 1 foundation verification and proceed in order. A Markdown plan is not implementation evidence.
+
 ## Product feature specification
 
 Read [Course management and code-based access](../FEATURE_SPEC_COURSES_AND_ACCESS_CODES.md) for the required admin/sub-admin roles, course folders, video/PDF resources, free/paid course rules, Telegram provider contact, and secure access-code redemption. The execution wrapper is [Course-management coding-agent prompt](FEATURE_COURSE_MANAGEMENT_ACCESS_CODES.md). These requirements are integrated into the relevant existing milestones; do not skip the milestone order.
