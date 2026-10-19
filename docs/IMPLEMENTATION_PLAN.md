@@ -30,6 +30,7 @@ The following are required product extensions, integrated into the existing mile
 - [Admin analytics](FEATURE_SPEC_ADMIN_ANALYTICS.md) provides main-admin platform aggregates and sub-admin owner-scoped metrics based only on persisted data.
 - [PWA offline and low-data mode](FEATURE_SPEC_PWA_OFFLINE.md) supplements Milestone 9 with a resource-class cache policy, safe offline states and no shared caching of private data.
 - [Study planner and reminders](FEATURE_SPEC_STUDY_PLANNER.md) adds private tasks/goals and opt-in best-effort browser reminders.
+- [Community posts](FEATURE_SPEC_COMMUNITY_POSTS.md) adds an authenticated student feed plus role-scoped authoring for main admins and sub-admins; see the [coding-agent prompt](agent-prompts/FEATURE_COMMUNITY_POSTS.md).
 
 Matching coding-agent prompts are indexed in [docs/agent-prompts/README.md](agent-prompts/README.md). The requested product features remain specifications until implemented and verified through the existing milestone sequence.
 
@@ -128,7 +129,8 @@ Read [`docs/FEATURE_SPEC_TEST_SERIES.md`](FEATURE_SPEC_TEST_SERIES.md) and [`doc
 - Add loading, empty, error and signed-out states; avoid leaking tokens or rendering untrusted HTML.
 - **Acceptance:** frontend works with configured API base URL; API errors are surfaced; no demo fallback is presented as live server data.
 
-### Milestone 8 — Complete learning experience, discovery and planner
+### Milestone 8 — Complete learning experience, discovery, planner and community
+- Implement the Community feed and staff authoring flows according to [FEATURE_SPEC_COMMUNITY_POSTS.md](FEATURE_SPEC_COMMUNITY_POSTS.md) only after the prerequisite auth, course-ownership and API milestones are verified. Main admins may publish global posts; sub-admins are limited to authorized course scope; students are read-only.
 - Implement functional sign-up/sign-in, searchable/filtered course discovery per [`docs/FEATURE_SPEC_COURSE_DISCOVERY.md`](FEATURE_SPEC_COURSE_DISCOVERY.md), course and lesson navigation, lesson playback/link opening, quiz attempt/results, notes/bookmarks/revision and synced progress.
 - Add personal study tasks, daily/weekly planner views and opt-in browser reminders per [`docs/FEATURE_SPEC_STUDY_PLANNER.md`](FEATURE_SPEC_STUDY_PLANNER.md), after required APIs exist.
 - Add student test-performance insights only from real persisted attempts and only when result policy allows.
