@@ -25,6 +25,8 @@ The following are required product extensions, integrated into the existing mile
 
 Matching coding-agent prompts are indexed in [docs/agent-prompts/README.md](agent-prompts/README.md). The requested product features remain specifications until implemented and verified through the existing milestone sequence.
 
+Production hardening is specified in [FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md](FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md), with its [coding-agent prompt](agent-prompts/FEATURE_PRODUCTION_SECURITY_RELIABILITY.md). It covers RBAC, audit logs, rate limits, backup/restore drills, CI gates, monitoring, secure deployment, cache privacy, protected media, export safety, accessibility, and performance. Integrate it with Milestones 1, 3, 10, and 11 rather than creating a parallel implementation track.
+
 ## Working rules
 
 1. Complete exactly one milestone per agent run. After reporting evidence and updating docs/BUILD_STATUS.md, stop.
@@ -34,6 +36,7 @@ Matching coding-agent prompts are indexed in [docs/agent-prompts/README.md](agen
 5. Do not include paid/proprietary course content or bypass access controls. Store only video URLs the project is authorized to use.
 6. Keep secrets out of source control. Use environment configuration and safe defaults.
 7. Do not cache authenticated/private API responses in the service worker.
+8. Treat security and operations checklist items as unverified until supported by actual test, restore, browser, or deployment evidence.
 
 ## Initial audit — observed state
 
@@ -135,6 +138,7 @@ Read [`docs/FEATURE_SPEC_TEST_SERIES.md`](FEATURE_SPEC_TEST_SERIES.md) and [`doc
 ### Milestone 10 — Quality, security, analytics and performance
 - Add automated backend tests and practical frontend checks; add CI for repeatable checks.
 - Review CORS, hosts, HTTPS/cookie/security headers, secret handling, throttling, API serialization/query behavior and dependency updates.
+- Follow [FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md](FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md): test RBAC boundaries, rate limits, audit-log redaction, CI gates, private-cache behavior, safe exports, accessibility, and representative performance.
 - Verify analytics formulas and staff scopes, spreadsheet-safe exports, private planner/notes/bookmark ownership, timezone handling, and offline cache privacy.
 - Check accessibility, safe DOM rendering, error handling, responsive behavior and service-worker privacy.
 - **Acceptance:** CI checks pass; high-risk security findings are resolved or documented with mitigation; performance and accessibility checks are recorded.
@@ -142,6 +146,7 @@ Read [`docs/FEATURE_SPEC_TEST_SERIES.md`](FEATURE_SPEC_TEST_SERIES.md) and [`doc
 ### Milestone 11 — Deployment and operations
 - Provide reproducible deployment configuration for Django, static assets, database migrations and static files.
 - Document environment variables, database backup/migration procedure, logs, health checks and rollback.
+- Verify HTTPS and security headers in the target environment; test a real isolated backup restore; verify monitoring/health behavior and document any controls not configured. Follow [FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md](FEATURE_SPEC_PRODUCTION_SECURITY_RELIABILITY.md).
 - Verify deployment only against an actual host and observed successful smoke tests.
 - **Acceptance:** clean deployment and migrations succeed in the target environment; HTTPS, allowed hosts, database persistence and API/frontend connectivity are verified; no secrets are committed.
 
