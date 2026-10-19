@@ -161,6 +161,7 @@ Complete **only one milestone per agent run** unless the user explicitly asks fo
 - Implement catalogue/search and filters according to `docs/FEATURE_SPEC_COURSE_DISCOVERY.md`, course detail, lesson playback/link handling, completion, quiz taking/results, notes/bookmarks/revision, progress dashboard, and profile.
 - Add study planner and daily/weekly task views according to `docs/FEATURE_SPEC_STUDY_PLANNER.md` once the required account and resource APIs exist.
 - Add student-facing test performance insights from `docs/FEATURE_SPEC_ADVANCED_TEST_ANALYTICS.md` only when persisted attempts and result-release behavior are available.
+- Implement the authenticated Community feed and role-scoped post authoring per `docs/FEATURE_SPEC_COMMUNITY_POSTS.md` and `docs/agent-prompts/FEATURE_COMMUNITY_POSTS.md`. Main admins can manage global and course posts; sub-admins can manage only authorized course posts; students can read published posts in scope. Do not add comments/reactions/chat in v1.
 - Make every visible control work or clearly label it as unavailable; remove dead buttons and misleading placeholders.
 - Exit criteria: core learner journey works from login through course lesson, quiz, notes, and progress.
 
