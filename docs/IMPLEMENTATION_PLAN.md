@@ -79,7 +79,9 @@ These are audit findings, not claims that the backend has been executed or runti
 - Add API tests for normal, empty, invalid and permission-sensitive cases.
 - **Acceptance:** documented endpoints return predictable responses; published/unpublished visibility and filtering are tested; query behavior suits the expected catalog.
 
-### Milestone 5 — Quizzes and scoring
+### Milestone 5 — Quizzes, test series, CSV import and scoring
+
+Read [`docs/FEATURE_SPEC_TEST_SERIES.md`](FEATURE_SPEC_TEST_SERIES.md) and [`docs/agent-prompts/FEATURE_TEST_SERIES.md`](agent-prompts/FEATURE_TEST_SERIES.md). Extend the current quiz engine into test series with sections, CSV question import, configurable timed/untimed modes, per-section timing, immutable attempt snapshots, autosave/resume, scoring policy, retakes, result release, and staff/student result views.
 - Implement an authenticated or explicitly specified quiz-attempt/submission contract and server-side scoring.
 - Never accept client-provided correct answers or scores as authoritative.
 - Return questions and choices without answer keys before submission; return score and explanations according to the defined attempt flow.
