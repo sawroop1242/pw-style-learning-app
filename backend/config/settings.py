@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
+    "accounts",
     "courses",
 ]
 
@@ -123,11 +124,16 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Manifest hashing (for far-future cache headers) is only needed in
+# production; without a collectstatic manifest, admin pages raise
+# "Missing staticfiles manifest entry" in development and tests.
+if ENVIRONMENT == "production":
+    STATICFILES_STORAGE_BACKEND = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+else:
+    STATICFILES_STORAGE_BACKEND = "whitenoise.storage.CompressedStaticFilesStorage"
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
-    },
+    "staticfiles": {"BACKEND": STATICFILES_STORAGE_BACKEND},
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
