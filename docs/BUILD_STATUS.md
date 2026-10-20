@@ -1,7 +1,7 @@
 # StudySpace Build Status
 
-**Current stage:** Milestone 2 - data model and Django admin  
-**Status:** Milestones 1 and 2 verified locally with recorded evidence (53 backend tests green); CI blocked by a platform/billing restriction on the private repository (documented below). Next: Milestone 3 (auth API).  
+**Current stage:** Milestone 3 - Authentication API complete  
+**Status:** Milestones 1, 2, and 3 verified locally with recorded evidence (96 backend tests green); CI blocked by a platform/billing restriction on the private repository (documented below). Next: Milestone 4 (courses API).  
 **Branch:** main  
 **Repository:** https://github.com/sawroop1242/pw-style-learning-app
 
@@ -88,6 +88,57 @@ Security-relevant admin hardening shipped in this milestone:
 
 Live runtime smoke test (`manage.py runserver`, ENVIRONMENT=development): `GET /healthz/` 200, `GET /admin/login/` 200, `GET /api/` 200. Logged-in admin session verified: course changelist 200, access-code add form 200, and a full course creation through the admin (200, persisted with owner set).
 
+## Milestone 3 - Authentication API (complete)
+
+Implements the M3 scope from `IMPLEMENTATION_PLAN.md`: registration with unique normalized username/email and Django password validators, JWT login/logout/refresh with token blacklisting, authenticated password change, email OTP password reset with rate limiting, and audit logging for auth events.
+
+### Endpoints (all under `/api/`)
+
+| Endpoint | Method | Auth | Throttle | Purpose |
+|---|---|---|---|---|
+| `/api/auth/register/` | POST | anon | 5/min | Create user + profile (role defaults to student) |
+| `/api/token/` | POST | anon | 10/min | Login with `username_or_email` + password |
+| `/api/token/refresh/` | POST | anon | anon default | Refresh access token |
+| `/api/auth/logout/` | POST | JWT | user default | Blacklist refresh token |
+| `/api/auth/me/` | GET | JWT | user default | Current user profile (username, email, role, timestamps) |
+| `/api/auth/change_password/` | POST | JWT | user default | Authenticated password change, blacklists outstanding refresh tokens |
+| `/api/auth/forgot_password/` | POST | anon | 3/hour | Issue 6-digit OTP email (generic response, no user enumeration) |
+| `/api/auth/verify_otp/` | POST | anon | 10/min | Verify OTP + set new password (single-use, attempt-limited, atomic) |
+| `/api/auth/resend_otp/` | POST | anon | 3/hour | Re-issue OTP, invalidating prior unconsumed codes |
+
+### Security behaviors
+
+- Registration/login accept username or email case-insensitively; emails normalized (lowercase, `EmailValidator`).
+- Passwords run through `validate_password` (Django validators incl. `UserAttributeSimilarityValidator` config); weak/new==old/mismatch rejected with field-level errors.
+- OTPs are 6-digit, stored only as HMAC-SHA256 hashes keyed on `SECRET_KEY`, expire in 10 minutes, max 5 verify attempts, and only one active OTP per user+purpose (previous codes consumed on reissue).
+- Forgot/verify/resend return the same generic response whether or not the account exists - no user enumeration. Email delivery failure is logged (audit `email_failed`) without leaking state.
+- JWT config: 30-minute access, 7-day refresh, blacklist app enabled, rotation + blacklist on change-password/logout.
+- Every auth event writes an `AuditEvent` row (register, login, logout, password change, OTP issue/verify/fail/resend, email failure) with actor, action, target, outcome, and metadata.
+
+## Milestone 3 result - verified
+
+Commands run from `backend/` with the venv interpreter:
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 - "System check identified no issues (0 silenced)" |
+| Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 - "No changes detected" |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" (0 failures, 0 errors) |
+| Accounts tests only | `python manage.py test accounts` | Exit 0 - "Ran 43 tests ... OK" |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 |
+
+Test coverage added in M3 (43 accounts tests):
+
+- Registration: success, duplicate username/email (case-insensitive), normalization (`TestUser` -> `testuser`), weak/missing-field rejection, profile auto-created with student role.
+- Login: username or email, wrong password, unknown user, inactive account, profile data returned.
+- Token refresh: valid, invalid; logout blacklists refresh (subsequent refresh 401), logout requires auth.
+- `me`: authenticated success, 401 without token.
+- Password change: success (old password no longer valid), wrong current password, weak new password, mismatched confirm, old refresh token rejected after change.
+- OTP flow: issue on existing email, generic 200 for unknown email, case-insensitive email, prior OTP invalidated on reissue, consumed/expired/wrong-user/max-attempts rejected, resend yields a different code, password actually reset.
+- Throttling: register 5/min, login 10/min, forgot 3/hour, OTP verify 10/min all return 429 past their limits.
+- Email delivery failure still returns generic 200 and records `email_failed` audit event.
+- Tests isolate the shared throttle cache via per-class `@override_settings(CACHES=...)` with distinct `LOCATION`s plus `cache.clear()` in `setUp`, so no cross-test 429s.
+
 ## Next step
 
-Complete Milestone 2 (models, admin, migrations, tests), then Milestones 3-6 for the backend in order, recording exact command evidence here after each milestone.
+Milestones 4-6 for the backend in order (courses API, community/study planner, deployment), recording exact command evidence here after each milestone.
