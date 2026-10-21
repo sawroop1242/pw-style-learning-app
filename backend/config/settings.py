@@ -27,7 +27,7 @@ def env_bool(name, default):
     )
 
 
-DEBUG = env_bool("DEBUG", ENVIRONMENT == "development")
+DEBUG = env_bool("DEBUG", ENVIRONMENT in {"development", "test"})
 if ENVIRONMENT in {"staging", "production"} and DEBUG:
     raise ImproperlyConfigured(
         f"DEBUG must be false when ENVIRONMENT={ENVIRONMENT}."

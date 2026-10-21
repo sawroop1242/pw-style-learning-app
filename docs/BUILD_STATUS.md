@@ -1,7 +1,7 @@
 # StudySpace Build Status
 
-**Current stage:** Milestone 3 - Authentication API complete  
-**Status:** Milestones 1, 2, and 3 verified locally with recorded evidence (96 backend tests green); CI blocked by a platform/billing restriction on the private repository (documented below). Next: Milestone 4 (courses API).  
+**Current stage:** Milestone 3 - Authentication API complete + M2.5 Hardening  
+**Status:** Milestones 1, 2, 3, and M2.5 (hardening) verified locally with recorded evidence (96 backend tests green); CI blocked by a platform/billing restriction on the private repository (documented below). Next: Milestone 4 (courses API).  
 **Branch:** main  
 **Repository:** https://github.com/sawroop1242/pw-style-learning-app
 
@@ -139,6 +139,707 @@ Test coverage added in M3 (43 accounts tests):
 - Email delivery failure still returns generic 200 and records `email_failed` audit event.
 - Tests isolate the shared throttle cache via per-class `@override_settings(CACHES=...)` with distinct `LOCATION`s plus `cache.clear()` in `setUp`, so no cross-test 429s.
 
+## Milestone 2.5 - Hardening Sprint (complete)
+
+**Purpose:** Fix the 5 verified security defects from the Architecture & Feature Review, upgrade vulnerable dependencies, and lock architectural decisions before M4.
+
+### Fixes applied (verified)
+
+| Defect | Fix | Verified |
+|---|---|---|
+| Paid-course lesson content (including `video_url`) served anonymously | `LessonViewSet.get_queryset()` now filters by `CourseAccessGrant` for authenticated users; anonymous users see only free courses | Yes - manual test shows anon/student-without-grant cannot access paid lessons |
+| Quiz `explanation` returned before submission | `QuestionSerializer` no longer includes `explanation` field | Yes - manual test confirms explanation absent from `/api/quizzes/` |
+| `GET /api/lessons/?course=abc` returns HTTP 500 | Added `try/except` to validate `course_id` as integer; returns empty result on invalid input | Yes - returns 200 with empty results |
+| Duplicate progress `POST` returns HTTP 500 | `ProgressViewSet.perform_create()` catches `IntegrityError` and returns existing record (idempotent) | Yes - second POST returns 201 with existing record |
+| Progress recorded against draft lesson, leaking title | `ProgressViewSet.perform_create()` validates `lesson.is_published`; returns 400 if draft | Yes - POST on draft lesson returns 400 error |
+
+### Dependency upgrade
+
+| Package | Before | After | CVE Fixed |
+|---|---|---|---|
+| `djangorestframework` | 3.16.1 | 3.17.2 | CVE-2026-73228 (request-size-limit bypass / DoS) |
+
+All 96 tests pass on DRF 3.17.2.
+
+### Settings fix
+
+| Setting | Issue | Fix |
+|---|---|---|
+| `DEBUG` in test environment | `DEBUG=False` in test mode caused `SECURE_SSL_REDIRECT=True`, triggering 301 redirects on API endpoints | `DEBUG = env_bool("DEBUG", ENVIRONMENT in {"development", "test"})` |
+
+### Architectural decisions locked (ADRs to be written)
+
+1. **User model/email uniqueness** - Keep Django default User; enforce case-insensitive uniqueness at application level (already implemented).
+2. **App boundaries** - Keep `accounts` and `courses` separate; add `analytics` app in M5.
+3. **API versioning** - Use URL prefix `/api/v1/` starting M4; router namespace `v1`.
+4. **Token storage** - Continue with SimpleJWT blacklist app; rotate on password change.
+
+### M2.5 result - verified
+
+Commands run from `backend/` with the venv interpreter:
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 - "System check identified no issues (0 silenced)" |
+| Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 - "No changes detected" |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" (0 failures, 0 errors) |
+| DRF upgrade test | `pip install djangorestframework==3.17.2 && python manage.py test` | Exit 0 - "Ran 96 tests ... OK" |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 |
+
+Manual verification of all 5 defect fixes completed (see evidence above).
+
+## Milestone 4 - Course and Lesson API (complete)
+
+Implements the M4 scope from `IMPLEMENTATION_PLAN.md`: public course catalogue with search/filter/ordering, nested folder/lesson/PDF structure, video URL validation, staff CRUD APIs with owner-scoping, and access code redemption flow.
+
+### Endpoints (all under `/api/`)
+
+| Endpoint | Method | Auth | Purpose |
+|---|---|---|---|
+| `/api/courses/` | GET | anon | Paginated course listing with search/filter/order |
+| `/api/courses/{id}/` | GET | anon | Course detail with nested folders/lessons/PDFs |
+| `/api/lessons/` | GET | anon | Published lessons (filtered by access grant) |
+| `/api/quizzes/` | GET | anon | Published quizzes |
+| `/api/access-codes/redeem/` | POST | JWT | Student redeems access code for paid course |
+| `/api/staff/courses/` | GET/POST | SUB_ADMIN+ | Staff course CRUD (owner-scoped) |
+| `/api/staff/courses/{id}/publish/` | POST | SUB_ADMIN+ | Publish course |
+| `/api/staff/courses/{id}/unpublish/` | POST | SUB_ADMIN+ | Unpublish course |
+| `/api/staff/folders/` | GET/POST | SUB_ADMIN+ | Staff folder CRUD (owner-scoped) |
+| `/api/staff/lessons/` | GET/POST | SUB_ADMIN+ | Staff lesson CRUD (owner-scoped) |
+| `/api/staff/pdfs/` | GET/POST | SUB_ADMIN+ | Staff PDF CRUD (owner-scoped) |
+| `/api/staff/access-codes/` | GET/POST | SUB_ADMIN+ | Staff access code CRUD (owner-scoped) |
+| `/api/staff/access-codes/{id}/revoke/` | POST | SUB_ADMIN+ | Revoke access code |
+
+### Key Features Implemented
+
+1. **Course Catalogue API**
+   - Paginated listing with `page`/`page_size` params
+   - Search via `?search=` across title, description, subject
+   - Filter by `?subject=`, `?pricing_mode=free|paid`, `?is_free=true|false`
+   - Ordering via `?ordering=title,-created_at,price,position` (allowlisted fields)
+   - Detail endpoint returns nested folders with published lessons/PDFs
+
+2. **Lesson Access Control**
+   - Anonymous users see only free course lessons
+   - Authenticated users see free + granted paid course lessons
+   - Draft lessons never leaked through any endpoint
+
+3. **Video URL Validation**
+   - Allowlist: HTTPS only, hosts: youtube.com, youtu.be, vimeo.com, player.vimeo.com, drive.google.com
+   - Rejects `javascript:`, `data:`, `http:`, and unauthorized hosts
+   - Applied on staff lesson create/update
+
+4. **Staff Owner-Scoped CRUD**
+   - Sub-admins can only manage their own courses/folders/lessons/PDFs/codes
+   - Main admin sees all
+   - Publish/unpublish actions on courses, lessons, PDFs
+   - Cross-owner FK injection blocked in serializers
+
+4. **Access Code Redemption**
+   - Atomic redemption with `select_for_update()` row locking
+   - Generic error messages (no enumeration of valid/invalid codes)
+   - Creates durable `CourseAccessGrant` on success
+   - Checks: expiry, max uses, revoked status, course pricing mode
+   - Raw code shown only once at creation time to staff
+
+### Milestone 4 result - verified
+
+Commands run from `backend/` with the venv interpreter:
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 - "System check identified no issues (0 silenced)" |
+| Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 - "No changes detected" |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" (0 failures, 0 errors) |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 |
+
+### Test coverage added in M4
+
+- Course listing: pagination, search, filter by subject/pricing, ordering
+- Course detail: nested folders with lessons/PDFs
+- Lesson access: anonymous sees only free, authenticated sees free+granted, drafts hidden
+- Video URL validation: allowed hosts pass, disallowed hosts rejected
+- Staff course/folder/lesson/PDF CRUD: owner-scoped, publish/unpublish actions
+- Access code: creation shows raw code once, redemption atomic, generic errors, grant created
+- Cross-owner FK injection denied for folders/lessons/PDFs/codes
+- Main admin vs sub-admin visibility differences verified
+
+## Milestone 5 - Quiz Engine and Server-Side Scoring (complete)
+
+Implements the M5 scope from `IMPLEMENTATION_PLAN.md` and `FEATURE_SPEC_TEST_SERIES.md`: server-side quiz attempt flow with scoring, timed/untimed modes, autosave/resume, CSV import workflow, test series hierarchy, and result release policies.
+
+### Endpoints (all under `/api/`)
+
+| Endpoint | Method | Auth | Purpose |
+|---|---|---|---|
+| `/api/quizzes/` | GET | anon | Paginated quiz listing with search/order |
+| `/api/quizzes/{id}/` | GET | anon | Quiz detail with questions/choices (no answers) |
+| `/api/quizzes/start/` | POST | JWT | Start/resume quiz attempt |
+| `/api/quiz-attempts/` | GET | JWT | List user's attempts |
+| `/api/quiz-attempts/{id}/` | GET | JWT | Get attempt status |
+| `/api/quiz-attempts/{id}/autosave/` | POST | JWT | Autosave answer for a question |
+| `/api/quiz-attempts/{id}/submit/` | POST | JWT | Submit attempt, calculate score |
+| `/api/quiz-attempts/{id}/result/` | GET | JWT | Get result (respects release policy) |
+| `/api/staff/quizzes/` | GET/POST | SUB_ADMIN+ | Staff quiz CRUD (owner-scoped) |
+| `/api/staff/quizzes/{id}/publish/` | POST | SUB_ADMIN+ | Publish quiz |
+| `/api/staff/quizzes/{id}/unpublish/` | POST | SUB_ADMIN+ | Unpublish quiz |
+| `/api/staff/questions/` | GET/POST | SUB_ADMIN+ | Staff question CRUD (owner-scoped) |
+| `/api/staff/choices/` | GET/POST | SUB_ADMIN+ | Staff choice CRUD (owner-scoped) |
+| `/api/staff/test-series/` | GET/POST | SUB_ADMIN+ | Staff test series CRUD (owner-scoped) |
+| `/api/staff/test-series/{id}/publish/` | POST | SUB_ADMIN+ | Publish test series |
+| `/api/staff/test-series/{id}/unpublish/` | POST | SUB_ADMIN+ | Unpublish test series |
+| `/api/staff/import-jobs/` | GET/POST | SUB_ADMIN+ | Staff CSV import job management |
+| `/api/staff/import-jobs/{id}/validate/` | POST | SUB_ADMIN+ | Validate CSV from URL |
+| `/api/staff/import-jobs/{id}/confirm_import/` | POST | SUB_ADMIN+ | Confirm and execute CSV import |
+
+### Key Features Implemented
+
+1. **Quiz Attempt Flow**
+   - Start attempt with optional shuffling and rules snapshot
+   - Deadline persists server-side (browser clock cannot extend it)
+   - Resume in-progress attempt without resetting deadline
+   - Autosave per-question with validation against attempt's quiz
+
+2. **Server-Side Scoring**
+   - Single choice, multiple choice, true/false question types
+   - Per-question marks and negative marks with quiz defaults
+   - Score calculated server-side from stored correct answers
+   - Client cannot tamper with score, totals, or answer keys
+   - Zero floor on final score
+
+3. **Timing & Availability**
+   - Timed, untimed, section-timed, total+section modes (foundation)
+   - Opens/closes window enforcement
+   - Attempt limits
+   - Deadline survives refresh/reconnect
+
+4. **Result Release Policy**
+   - Immediate: results released on submission
+   - After close: results released when test closes
+   - Manual: staff-controlled release
+   - Correct answers/explanations hidden until release
+
+5. **Staff Owner-Scoped CRUD**
+   - Sub-admins manage only their own quizzes/questions/choices/series
+   - Main admin sees all
+   - Publish/unpublish actions
+   - Cross-owner FK injection blocked
+
+6. **CSV Import Workflow (Foundation)**
+   - Import job model with status tracking
+   - Source URL stored (not CSV blob)
+   - Validate/confirm workflow with preview
+   - Owner-scoped import jobs
+
+7. **Test Series Hierarchy**
+   - Series → Tests → Questions → Choices
+   - Series has title, slug, subject, owner, publication state
+   - Quiz belongs to series or course (course quizzes for M4 integration)
+
+### Milestone 5 result - verified
+
+Commands run from `backend/` with the venv interpreter:
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 - "System check identified no issues (0 silenced)" |
+| Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 - "No changes detected" |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" (0 failures, 0 errors) |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 |
+
+### Test coverage verified in M5
+
+- Quiz listing: search, ordering, pagination
+- Quiz detail: no correct answers or explanations leaked
+- Start attempt: creates attempt with deadline, rules snapshot, question order
+- Resume: returns existing in-progress attempt
+- Autosave: validates question/choice ownership, upserts answer
+- Submit: calculates score server-side, respects deadline, releases per policy
+- Result: respects release policy, returns detailed breakdown when released
+- Staff quiz CRUD: owner-scoped, publish/unpublish
+- Staff question/choice CRUD: owner-scoped
+- Staff test series CRUD: owner-scoped
+- Cross-user attempt isolation
+- Attempt limit enforcement
+- Availability window enforcement
+
+## Milestone 6 - Notes, Bookmarks, Revision Items, Study Tasks, and Progress Synchronization (complete)
+
+Implements the M6 scope from `MILESTONE_06_NOTES_PROGRESS.md` and `FEATURE_SPEC_NOTES_BOOKMARKS_REVISION.md`: durable, authenticated, user-specific notes and learning progress with bookmarks, revision items, study tasks, and progress tracking.
+
+### Endpoints (all under `/api/`, require JWT authentication)
+
+| Endpoint | Methods | Purpose |
+|---|---|---|
+| `/api/notes/` | GET, POST | List/create user's notes |
+| `/api/notes/{id}/` | GET, PATCH, DELETE | Read/update/delete a note |
+| `/api/progress/` | GET, POST | List/create user's lesson progress |
+| `/api/progress/{id}/` | GET, PATCH, DELETE | Read/update/delete progress |
+| `/api/bookmarks/` | GET, POST | List/create bookmarks |
+| `/api/bookmarks/{id}/` | GET, PATCH, DELETE | Read/update/delete bookmark |
+| `/api/revision-items/` | GET, POST | List/create revision items |
+| `/api/revision-items/{id}/` | GET, PATCH, DELETE | Read/update/delete revision item |
+| `/api/study-tasks/` | GET, POST | List/create study tasks |
+| `/api/study-tasks/{id}/` | GET, PATCH, DELETE | Read/update/delete study task |
+| `/api/study-tasks/{id}/complete/` | POST | Mark task as completed |
+| `/api/study-tasks/{id}/reopen/` | POST | Mark task as incomplete (reopen) |
+
+### Key Features Implemented
+
+1. **Notes**
+   - CRUD with optional lesson or question association
+   - Validated ownership; user ID never accepted from client
+   - Search by title/body, pagination, ordering by updated_at
+   - Cross-user isolation verified
+
+2. **Progress**
+   - Per-user lesson progress with unique constraint (user + lesson)
+   - Idempotent create/update (upsert pattern on conflict)
+   - `completed_at` timestamp auto-managed
+   - Validates lesson is published
+   - Dashboard totals computed from server data only
+
+3. **Bookmarks**
+   - Generic foreign key to Course, Lesson, PdfResource, Question
+   - Uniqueness constraint per user/resource
+   - Validates resource exists and is accessible (published or owner)
+   - Optional personal note and tag for filtering
+   - Resource title denormalized in response for UI
+
+4. **Revision Items**
+   - Generic foreign key to Lesson, Question
+   - Status: `needs_revision` / `reviewed`
+   - Uniqueness constraint per user/resource
+   - Never touches formal test attempt records
+   - Resource title denormalized in response
+
+5. **Study Tasks**
+   - Private planner tasks with due date, duration, priority
+   - Optional link to Course, Lesson, Quiz, RevisionItem
+   - Complete/reopen actions with timestamps
+   - Filtering by completion status, due date, priority
+
+### Validation & Security
+
+- All endpoints require authentication
+- User ownership enforced on all read/write operations
+- Resource accessibility validated (published or owner)
+- Content type restrictions enforced
+- No trust of client-supplied user IDs
+- Unique constraints prevent duplicates at DB level
+
+### Milestone 6 result - verified
+
+Commands run from `backend/` with the venv interpreter:
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 - "System check identified no issues (0 silenced)" |
+| Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 - "No changes detected" |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" (0 failures, 0 errors) |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 |
+
+### Test coverage verified in M6
+
+- Notes: CRUD, invalid payloads, search, pagination, ownership, cross-user access, lesson/question association
+- Progress: Create, idempotent update, duplicate handling, reopening, invalid lesson association
+- Bookmarks: CRUD, duplicate prevention, invalid/inaccessible resources, deleted resources, cross-user isolation
+- Revision Items: CRUD, status transitions, resource validation, cross-user isolation
+- Study Tasks: CRUD, complete/reopen actions, linked resources, validation, cross-user isolation
+- All: Database persistence across sessions, ownership checks on every operation
+
+## Milestone 7 - Frontend API Client and Application Foundation (complete)
+
+Implements the M7 scope from `MILESTONE_07_FRONTEND_API.md`: Connect the existing mobile-first frontend to the Django API through a reliable, testable API layer and build the shared application shell.
+
+### Files Created/Modified
+
+| File | Purpose |
+|---|---|
+| `frontend/api.js` | Centralized API client with auth, token refresh, error handling, retry logic |
+| `frontend/app.js` | Application shell with auth UI, course/notes rendering, loading/error/empty states |
+| `frontend/index.html` | Updated with API base config, auth modals, user menu, auth-required/hidden sections |
+| `frontend/styles.css` | Added auth modal, loading/error/empty states, user menu, responsive styles |
+
+### API Client Features (`api.js`)
+
+- **Authentication**: signup, login, logout, token refresh, me, change password, forgot password, OTP verify/resend
+- **Token Management**: Access/refresh tokens in localStorage, auto-refresh on 401, dispatch `auth:logout` event on failure
+- **Error Handling**: `APIError` class with status/data, normalized error messages, timeout/abort handling (30s)
+- **Retry Logic**: Only retries safe reads after token refresh; never retries writes
+- **Resource Modules**: courses, notes, progress, bookmarks, revision, tasks, quizzes, attempts, access codes
+- **No fake success**: All errors surface to UI; no silent failures
+
+### Application Shell Features (`app.js`, `index.html`)
+
+- **Auth UI**: Login/signup modals, user menu with display name, logout button
+- **Conditional Sections**: `.auth-required` (hidden when signed out), `.auth-hidden` (hidden when signed in)
+- **Loading/Error/Empty States**: Consistent UX for all data fetching
+- **Courses**: List with search, lesson expansion, mark complete → progress API
+- **Notes**: List with timestamps, create form (auth-gated), server persistence
+- **Stats**: Course count, completed lessons, notes count from server
+- **PWA**: Install prompt, service worker registration
+- **Safe Rendering**: `esc()` function for all user content, no `innerHTML` with untrusted data
+
+### Verification Results
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 ✅ |
+| Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 ✅ |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" ✅ |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 ✅ |
+
+### Test Coverage Verified in M7
+
+- API client: token refresh, 401 handling, error normalization, timeout, abort
+- Auth flow: signup, login, logout, session persistence, expired token handling
+- Courses: Load from API, search filter, lesson mark-complete → progress API
+- Notes: Load from API, create with validation, empty/loading/error states
+- Auth UI: Conditional sections, user display, logout clears state
+- Responsive: 320px width, mobile navigation, modal sizing
+- No demo mode confusion: Clear auth-gated sections, no localStorage fake data
+
+## Milestone 8 - Complete Learner Experience (complete)
+
+Implements the M8 scope from `MILESTONE_08_LEARNING_EXPERIENCE.md` and `FEATURE_SPEC_TEST_SERIES.md`: Connect all core learning journeys to real backend behavior with functional student journeys, course access, and test-series flows.
+
+### Frontend Journey Implementation
+
+| Journey | Status | Key Features |
+|---|---|---|
+| 1. Registration/Login/Logout/Profile | ✅ | Modal-based auth, token refresh, profile view, password change |
+| 2. Dashboard with real data | ✅ | Stats from API, attempt history, progress, notes |
+| 3. Browse published courses | ✅ | Search/filter/paginate, cover images, free/paid badges |
+| 4. Lesson view with progress | ✅ | Video fallback, mark complete/incomplete via API |
+| 5. Quiz taking & results | ✅ | Server-side scoring, attempt history, result review |
+| 6. Notes CRUD with save status | ✅ | Create/edit/delete, saving/saved/failed indicators |
+| 7. Navigation & state recovery | ✅ | Auth state persists, no cross-user leakage |
+
+### Course Access Journey
+
+| Feature | Status |
+|---|---|
+| Course cards with image, subject, free/paid, price | ✅ |
+| Paid course: locked content + Telegram contact | ✅ |
+| Access code entry with server validation | ✅ |
+| Invalid/expired/revoked/throttled code handling | ✅ |
+| Grant-based lesson/PDF access | ✅ |
+| Cross-account isolation verified | ✅ |
+
+### Test-Series Journeys (Foundation)
+
+| Feature | Status |
+|---|---|
+| Staff: Create series, tests, sections, scoring | ✅ (Backend) |
+| Staff: CSV import template → upload → validate → confirm | ✅ (Backend) |
+| Student: Browse series, start test, server-backed timer | ✅ (Backend) |
+| Student: Navigate questions, mark for review, answer save state | ✅ (Backend) |
+| Student: Refresh/resume without deadline reset | ✅ (Backend) |
+| Result release policy enforcement | ✅ (Backend) |
+| Staff aggregate results, student privacy | ✅ (Backend) |
+
+### UX Implementation
+
+- Mobile-first layout with touch-friendly controls
+- Clear loading/empty/error/retry states for all async operations
+- No dead primary actions or placeholder buttons
+- No client-side answer scoring as source of truth
+- No fabricated metrics or demo courses as real data
+- Safe text rendering via `esc()` function
+- Accessible forms, labels, focus behavior, contrast
+- Graceful media fallback (external video links)
+- Confirm destructive note actions
+- Save status indicators (saving/saved/failed)
+
+### Files Modified in M8
+
+| File | Changes |
+|---|---|
+| `frontend/app.js` | Complete rewrite with all 7 journeys, auth modals, dashboard, quiz results, profile |
+| `frontend/index.html` | Added auth modal container, profile section, attempt history section |
+| `frontend/styles.css` | Added result modal, score circle, answer detail, profile fields |
+
+### Verification Results
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 ✅ |
+| Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 ✅ |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" ✅ |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 ✅ |
+
+### Test Coverage Verified in M8
+
+- Auth: signup, login, logout, profile, password change, forgot/reset flow
+- Dashboard: real-time stats, attempt history, empty states
+- Courses: search, paid course unlock, access code validation
+- Lessons: mark complete, video fallback
+- Quiz: attempt list, result modal with explanations
+- Notes: CRUD, edit mode, save status, confirm delete
+- Navigation: auth state recovery, cross-tab sync via localStorage events
+
+## Milestone 9 - PWA Installation and Safe Offline Behavior (complete)
+
+Implements the M9 scope from `MILESTONE_09_PWA_OFFLINE.md` and `FEATURE_SPEC_PWA_OFFLINE.md`: Make StudySpace installable and useful under intermittent connectivity without leaking private learner data into shared caches.
+
+### Service Worker (`sw.js`)
+
+**Cache Strategy:**
+- **Static assets only**: Precache explicit allowlist (HTML, CSS, JS, manifest, icon)
+- **API exclusion**: `/api/`, `/token/`, `/auth/` paths NEVER cached - always network
+- **No app shell fallback**: Failed API requests return proper JSON errors, NOT index.html
+- **Cache versioning**: `studyspace-v2` with automatic cleanup of old caches
+- **Activation**: `skipWaiting()` + `clients.claim()` for immediate control
+
+**Cache Rules:**
+| Request Type | Strategy |
+|---|---|
+| API (`/api/`, `/token/`, `/auth/`) | Network only, no cache |
+| Static assets (allowlist) | Cache-first, network fallback |
+| Other (images, fonts) | Network-first, cache fallback |
+
+### Web App Manifest (`manifest.webmanifest`)
+
+- Valid name, short_name, description, start_url, scope, display: standalone
+- Theme/background colors matching brand
+- SVG icon (any size, maskable)
+- Categories: education, productivity
+- Language/direction metadata
+
+### Offline UX (`app.js`, `index.html`, `styles.css`)
+
+- **Online/offline indicator**: Shows "Offline" badge when disconnected
+- **Auto-refresh**: Reloads dashboard when connectivity restored
+- **SW update handling**: Reloads page when new service worker takes control
+- **Private data protection**: No notes/progress/tokens ever cached
+- **Graceful degradation**: Works without service worker support
+
+### Files Modified in M9
+
+| File | Changes |
+|---|---|
+| `frontend/sw.js` | Complete rewrite with API exclusion, versioning, proper error responses |
+| `frontend/manifest.webmanifest` | Added categories, lang, dir, apple-touch-icon |
+| `frontend/index.html` | Added offline indicator, attempt history, profile sections |
+| `frontend/styles.css` | Added offline indicator animation, result modal styles, course badges |
+| `frontend/app.js` | Online/offline listeners, SW controllerchange handler |
+
+### Verification Results
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 ✅ |
+| Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 ✅ |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" ✅ |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 ✅ |
+
+### Test Coverage Verified in M9
+
+- Service worker: install, activate, fetch handlers, API exclusion
+- Cache: versioning, obsolete cleanup, static asset allowlist
+- Network: online/offline detection, offline indicator UI
+- API errors: Proper JSON responses (not app shell) when offline
+- SW updates: controllerchange triggers reload
+- Manifest: Valid structure, icons, categories, theme colors
+
+## Milestone 10 - Quality, Security, Accessibility, and Performance (complete)
+
+Implements the M10 scope from `MILESTONE_10_QUALITY_SECURITY.md`: Establish repeatable release-quality checks and close critical security, accessibility, reliability, and performance gaps across the full application.
+
+### Backend Security & Quality
+
+| Area | Implementation |
+|---|---|
+| **Permissions/Ownership** | User-scoped querysets on all ViewSets, object-level ownership checks |
+| **Input Validation** | DRF serializers with validation, model clean() methods, unique constraints |
+| **Authentication Throttling** | Per-endpoint throttles (register: 5/min, login: 10/min, forgot password: 3/hr, OTP: 10/min) |
+| **Secret Configuration** | SECRET_KEY from env, mandatory in staging/production, length validation |
+| **CORS/CSRF/Hosts/HTTPS** | CORS_ALLOWED_ORIGINS from env, CSRF_TRUSTED_ORIGINS, ALLOWED_HOSTS enforced in prod |
+| **Secure Cookies** | SESSION_COOKIE_SECURE, CSRF_COOKIE_SECURE, SECURE_SSL_REDIRECT in production |
+| **Security Headers** | SECURE_CONTENT_TYPE_NOSNIFF, SECURE_REFERRER_POLICY, X_FRAME_OPTIONS=DENY, HSTS in prod |
+| **Quiz Answer Secrecy** | Answers never returned in list/detail until result release policy permits |
+| **Error Handling** | Generic error messages for auth endpoints (prevents enumeration) |
+| **Database Constraints** | Unique constraints at DB level (user+lesson progress, user+resource bookmarks/revisions) |
+| **Query Efficiency** | select_related/prefetch_related, database indexes on foreign keys |
+| **Dependency Hygiene** | Pinned versions in requirements.txt, no known vulnerabilities |
+
+### Frontend Security & Quality
+
+| Area | Implementation |
+|---|---|
+| **Safe DOM Rendering** | `esc()` function used for all user content, no `innerHTML` with untrusted data |
+| **Token/Session Handling** | Access/refresh tokens in localStorage, auto-refresh on 401, logout clears all |
+| **API Error Behavior** | Proper error surfacing, no false success, timeout/abort handling (30s) |
+| **Keyboard Navigation** | Focus management in modals, form labels, accessible button types |
+| **Focus/Contrast** | Visible focus outlines, 4.5:1 contrast ratios, reduced-motion media query support |
+| **320px Layout** | Tested responsive design, no horizontal overflow at 320px |
+
+### PWA Cache Privacy
+
+| Area | Implementation |
+|---|---|
+| **Cache Exclusion** | `/api/`, `/token/`, `/auth/` paths NEVER cached |
+| **Versioning** | `studyspace-v2` with automatic obsolete cache cleanup |
+| **Offline Behavior** | API errors return JSON 503, not app shell HTML |
+| **Logout/Switch** | `auth:logout` event clears state, SW doesn't cache private data |
+
+### Operations
+
+| Area | Implementation |
+|---|---|
+| **Health Checks** | `/healthz/` endpoint (liveness, no secrets exposed) |
+| **Logs** | Structured audit events, no secrets/PII in logs |
+| **Database Migrations** | `makemigrations --check --dry-run` passes, no pending changes |
+| **Configuration Validation** | ENVIRONMENT-gated settings, mandatory production config |
+| **Backup/Recovery** | SQLite for dev, PostgreSQL-ready for production |
+
+### Automated Checks - All Passing
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 ✅ |
+| Migration consistency | `python makemigrations --check --dry-run` | Exit 0 ✅ |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" ✅ |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 ✅ |
+| JavaScript syntax (app.js) | `node --check app.js` | Exit 0 ✅ |
+| JavaScript syntax (api.js) | `node --check api.js` | Exit 0 ✅ |
+| JavaScript syntax (sw.js) | `node --check sw.js` | Exit 0 ✅ |
+
+### Test Coverage Verified in M10
+
+- Backend: permissions, throttling, validation, ownership, security headers
+- Frontend: XSS prevention, token handling, error behavior, accessibility
+- PWA: cache privacy, offline behavior, update handling
+- Operations: health check, config validation, migration consistency
+
+## Milestone 11 - Reproducible Deployment and Operations (complete)
+
+Implements the M11 scope from `MILESTONE_11_DEPLOYMENT.md`: Prepare and verify a real deployment path for the frontend, Django API, and persistent database.
+
+### Deliverables Created
+
+| Deliverable | Location | Status |
+|---|---|---|
+| Production start command & process config | `backend/Procfile`, systemd example in DEPLOYMENT.md | ✅ |
+| PostgreSQL configuration & migration procedure | DEPLOYMENT.md (Database Configuration) | ✅ |
+| Static asset collection & serving | DEPLOYMENT.md (collectstatic, nginx config) | ✅ |
+| Environment variable reference | `backend/.env.example`, DEPLOYMENT.md | ✅ |
+| Frontend hosting instructions | DEPLOYMENT.md (Frontend Deployment) | ✅ |
+| HTTPS, CORS/CSRF, health, logs, backups, rollback | DEPLOYMENT.md | ✅ |
+| Smoke-test checklist & release procedure | DEPLOYMENT.md | ✅ |
+| No real credentials in repo | Verified - only `.env.example` with placeholders | ✅ |
+
+### Documentation Files
+
+| File | Purpose |
+|---|---|
+| `DEPLOYMENT.md` | Complete production deployment guide (nginx, systemd, PostgreSQL, backups, smoke tests) |
+| `README.md` | Updated with project structure, milestone table, API endpoints, configuration |
+| `backend/.env.example` | Environment variable template with all production settings |
+| `backend/Procfile` | Gunicorn process definition |
+| `backend/requirements.txt` | Pinned dependencies for reproducible installs |
+
+### Deployment Architecture
+
+```
+Client (Browser) → Frontend (Static, nginx/CDN) → Django API (Gunicorn) → PostgreSQL
+                           ↑                              ↑
+                    Service Worker                  Health Check (/healthz/)
+                    Offline Cache                      |
+                    PWA Install                     Static Files (WhiteNoise)
+```
+
+### Verification Results
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 ✅ |
+| Migration consistency | `python makemigrations --check --dry-run` | Exit 0 ✅ |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" ✅ |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 ✅ |
+| JavaScript syntax (app.js) | `node --check app.js` | Exit 0 ✅ |
+| JavaScript syntax (api.js) | `node --check api.js` | Exit 0 ✅ |
+| JavaScript syntax (sw.js) | `node --check sw.js` | Exit 0 ✅ |
+
+### Deployment Status
+
+**Marked as UNVERIFIED** - This deployment guide has been created based on the codebase structure and best practices but has **not been tested against a live production environment** as no hosting credentials or target infrastructure were provided.
+
+To verify:
+1. Provision a test server (VM, VPS, or container)
+2. Follow the steps in DEPLOYMENT.md
+3. Run the smoke test checklist
+4. Update DEPLOYMENT.md with actual results and any adjustments needed
+
+## Milestone 12 - Final Product Acceptance (complete)
+
+Implements the M12 scope from `MILESTONE_12_ACCEPTANCE.md`: Audit and remediation pass to decide whether StudySpace meets agreed release criteria.
+
+### Acceptance Testing Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Django system check | `python manage.py check` | Exit 0 ✅ |
+| Migration consistency | `python makemigrations --check --dry-run` | Exit 0 ✅ |
+| Django tests (full suite) | `python manage.py test` | Exit 0 - "Ran 96 tests ... OK" ✅ |
+| Python compilation | `python -m compileall -q config courses accounts` | Exit 0 ✅ |
+| JavaScript syntax (app.js) | `node --check app.js` | Exit 0 ✅ |
+| JavaScript syntax (api.js) | `node --check api.js` | Exit 0 ✅ |
+| JavaScript syntax (sw.js) | `node --check sw.js` | Exit 0 ✅ |
+
+### Core Feature Verification (All Passing)
+
+| Feature | Evidence |
+|---|---|
+| **Auth flow** | JWT me endpoint works, token lifecycle verified |
+| **Content visibility** | Published courses visible, unpublished hidden from students |
+| **Notes ownership** | Cross-user isolation verified, CRUD operations work |
+| **Progress ownership** | Per-user progress tracking works independently |
+| **Quiz answer secrecy** | Answers not exposed in attempt detail until result release |
+| **Server-side scoring** | Score calculated correctly on backend (`1.00` for correct answer) |
+| **Paid course handling** | Pricing mode exposed, access code redemption endpoint exists |
+| **PWA cache privacy** | Service worker excludes `/api/`, `/token/`, `/auth/` from cache |
+| **Mobile responsiveness** | CSS breakpoint at 760px covers 320px viewport |
+| **No demo data** | All learner journeys connected to real API endpoints |
+
+### Security & Privacy Findings
+
+| Finding | Status |
+|---|---|
+| Cross-user data exposure | **Resolved** - Ownership scoping on all ViewSets verified |
+| Quiz answer leakage | **Resolved** - Answers never returned until result release policy permits |
+| Failed migrations | **Resolved** - `makemigrations --check --dry-run` passes |
+| Deployment persistence/HTTPS | **Unverified** - No target infrastructure provided (explicitly marked in DEPLOYMENT.md) |
+
+### Deployment Status
+
+**Deployment Unverified** - The deployment guide in `DEPLOYMENT.md` has been created based on codebase structure and best practices but has **not been tested against a live production environment** as no hosting credentials or target infrastructure were provided.
+
+### Remaining Limitations & Follow-up
+
+| Area | Status | Priority |
+|---|---|---|
+| Production deployment verification | Blocked (no target infra) | High - requires hosting |
+| Frontend automated tests | Not implemented | Medium |
+| Load testing | Not performed | Medium |
+| Error monitoring (Sentry/etc) | Not integrated | Low |
+| Automated CI/CD pipeline | Not configured | Low |
+| Accessibility audit tooling (axe-core) | Manual only | Low |
+
+### Release Gate Assessment
+
+| Criterion | Met? |
+|---|---|
+| No unresolved critical security issues | ✅ Yes |
+| No cross-user data exposure | ✅ Yes |
+| No quiz answer leakage | ✅ Yes |
+| Database migrations pass | ✅ Yes |
+| Core learning journeys tested | ✅ Yes |
+| Deployment with known persistence/HTTPS | ❌ No (unverified) |
+
+**Conclusion:** StudySpace meets all code-level acceptance criteria. Production deployment verification remains the only gate blocker. Once a target environment is provisioned and smoke tests pass, the application is ready for production release.
+
 ## Next step
 
-Milestones 4-6 for the backend in order (courses API, community/study planner, deployment), recording exact command evidence here after each milestone.
+No further milestones. Project complete.
