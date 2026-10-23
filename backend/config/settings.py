@@ -179,8 +179,10 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle"
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/minute",
-        "user": "1000/minute",
+        # Per-IP ceiling for anonymous reads. Raise it if a whole campus shares
+        # one address; auth endpoints add their own tighter, scoped limits.
+        "anon": os.getenv("THROTTLE_ANON", "100/minute"),
+        "user": os.getenv("THROTTLE_USER", "1000/minute"),
     },
 }
 

@@ -1167,3 +1167,7 @@ python3 tools/serve.py --port 8080             # site + proxy
 The preview runs the site through `tools/serve.py` against a local Django instance, so accounts created in
 the preview are real accounts in that sandbox database. They are not deployed users: the sandbox database
 is disposable and no production host is configured.
+
+No SMTP account is configured in the sandbox, so the console e-mail backend prints reset codes to the
+Django log instead of delivering them. The reset flow itself is exercised end to end in tests; only the
+final delivery hop is missing until `EMAIL_*` settings are supplied in deployment secrets.
