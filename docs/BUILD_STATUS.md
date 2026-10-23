@@ -939,6 +939,8 @@ row, the language badge and the separate rating block.
 - Marks in the margin (`+4 −1`), options as A/B/C/D rows with circular keys, and per-question
   "mark for review" / "clear answer" text controls.
 - A question map in the right rail (drawer on mobile) that shows answered, marked, not-answered and current.
+- A **Print** action and a print stylesheet: chrome, tool controls and the map drop out, questions avoid
+  breaking across pages, and the answer sheet prints with its solutions.
 - On submit, an **answer sheet** replaces the paper: score table, accuracy, section-wise marks, and every
   question with the correct option, the attempted option and a worked explanation. "Only incorrect answers"
   filters the list.

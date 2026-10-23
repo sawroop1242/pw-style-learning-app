@@ -556,6 +556,10 @@ function watchScroll() {
 const paperTitle = CHOSEN?.title || 'Practice question paper';
 $('#exam-name').textContent = paperTitle;
 $('#paper-title').textContent = paperTitle;
+$('#print-btn')?.addEventListener('click', () => {
+  if (typeof window.print === 'function') window.print();
+});
+
 $('#exam-sub').textContent = CHOSEN
   ? `${CHOSEN.exam} · ${CHOSEN.kind}`
   : `${PAPER.length} questions · ${ALLOWED_MINUTES} minutes`;

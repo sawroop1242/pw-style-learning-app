@@ -771,3 +771,35 @@ body.exam-shell { background: var(--canvas); }
 /* The answer sheet takes the full width once the paper is submitted */
 #result-view { grid-column: 1 / -1; }
 #result-view[hidden] { display: none; }
+
+/* ================================ PRINT ================================ */
+/* The paper is meant to be printable: chrome, tools and the map drop out and
+   questions avoid breaking across pages. */
+@media print {
+  :root { --canvas: #ffffff; --paper: #ffffff; }
+
+  body.exam-shell { background: #fff; }
+
+  .paper-bar,
+  .qmap,
+  .paper-foot,
+  .q-tools,
+  .review-filter,
+  .toast-stack,
+  .skip-link,
+  #submit-modal { display: none !important; }
+
+  .paper-layout { display: block; padding: 0; }
+  .paper { border: 0; border-radius: 0; padding: 0; }
+  .paper-head { margin-bottom: 18px; }
+
+  .question { break-inside: avoid; page-break-inside: avoid; }
+  .paper-section { break-inside: auto; }
+  .options { gap: 4px; }
+  .option { border: 0; padding: 2px 0; }
+
+  .result-sheet { border: 0; padding: 0; }
+  .solution { break-inside: avoid; page-break-inside: avoid; }
+
+  a[href]::after { content: ""; }
+}
