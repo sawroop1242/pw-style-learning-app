@@ -159,7 +159,7 @@ table { border-collapse: collapse; width: 100%; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- Responsive ------------------------------------------------------ */
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .container, .container-wide, .container-narrow { padding-inline: var(--sp-4); }
   .section { padding-block: var(--sp-8); }
   body { padding-bottom: var(--tabbar-h); }

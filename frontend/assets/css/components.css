@@ -750,8 +750,8 @@
 
 /* ============================== RESPONSIVE ============================= */
 @media (min-width: 1024px) {
-  body { padding-left: var(--sidebar-w); }
-  .skip-link { left: calc(var(--sidebar-w) + 16px); }
+  body.has-shell { padding-left: var(--sidebar-w); }
+  body.has-shell .skip-link { left: calc(var(--sidebar-w) + 16px); }
   body.exam-shell { padding-left: 0; }
   .sidebar { transform: none; }
   .sidebar-scrim { display: none; }

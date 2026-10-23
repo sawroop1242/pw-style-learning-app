@@ -230,6 +230,7 @@ function sidebarFoot() {
 export function renderHeader(active = '') {
   const host = document.getElementById('site-header');
   if (!host) return;
+  document.body.classList.add('has-shell');
   const user = storage.user;
 
   host.innerHTML = `
