@@ -1,100 +1,129 @@
 /* ==========================================================================
    StudySpace — design tokens
-   An editorial, "textbook" system: warm paper, ink text, one muted indigo
-   accent, serif display type and generous whitespace. Pages and components
-   only ever consume these variables.
+   A dark, app-first system: deep navy canvas, raised charcoal cards, one
+   confident violet accent, mint / amber / pink supporting colours, sans
+   display type and compact, rounded surfaces. Pages and components only ever
+   consume these variables.
+
+   NOTE ON NAMES — the names are historical (this file once described a light
+   "paper" theme). They are kept verbatim so every `var()` reference in the
+   other stylesheets keeps resolving; only the values moved to dark.
+   `--ink-900` is deliberately the violet action colour, because
+   `.btn-primary`, focused chips and current-page controls are painted with it.
    ========================================================================== */
 
 :root {
-  /* ---- Accent: muted indigo ------------------------------------------ */
-  --violet-900: #262447;
-  --violet-800: #35335f;
-  --violet-700: #45437b;
-  --violet-600: #565494;
-  --violet-500: #6b69ab;
-  --violet-400: #8f8dc4;
-  --violet-200: #dcdcf0;
-  --violet-100: #ebebf6;
-  --violet-50: #f5f5fb;
+  /* ---- Accent: electric violet --------------------------------------- */
+  --violet-900: #1c1c4d;
+  --violet-800: #2b2b74;
+  --violet-700: #4b4be8;
+  --violet-600: #5b5bf6;
+  --violet-500: #7c7cff;
+  --violet-400: #a0a0ff;
+  --violet-200: #2f2f5c;
+  --violet-100: #20203c;
+  --violet-50: #181829;
 
-  /* ---- Secondary: warm ochre, used sparingly -------------------------- */
-  --amber-600: #96601a;
-  --amber-500: #b4761f;
-  --amber-400: #c98a33;
-  --amber-100: #f7ecd9;
+  /* ---- Secondary: warm amber, used for highlights only ---------------- */
+  --amber-600: #ffb648;
+  --amber-500: #ffc266;
+  --amber-400: #ffd08a;
+  --amber-100: #332815;
 
-  /* ---- Ink: warm near-black ------------------------------------------ */
-  --ink-950: #14120f;
-  --ink-900: #1b1a17;
-  --ink-850: #201e1a;
-  --ink-800: #262421;
-  --ink-700: #33302b;
-  --ink-600: #423e37;
+  /* ---- Ink: deep navy surfaces --------------------------------------- */
+  --ink-950: #07070f;
+  --ink-900: #5b5bf6; /* action colour — see note above */
+  --ink-850: #0d0d17;
+  --ink-800: #10101a;
+  --ink-700: #4b4be8; /* primary button hover */
+  --ink-600: #15151f;
 
-  /* ---- Neutrals: warm greys ------------------------------------------ */
-  --slate-700: #4a463f;
-  --slate-600: #5f5a51;
-  --slate-500: #746e63;
-  --slate-400: #8b8477;
-  --slate-300: #bdb6a8;
-  --slate-200: #e3ddd1;
-  --slate-100: #efeae0;
-  --slate-50: #f7f4ec;
+  /* ---- Neutrals: cool greys ------------------------------------------ */
+  --slate-700: #c8c8d8;
+  --slate-600: #a2a2b8;
+  --slate-500: #8b8ba3;
+  --slate-400: #6f6f86;
+  --slate-300: #45455a;
+  --slate-200: #2b2b3a;
+  --slate-100: #1e1e2a;
+  --slate-50: #141420;
 
-  --paper: #ffffff;
-  --canvas: #faf8f2;
+  --paper: #16161f;
+  --canvas: #0b0b16;
 
   /* ---- Semantics ------------------------------------------------------ */
-  --success-600: #2f6b46;
-  --success-500: #3d7d55;
-  --success-100: #e6f0e8;
-  --danger-600: #9c3a32;
-  --danger-500: #b44b41;
-  --danger-100: #f7e7e4;
-  --info-500: #35548f;
-  --info-100: #e8edf6;
+  --success-600: #34d399;
+  --success-500: #2ee6a8;
+  --success-100: #10281f;
+  --danger-600: #ff6b76;
+  --danger-500: #ff4d5a;
+  --danger-100: #33141a;
+  --info-500: #4d9cff;
+  --info-100: #132038;
   /* Tints used for borders on soft state fills, and their text pairs. */
-  --success-200: #b9d3c1;
-  --danger-200: #e3c0b9;
-  --info-200: #bfdbfe;
-  --amber-200: #e0c8a4;
-  --amber-700: #7f5015;
-  --amber-800: #6f4712;
-  --amber-900: #3a2400;
-  --danger-800: #7d2e27;
-  --info-800: #1e40af;
+  --success-200: #1e4a3a;
+  --danger-200: #5a222b;
+  --info-200: #1f3a63;
+  --amber-200: #5a4520;
+  --amber-700: #f0a93c;
+  --amber-800: #ffcf85;
+  --amber-900: #ffe6b8;
+  --danger-800: #ffb3b8;
+  --info-800: #bcd8ff;
 
-  --live: #a33a32;
+  --live: #ff4d5a;
 
   /* ---- Text ----------------------------------------------------------- */
-  --text-strong: #1b1a17;
-  --text: #33302b;
-  --text-muted: #5f5a51;
-  --text-subtle: #6f685c;
-  --text-invert: #fbf9f4;
-  --text-invert-muted: rgba(251, 249, 244, 0.66);
+  --text-strong: #ffffff;
+  --text: #e8e8f2;
+  --text-muted: #a2a2b8;
+  --text-subtle: #8b8ba3;
+  --text-invert: #ffffff;
+  --text-invert-muted: rgba(255, 255, 255, 0.68);
 
   /* ---- Surfaces ------------------------------------------------------- */
-  --surface: #ffffff;
-  --surface-raised: #ffffff;
-  --surface-sunken: #f4f1e8;
-  --surface-inverse: #1b1a17;
+  --surface: #16161f;
+  --surface-raised: #1b1b26;
+  --surface-sunken: #111119;
+  --surface-inverse: #f4f4fb;
+  /* Sits above the canvas: inputs, rails, quiet panels. */
+  --surface-soft: #12121c;
 
-  --border: #e4ded1;
-  --border-strong: #d3ccbc;
-  --border-inverse: rgba(251, 249, 244, 0.1);
+  --border: #252532;
+  --border-strong: #333346;
+  /* Form controls are their own boundary: 3:1 against the card behind them
+     (WCAG 1.4.11 non-text contrast). */
+  --border-input: #63637e;
+  --danger-solid: #c8263a;
+  --danger-solid-hover: #a91f31;
+  --amber-ink: #1a1200;
+  --border-inverse: rgba(255, 255, 255, 0.1);
 
-  /* ---- Gradients: effectively flat, kept for API compatibility -------- */
-  --grad-brand: linear-gradient(135deg, #565494 0%, #45437b 100%);
-  --grad-ink: linear-gradient(160deg, #201e1a 0%, #1b1a17 100%);
-  --grad-amber: linear-gradient(135deg, #c98a33 0%, #b4761f 100%);
-  --grad-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
+  /* ---- Gradients ------------------------------------------------------ */
+  --grad-brand: linear-gradient(135deg, #6d6dff 0%, #4b4be8 100%);
+  --grad-ink: linear-gradient(160deg, #16161f 0%, #0d0d17 100%);
+  --grad-amber: linear-gradient(135deg, #ffc266 0%, #ffb648 100%);
+  --grad-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+  /* Hero wash used behind the welcome banner. */
+  --grad-hero: linear-gradient(115deg, #241f5c 0%, #191937 45%, #101020 100%);
+  /* Coloured header bands for batch cards, one per subject. */
+  --grad-physics: linear-gradient(135deg, #4a3bd8 0%, #2b2170 100%);
+  --grad-chemistry: linear-gradient(135deg, #0f8f73 0%, #103c33 100%);
+  --grad-maths: linear-gradient(135deg, #1f6fe0 0%, #16305e 100%);
+  --grad-biology: linear-gradient(135deg, #c2447e 0%, #4d1c34 100%);
+  --grad-reasoning: linear-gradient(135deg, #c98218 0%, #4a2f0d 100%);
+  --grad-english: linear-gradient(135deg, #8b5cf6 0%, #3a2170 100%);
+  --grad-computer: linear-gradient(135deg, #0e7490 0%, #123240 100%);
+  --grad-default: linear-gradient(135deg, #3f3f52 0%, #1c1c26 100%);
+  --grad-page-head: linear-gradient(180deg, #14142a 0%, #0b0b16 100%);
+  --grad-course: linear-gradient(160deg, #1a1740 0%, #0e0e1c 62%, #0b0b16 100%);
+  --grad-auth: linear-gradient(155deg, #241f5c 0%, #12102a 55%, #0b0b16 100%);
 
   /* ---- Type ----------------------------------------------------------- */
   --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua",
-    Georgia, "Times New Roman", serif;
+  --font-display: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   --text-2xs: 0.6875rem;   /* 11px */
@@ -109,7 +138,7 @@
   --text-4xl: 2.875rem;    /* 46px */
   --text-5xl: 3.5rem;      /* 56px */
 
-  --leading-tight: 1.2;
+  --leading-tight: 1.18;
   --leading-snug: 1.45;
   --leading-normal: 1.7;
 
@@ -129,24 +158,24 @@
   --sp-10: 4rem;
   --sp-11: 5.5rem;
 
-  /* ---- Radius: quiet, paper-like -------------------------------------- */
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-xl: 16px;
-  --r-2xl: 20px;
-  --r-3xl: 24px;
+  /* ---- Radius: soft, app-like ---------------------------------------- */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-2xl: 24px;
+  --r-3xl: 28px;
   --r-pill: 999px;
 
-  /* ---- Elevation: almost none; borders carry the structure ------------- */
-  --shadow-xs: 0 1px 1px rgba(27, 26, 23, 0.04);
-  --shadow-sm: 0 1px 2px rgba(27, 26, 23, 0.05);
-  --shadow-md: 0 6px 20px rgba(27, 26, 23, 0.07);
-  --shadow-lg: 0 14px 40px rgba(27, 26, 23, 0.09);
-  --shadow-xl: 0 24px 64px rgba(27, 26, 23, 0.12);
-  --shadow-brand: 0 6px 20px rgba(27, 26, 23, 0.07);
-  --shadow-amber: 0 6px 20px rgba(27, 26, 23, 0.07);
+  /* ---- Elevation: soft black drop shadows ----------------------------- */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 28px 70px rgba(0, 0, 0, 0.6);
+  --shadow-brand: 0 10px 28px rgba(91, 91, 246, 0.35);
+  --shadow-amber: 0 10px 28px rgba(255, 182, 72, 0.22);
 
   /* ---- Motion --------------------------------------------------------- */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -159,7 +188,9 @@
   --container: 1080px;
   --container-wide: 1240px;
   --header-h: 64px;
-  --tabbar-h: 58px;
+  --tabbar-h: 62px;
+  --sidebar-w: 248px;
+  --topbar-h: 68px;
 
   --z-sticky: 40;
   --z-header: 50;

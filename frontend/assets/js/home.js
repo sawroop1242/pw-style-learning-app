@@ -76,6 +76,58 @@ function renderCategories() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Khazana — the free library, grouped from the live catalogue       */
+/* ------------------------------------------------------------------ */
+
+const SUBJECT_ICON = {
+  Physics: 'atom',
+  Chemistry: 'flask',
+  Mathematics: 'target',
+  Maths: 'target',
+  Biology: 'heart',
+  Reasoning: 'lightbulb',
+  English: 'book-open',
+  'Computer Science': 'cpu',
+  'General Studies': 'globe',
+  Science: 'sparkles'
+};
+
+async function renderKhazana() {
+  const host = $('#khazana-grid');
+  if (!host) return;
+
+  const { data } = await live('/courses/?page_size=60', COURSES);
+  const rows = (Array.isArray(data) ? data : data.results || []).map(adaptCourse);
+
+  const bySubject = new Map();
+  for (const course of rows) {
+    const subject = course.subject || 'General';
+    const entry = bySubject.get(subject) || { subject, batches: 0, lessons: 0, free: 0 };
+    entry.batches += 1;
+    entry.lessons += Number(course.lessons || 0);
+    if (course.pricing_mode === 'free') entry.free += 1;
+    bySubject.set(subject, entry);
+  }
+
+  const tiles = [...bySubject.values()].sort((a, b) => b.lessons - a.lessons).slice(0, 12);
+  if (!tiles.length) return;
+
+  host.innerHTML = tiles
+    .map(
+      (tile) => `
+      <a class="khazana-tile" href="courses.html?q=${encodeURIComponent(tile.subject)}">
+        <span class="khazana-icon">${icon(SUBJECT_ICON[tile.subject] || 'book-open')}</span>
+        <span class="khazana-body">
+          <strong>${esc(tile.subject)}</strong>
+          <small>${tile.batches} ${tile.batches === 1 ? 'batch' : 'batches'} · ${tile.lessons} lessons</small>
+        </span>
+        ${tile.free ? `<span class="badge badge-free">${tile.free} free</span>` : ''}
+      </a>`
+    )
+    .join('');
+}
+
+/* ------------------------------------------------------------------ */
 /* Trending batches & free mocks                                      */
 /* ------------------------------------------------------------------ */
 
@@ -174,6 +226,7 @@ searchForm?.addEventListener('submit', (e) => {
 /* ------------------------------------------------------------------ */
 
 renderCategories();
+renderKhazana();
 renderFeatured();
 renderTrending();
 renderTests();

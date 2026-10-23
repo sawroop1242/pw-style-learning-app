@@ -1171,3 +1171,55 @@ is disposable and no production host is configured.
 No SMTP account is configured in the sandbox, so the console e-mail backend prints reset codes to the
 Django log instead of delivering them. The reset flow itself is exercised end to end in tests; only the
 final delivery hop is missing until `EMAIL_*` settings are supplied in deployment secrets.
+
+## Run 7 — dark app shell (2026-10-23, branch `arena/22ff0f3c-pw-style-learning-app`)
+
+The light "paper" theme is retired. The frontend now uses a dark navy/indigo system modelled on the
+app-style reference board: deep canvas, raised charcoal cards, one violet action colour, coloured
+subject bands, a desktop sidebar with a sticky top bar, mobile bottom tabs, and a dark exam window.
+The brand, copy and content are StudySpace's own — no third-party logo, photography or wording is
+reproduced.
+
+### What changed
+
+| Area | Change |
+|---|---|
+| `assets/css/tokens.css` | Rewritten to a dark palette. **Every historical token name is kept** so ~3,000 `var()` references keep resolving; `--ink-900` is the violet action colour, `--text-invert` is near-white. Added subject-band gradients, a page-head gradient, `--border-input` (3:1 control boundary) and `--danger-solid`. |
+| `assets/css/components.css` | New shell: fixed 248 px sidebar (brand, seven primary links, sign-in/account card), sticky translucent top bar (search, notifications, avatar), off-canvas drawer + scrim under 1024 px, scrim scroll-lock, 5-item bottom tab bar. Radius/colour pass over buttons, chips, badges, cards, forms, overlays, footer. |
+| `assets/css/pages.css` | Hero is now a gradient banner with a violet CTA and a glass featured-batch card; category tiles and batch cards use rounded icon/keyline treatments; new Khazana, announcements and community panels; pill tab strips on batch pages; accented auth panel. |
+| `assets/css/app.css` | Dashboard cards, exam bar, question panel, options, palette and action bar restyled dark; print stylesheet force-restores light tokens so a printed paper stays black-on-white. |
+| `assets/js/ui.js` | Shell rewritten (`renderHeader`, `renderTabbar`), new `megaphone`/`wrench`/`flask` glyphs, seven-item nav, five-tab bar, drawer focus/escape handling, search toggle, batch-card facts row. |
+| `assets/js/home.js` | New `renderKhazana()` — subject tiles derived from the live catalogue (batches + lesson counts), not hand-written fake rows. |
+| `index.html` | Khazana section plus announcements/community panels with real product copy; `theme-color` updated. |
+| `manifest.webmanifest`, `sw.js` | Splash/theme colours match the dark canvas; cache bumped to `studyspace-v8`. |
+
+### Contrast (WCAG 2.2 AA, computed)
+
+| Pair | Ratio |
+|---|---|
+| body text on canvas / card | 16.1 / 14.8 |
+| muted text on canvas / card | 7.8 / 7.2 |
+| subtle text on canvas / card | 5.9 / 5.4 |
+| white on violet action | 4.9 |
+| soft-state text on its tint (success, danger, amber, info) | 6.1 – 11.9 |
+| form-control boundary vs card | 3.1 (`--border-input`) |
+
+`.btn-accent` was flipped to dark ink on amber after measuring white-on-amber at 1.74:1; `.btn-danger`
+uses a solid red (`#c8263a`) that keeps white text at 5.5:1.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Django suite (`accounts` + `courses`) | **146 tests, OK** (no backend change this run; re-run for the record) |
+| jsdom interaction suite | **64/64** |
+| Live auth through `tools/serve.py` | **18/18** |
+| Headless render · structural a11y | 9/9 · 9/9 pages clean |
+| CSS classes · custom properties | **352 used / 0 missing** · 141 defined / 119 referenced / **0 undefined** |
+| Literal hex outside `tokens.css` | 38 (28 baseline + 10 inside the print stylesheet, which must be light) |
+| CSS parse (css-tree) | 5 stylesheets, **no parse errors** |
+| HTTP through the proxy | 28/28 URLs 200 |
+| `node --check` | 12/12 modules |
+
+The theme is a view-layer change only: API contracts, permissions, throttles and grading are untouched,
+and the earlier runs' test evidence still holds.

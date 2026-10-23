@@ -224,7 +224,7 @@ function renderAside(course) {
       </div>
     </div>
 
-    <div class="card card-pad" style="margin-top:16px;display:grid;gap:12px;background:var(--violet-50);border-color:#ddd6fe">
+    <div class="card card-pad" style="margin-top:16px;display:grid;gap:12px;background:rgba(91,91,246,0.1);border-color:var(--violet-600)">
       <div class="row" style="gap:10px">
         <span class="avatar avatar-teal">${icon('message')}</span>
         <div>

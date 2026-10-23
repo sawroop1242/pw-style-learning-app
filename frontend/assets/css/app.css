@@ -68,21 +68,22 @@
   padding: var(--sp-4) var(--sp-5);
   background: var(--paper);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  transition: border-color var(--dur) var(--ease);
+  border-radius: var(--r-lg);
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 
-.continue-card:hover { border-color: var(--slate-300); }
+.continue-card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
 
 .continue-thumb {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--slate-50);
+  border-radius: var(--r-md);
+  background: rgba(91, 91, 246, 0.14);
+  color: var(--violet-400);
   font-family: var(--font-display);
   font-size: 0.8rem;
   color: var(--text-subtle);
@@ -229,7 +230,7 @@
   padding: var(--sp-4) var(--sp-5);
   background: var(--paper);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   display: grid;
   gap: 6px;
 }
@@ -255,7 +256,7 @@
   width: min(760px, 100%);
   background: var(--paper);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-xl);
   padding: clamp(24px, 4vw, 48px);
 }
 
@@ -343,14 +344,16 @@
 
 /* ============================ TEST WINDOW ============================== */
 
-body.exam-shell { background: var(--slate-50); }
+body.exam-shell { background: var(--canvas); }
 body.is-exam { --header-h: 64px; }
 
 .exam-bar {
   position: sticky;
   top: 0;
   z-index: var(--z-header);
-  background: var(--paper);
+  background: rgba(12, 12, 22, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--border);
 }
 
@@ -399,10 +402,10 @@ body.is-exam { --header-h: 64px; }
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 12px;
+  padding: 7px 14px;
   border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--slate-50);
+  border-radius: var(--r-pill);
+  background: var(--surface-soft);
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
 }
@@ -482,7 +485,7 @@ body.is-exam { --header-h: 64px; }
 .qpanel {
   background: var(--paper);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   padding: clamp(20px, 3vw, 32px);
   scroll-margin-top: calc(var(--header-h) + 88px);
   outline: none;
@@ -528,9 +531,11 @@ body.is-exam { --header-h: 64px; }
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  min-height: 52px;
   padding: 13px 15px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border: 1px solid var(--border-input);
+  border-radius: var(--r-md);
+  background: var(--surface-soft);
   cursor: pointer;
   transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
@@ -558,8 +563,8 @@ body.is-exam { --header-h: 64px; }
 .qoption-text { font-size: var(--text-base); line-height: 1.55; color: var(--text); }
 
 .qoption.is-selected {
-  border-color: var(--ink-900);
-  background: var(--slate-50);
+  border-color: var(--violet-600);
+  background: rgba(91, 91, 246, 0.12);
 }
 
 .qoption.is-selected .qoption-key {
@@ -593,10 +598,10 @@ body.is-exam { --header-h: 64px; }
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: var(--sp-3) var(--sp-4);
+  padding: 10px var(--sp-4);
   background: var(--paper);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-pill);
 }
 
 .qpanel-spacer { flex: 1 1 auto; }
@@ -1011,9 +1016,23 @@ body.is-exam { --header-h: 64px; }
 /* ================================ PRINT ================================ */
 
 @media print {
-  :root { --canvas: #ffffff; --paper: #ffffff; }
+  :root {
+    --canvas: #ffffff;
+    --paper: #ffffff;
+    --surface: #ffffff;
+    --surface-soft: #ffffff;
+    --surface-raised: #ffffff;
+    --text-strong: #111111;
+    --text: #222222;
+    --text-muted: #333333;
+    --text-subtle: #444444;
+    --border: #cccccc;
+    --border-strong: #bbbbbb;
+  }
 
-  body.exam-shell { background: #fff; }
+  body.exam-shell { background: #fff; color: #111; }
+  .qoption { background: #fff; }
+  .qoption.is-selected { background: #f3f3f3; }
 
   .exam-bar,
   .exam-side,

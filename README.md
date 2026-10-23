@@ -1,6 +1,6 @@
 # StudySpace — PW-inspired learning PWA + Django API
 
-A mobile-first learning platform starter with a purple/white PWA frontend and Django REST Framework backend. This is an independent project and is not affiliated with Physics Wallah (PW). Use only course/video URLs you are authorized to access.
+A mobile-first learning platform with a dark, app-style PWA frontend (desktop sidebar, phone bottom tabs) and a Django REST Framework backend. This is an independent project and is not affiliated with Physics Wallah (PW). Use only course/video URLs you are authorized to access.
 
 ## Features
 

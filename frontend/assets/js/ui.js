@@ -88,7 +88,10 @@ const ICONS = {
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6v.1M4 12v.1M4 18v.1"/>',
   'external-link': '<path d="M13 5h6v6"/><path d="M19 5 10 14"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
   message: '<path d="M20.5 12a8.5 8.5 0 1 1-4.3-7.4"/><path d="M20.5 4.5 12 13l-3-1"/>',
-  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/>'
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/>',
+  flask: '<path d="M9.5 3.5h5"/><path d="M10.5 3.5v5.2L5.6 17a2.4 2.4 0 0 0 2.1 3.6h8.6a2.4 2.4 0 0 0 2.1-3.6l-4.9-8.3V3.5"/><path d="M7.5 14h9"/>',
+  megaphone: '<path d="M3.5 10.5v3a1.5 1.5 0 0 0 1.5 1.5h2l7 4V5l-7 4H5a1.5 1.5 0 0 0-1.5 1.5z"/><path d="M17 8.5a4.5 4.5 0 0 1 0 7"/><path d="M6.5 15v4.5a1.5 1.5 0 0 0 3 0V16"/>',
+  wrench: '<path d="M14.5 6.5a4 4 0 1 0 4.9 4.9L21 13l-8 8-2-2 8-8z"/><path d="m5 19 4-4"/><path d="M4 8.5 6.5 6l2.5 2.5-2.5 2.5z"/>'
 };
 
 const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true"><defs><linearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6d28d9"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs>${Object.entries(
@@ -182,18 +185,47 @@ export function confirmDialog({ title, body = '', confirmText = 'Confirm', cance
 /* ------------------------------------------------------------------ */
 
 const NAV = [
-  { href: 'index.html', label: 'Home', id: 'home' },
-  { href: 'courses.html', label: 'Batches', id: 'courses' },
-  { href: 'tests.html', label: 'Test series', id: 'tests' },
-  { href: 'dashboard.html', label: 'My learning', id: 'dashboard' }
+  { href: 'index.html', label: 'Home', id: 'home', icon: 'home' },
+  { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'layers' },
+  { href: 'tests.html', label: 'Test series', id: 'tests', icon: 'file-text' },
+  { href: 'index.html#khazana', label: 'Khazana', id: 'khazana', icon: 'grid' },
+  { href: 'index.html#announcements', label: 'Announcements', id: 'announcements', icon: 'megaphone' },
+  { href: 'index.html#community', label: 'Community', id: 'community', icon: 'users' },
+  { href: 'dashboard.html#tools', label: 'Study tools', id: 'dashboard', icon: 'sparkles' }
 ];
 
 const TABS = [
   { href: 'index.html', label: 'Home', id: 'home', icon: 'home' },
   { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'layers' },
-  { href: 'tests.html', label: 'Tests', id: 'tests', icon: 'file-text' },
-  { href: 'dashboard.html', label: 'My space', id: 'dashboard', icon: 'user' }
+  { href: 'tests.html', label: 'Test series', id: 'tests', icon: 'file-text' },
+  { href: 'index.html#khazana', label: 'Khazana', id: 'khazana', icon: 'grid' },
+  { href: 'dashboard.html', label: 'Profile', id: 'dashboard', icon: 'user' }
 ];
+
+/* The little shell card at the foot of the sidebar: sign-in prompt or the
+   signed-in student. Kept deliberately short — the sidebar is a nav rail,
+   not a billboard. */
+function sidebarFoot() {
+  const user = storage.user;
+  if (isSignedIn() && user) {
+    return `
+      <div class="side-foot">
+        <a class="side-user" href="dashboard.html">
+          <span class="avatar">${esc(initials(user.username || 'Student'))}</span>
+          <span class="side-user-text">
+            <strong>${esc(user.username || 'Student')}</strong>
+            <small>My learning</small>
+          </span>
+        </a>
+      </div>`;
+  }
+  return `
+    <div class="side-foot">
+      <p class="side-foot-note">Sign in to pick up where you left off.</p>
+      <a class="btn btn-primary btn-sm btn-block" href="login.html">Sign in</a>
+      <a class="side-foot-link" href="login.html#register">Create a free account</a>
+    </div>`;
+}
 
 export function renderHeader(active = '') {
   const host = document.getElementById('site-header');
@@ -201,55 +233,79 @@ export function renderHeader(active = '') {
   const user = storage.user;
 
   host.innerHTML = `
-    <header class="site-header">
-      <div class="container-wide header-inner">
-        <a class="brand" href="index.html" aria-label="StudySpace home">
-          <span class="brand-mark">${icon('zap')}</span>
-          <span class="brand-text">StudySpace<small>Learn · Practise · Rank</small></span>
-        </a>
-        <nav class="primary-nav" aria-label="Primary">
-          ${NAV.map(
-            (item) =>
-              `<a href="${item.href}" ${item.id === active ? 'aria-current="page"' : ''}>${item.label}</a>`
-          ).join('')}
-        </nav>
-        <div class="header-search" role="search">
-          ${icon('search')}
-          <input type="search" placeholder="Search batches, tests, subjects" aria-label="Search" data-global-search>
-          <kbd>/</kbd>
-        </div>
-        <div class="header-actions">
-          <button class="icon-btn" aria-label="Notifications" data-tip="Notifications">${icon('bell')}</button>
-          ${
-            isSignedIn() && user
-              ? `<a class="user-chip" href="dashboard.html">
-                   <span class="avatar">${esc(initials(user.username || 'Student'))}</span>
-                   <span class="truncate">${esc(user.username || 'Student')}</span>
-                 </a>`
-              : `<a class="btn btn-ghost-invert btn-sm" href="login.html">Sign in</a>
-                 <a class="btn btn-accent btn-sm" href="login.html#register">Get started</a>`
-          }
-          <button class="icon-btn nav-toggle" aria-label="Open menu" aria-expanded="false" data-menu-toggle>${icon('menu')}</button>
-        </div>
+    <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+      <a class="brand" href="index.html" aria-label="StudySpace home">
+        <span class="brand-mark">${icon('zap')}</span>
+        <span class="brand-text">StudySpace<small>Learn · Practise · Rank</small></span>
+      </a>
+      <nav class="side-nav" aria-label="Primary">
+        ${NAV.map(
+          (item) => `
+          <a class="side-link" href="${item.href}" ${item.id === active ? 'aria-current="page"' : ''}>
+            ${icon(item.icon)}<span>${item.label}</span>
+          </a>`
+        ).join('')}
+      </nav>
+      ${sidebarFoot()}
+    </aside>
+    <div class="sidebar-scrim" data-scrim hidden></div>
+
+    <header class="topbar">
+      <button class="icon-btn topbar-menu" aria-label="Open menu" aria-expanded="false" data-menu-toggle>${icon('menu')}</button>
+      <a class="topbar-brand" href="index.html" aria-label="StudySpace home">
+        <span class="brand-mark">${icon('zap')}</span>
+        <span class="brand-text">StudySpace</span>
+      </a>
+      <div class="topbar-search" role="search">
+        ${icon('search')}
+        <input type="search" placeholder="Search batches, tests, subjects" aria-label="Search" data-global-search>
+        <kbd>/</kbd>
       </div>
-      <div class="container-wide mobile-nav" data-mobile-nav hidden>
-        ${NAV.map((i) => `<a class="mobile-nav-link" href="${i.href}">${i.label}</a>`).join('')}
-        ${isSignedIn() ? '' : '<a class="mobile-nav-link" href="login.html">Sign in</a>'}
+      <div class="topbar-actions">
+        <button class="icon-btn" aria-label="Search" data-search-toggle>${icon('search')}</button>
+        <button class="icon-btn has-dot" aria-label="Notifications" data-tip="Notifications">${icon('bell')}</button>
+        ${
+          isSignedIn() && user
+            ? `<a class="user-chip" href="dashboard.html" aria-label="Signed in as ${esc(user.username || 'Student')}">
+                 <span class="avatar">${esc(initials(user.username || 'Student'))}</span>
+               </a>`
+            : `<a class="btn btn-primary btn-sm topbar-cta" href="login.html">Sign in</a>`
+        }
       </div>
     </header>`;
 
-  const header = host.querySelector('.site-header');
-  const onScroll = () => header.classList.toggle('is-scrolled', window.scrollY > 8);
-  window.addEventListener('scroll', onScroll, { passive: true });
-  onScroll();
+  const sidebar = host.querySelector('.sidebar');
+  const scrim = host.querySelector('[data-scrim]');
+  const menuBtn = host.querySelector('[data-menu-toggle]');
 
-  const toggle = host.querySelector('[data-menu-toggle]');
-  const mobile = host.querySelector('[data-mobile-nav]');
-  toggle?.addEventListener('click', () => {
-    const open = mobile.hidden;
-    mobile.hidden = !open;
-    toggle.setAttribute('aria-expanded', String(open));
-    toggle.innerHTML = icon(open ? 'x' : 'menu');
+  const closeDrawer = () => {
+    sidebar.classList.remove('is-open');
+    document.body.classList.remove('is-locked');
+    scrim.hidden = true;
+    menuBtn.setAttribute('aria-expanded', 'false');
+    menuBtn.innerHTML = icon('menu');
+    menuBtn.setAttribute('aria-label', 'Open menu');
+  };
+  const openDrawer = () => {
+    sidebar.classList.add('is-open');
+    document.body.classList.add('is-locked');
+    scrim.hidden = false;
+    menuBtn.setAttribute('aria-expanded', 'true');
+    menuBtn.innerHTML = icon('x');
+    menuBtn.setAttribute('aria-label', 'Close menu');
+  };
+
+  menuBtn?.addEventListener('click', () => {
+    if (sidebar.classList.contains('is-open')) closeDrawer();
+    else openDrawer();
+  });
+  scrim?.addEventListener('click', closeDrawer);
+  sidebar?.querySelectorAll('a').forEach((a) => a.addEventListener('click', closeDrawer));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar?.classList.contains('is-open')) {
+      closeDrawer();
+      menuBtn?.focus();
+    }
   });
 
   const search = host.querySelector('[data-global-search]');
@@ -257,6 +313,11 @@ export function renderHeader(active = '') {
     if (e.key === 'Enter' && search.value.trim()) {
       location.href = `courses.html?q=${encodeURIComponent(search.value.trim())}`;
     }
+  });
+
+  host.querySelector('[data-search-toggle]')?.addEventListener('click', () => {
+    const open = document.body.classList.toggle('is-search-open');
+    if (open) search?.focus();
   });
 
   document.addEventListener('keydown', (e) => {
@@ -281,11 +342,6 @@ export function renderTabbar(active = '') {
             </a>
           </li>`
         ).join('')}
-        <li>
-          <a href="login.html">
-            ${icon('user')}<span>Account</span>
-          </a>
-        </li>
       </ul>
     </nav>`;
 }
@@ -408,7 +464,9 @@ export function batchCard(course) {
           <a href="course.html?slug=${encodeURIComponent(course.slug)}">${esc(course.title)}</a>
         </h3>
         <p class="batch-meta">
-          ${faculty ? `${esc(faculty.name)} · ` : ''}${rating} ★ · ${compact(course.learners)} learners
+          <span>${esc(course.subject || 'General')}</span>
+          ${course.startsOn ? `<span>Starts ${shortDate(course.startsOn)}</span>` : `<span>${esc(course.lessons || 0)} lessons</span>`}
+          <span>${rating} ★</span>
         </p>
         <div class="batch-foot">
           <div class="price-block">
@@ -417,7 +475,7 @@ export function batchCard(course) {
             ${off > 0 ? `<span class="price-off">${off}% off</span>` : ''}
           </div>
           <a class="btn btn-ghost btn-sm batch-cta" href="course.html?slug=${encodeURIComponent(course.slug)}">
-            View
+            View details ${icon('arrow-right')}
           </a>
         </div>
       </div>
