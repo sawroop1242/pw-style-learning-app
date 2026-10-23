@@ -1,1 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="30" fill="#6d28d9"/><path d="M24 36h80v10H24zm0 22h80v10H24zm0 22h52v10H24z" fill="#fff"/><circle cx="92" cy="85" r="16" fill="#c4b5fd"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="StudySpace">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="0.55" stop-color="#6d28d9"/>
+      <stop offset="1" stop-color="#4c1d95"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#ede9fe"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- soft glow -->
+  <circle cx="150" cy="120" r="150" fill="#a78bfa" opacity="0.28"/>
+  <circle cx="400" cy="430" r="130" fill="#0b1020" opacity="0.22"/>
+
+  <!-- open book -->
+  <g fill="none" stroke="#c4b5fd" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+    <path d="M256 372c-30-24-74-34-124-34V182c50 0 94 10 124 34"/>
+    <path d="M256 372c30-24 74-34 124-34V182c-50 0-94 10-124 34"/>
+  </g>
+
+  <!-- bolt -->
+  <path d="M286 96 168 292h74l-16 124 118-196h-74z" fill="url(#bolt)"/>
+
+  <!-- accent spark -->
+  <circle cx="388" cy="136" r="22" fill="#fbbf24"/>
+</svg>

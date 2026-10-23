@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="api-base" content="/api">
+  <title>Sign in — StudySpace</title>
+  <meta name="description" content="Sign in to your StudySpace account to continue your batch, tests and notes.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript-bar" role="note">
+      StudySpace needs JavaScript for the catalogue, tests and dashboard.
+      Please enable it, or write to
+      <a href="mailto:support@studyspace.example">support@studyspace.example</a> for help.
+    </div>
+  </noscript>
+  <div class="auth-shell">
+    <!-- Brand side -->
+    <aside class="auth-brand on-dark">
+      <a class="brand" href="index.html">
+        <span class="brand-mark"><svg><use href="#i-zap"/></svg></span>
+        <span class="brand-text">StudySpace<small>Learn · Practise · Rank</small></span>
+      </a>
+
+      <div class="auth-brand-copy">
+        <h2>Pick up exactly where you left off.</h2>
+        <p>Your batch, your tests and your notes in one place — on every device you sign in from.</p>
+
+        <ul class="auth-points">
+          <li>
+            <span class="ap-icon"><svg><use href="#i-play"/></svg></span>
+            <span><strong style="display:block;color:#fff">Continue any lesson</strong>Recorded classes resume at the second you stopped.</span>
+          </li>
+          <li>
+            <span class="ap-icon"><svg><use href="#i-trophy"/></svg></span>
+            <span><strong style="display:block;color:#fff">Track your rank</strong>Every mock adds to a performance graph you can actually act on.</span>
+          </li>
+          <li>
+            <span class="ap-icon"><svg><use href="#i-shield-check"/></svg></span>
+            <span><strong style="display:block;color:#fff">Private by default</strong>Notes and bookmarks are visible only to you.</span>
+          </li>
+        </ul>
+      </div>
+
+      <blockquote class="auth-quote">
+        “The streak is the only reason I opened the app on days I did not feel like studying. Twelve weeks later it is a habit.”
+        <footer>
+          <span class="avatar avatar-sm avatar-amber">IV</span>
+          Ishita Verma · JEE aspirant
+        </footer>
+      </blockquote>
+    </aside>
+
+    <!-- Form side -->
+    <main class="auth-form-side">
+      <div class="auth-form-wrap">
+        <a class="link tiny" href="index.html" style="margin-bottom:22px;display:inline-flex">
+          <svg><use href="#i-arrow-left"/></svg> Back to home
+        </a>
+
+        <h1 id="auth-title">Welcome back</h1>
+        <p id="auth-sub">Sign in to continue your preparation.</p>
+
+        <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
+          <button role="tab" id="tab-signin" aria-selected="true" aria-controls="form-signin">Sign in</button>
+          <button role="tab" id="tab-signup" aria-selected="false" aria-controls="form-signup">Create account</button>
+        </div>
+
+        <!-- Sign in -->
+        <form class="auth-form" id="form-signin" role="tabpanel" aria-labelledby="tab-signin" novalidate>
+          <div class="field">
+            <label for="login-user">Username or email</label>
+            <div class="input-group">
+              <svg><use href="#i-user"/></svg>
+              <input class="input" id="login-user" name="username" autocomplete="username" placeholder="aarav" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="login-pass">Password</label>
+            <div class="input-group">
+              <svg><use href="#i-lock"/></svg>
+              <input class="input" id="login-pass" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required style="padding-right:46px">
+              <button class="input-action" type="button" data-toggle-pass="login-pass" aria-label="Show password">
+                <svg><use href="#i-eye"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="row-between">
+            <label class="check">
+              <input type="checkbox" name="remember" checked>
+              <span>Keep me signed in</span>
+            </label>
+            <a class="link tiny" href="#" data-forgot>Forgot password?</a>
+          </div>
+
+          <button class="btn btn-primary btn-lg btn-block" type="submit" id="login-submit">Sign in</button>
+          <p class="field-error" id="login-error" hidden></p>
+        </form>
+
+        <!-- Sign up -->
+        <form class="auth-form" id="form-signup" role="tabpanel" aria-labelledby="tab-signup" hidden novalidate>
+          <div class="field">
+            <label for="su-name">Full name</label>
+            <div class="input-group">
+              <svg><use href="#i-user"/></svg>
+              <input class="input" id="su-name" name="name" autocomplete="name" placeholder="Aarav Gupta" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="su-email">Email</label>
+            <div class="input-group">
+              <svg><use href="#i-mail"/></svg>
+              <input class="input" id="su-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="su-pass">Password</label>
+            <div class="input-group">
+              <svg><use href="#i-lock"/></svg>
+              <input class="input" id="su-pass" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required style="padding-right:46px">
+              <button class="input-action" type="button" data-toggle-pass="su-pass" aria-label="Show password">
+                <svg><use href="#i-eye"/></svg>
+              </button>
+            </div>
+            <span class="field-hint">Use a mix of letters, numbers and a symbol.</span>
+          </div>
+          <div class="field">
+            <label for="su-pass2">Confirm password</label>
+            <div class="input-group">
+              <svg><use href="#i-lock"/></svg>
+              <input class="input" id="su-pass2" name="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repeat your password" required>
+            </div>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" name="terms" required>
+            <span>I agree to the <a href="legal.html#terms" style="color:var(--violet-600)">terms of use</a> and <a href="legal.html#privacy" style="color:var(--violet-600)">privacy policy</a>.</span>
+          </label>
+
+          <button class="btn btn-primary btn-lg btn-block" type="submit" id="signup-submit">Create account</button>
+          <p class="field-error" id="signup-error" hidden></p>
+        </form>
+
+        <div class="auth-divider">or</div>
+
+        <button class="btn btn-ghost btn-block" data-demo-login>
+          <svg><use href="#i-sparkles"/></svg> Continue with the demo account
+        </button>
+
+        <div class="demo-hint">
+          <strong>Preview build.</strong> The demo account opens with sample batches, tests and notes.
+          No real account is created and no data leaves this browser.
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="site-footer" hidden></div>
+
+  <script type="module" src="assets/js/auth.js"></script>
+</body>
+</html>

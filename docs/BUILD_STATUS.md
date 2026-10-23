@@ -843,3 +843,62 @@ Implements the M12 scope from `MILESTONE_12_ACCEPTANCE.md`: Audit and remediatio
 ## Next step
 
 No further milestones. Project complete.
+
+---
+
+## Run 3 — frontend rebuild (2026-10-23)
+
+The earlier `frontend/` was a single-page shell (`app.js`, `api.js`, `styles.css`). It has been replaced by a
+static, framework-free multi-page PWA with the structure of a commercial Indian learning platform, using
+StudySpace branding and original sample content only.
+
+### What ships
+
+| Area | Files |
+|---|---|
+| Pages | `index.html`, `courses.html`, `course.html`, `tests.html`, `test-player.html`, `dashboard.html`, `login.html`, `legal.html`, `offline.html` |
+| Styles | `assets/css/tokens.css` (design tokens), `base.css` (reset, focus, containers), `components.css` (chrome, buttons, cards, modals, toasts), `pages.css` (hero, catalogue, course detail, auth, legal), `app.css` (dashboard widgets, exam palette, results) |
+| Scripts | `assets/js/core.js` (API client with fixture fallback), `data.js` (15 batches, 12 tests, 10-question paper), `ui.js` (inline SVG sprite, header/tabbar/footer, cards), one module per page |
+| PWA | `sw.js` (shell + static assets only; `/api/`, `/token/`, `/auth/`, `/admin/` never cached), `manifest.webmanifest`, `assets/icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` |
+
+Deleted: `frontend/app.js`, `frontend/api.js`, `frontend/styles.css`.
+
+### Behaviour
+
+- **Data.** Every read goes through `live(path, fixture)` — the Django API when reachable, otherwise the
+  bundled fixtures, with a `Preview · sample data` flag in the footer. No page calls `localhost`; the API base
+  is the relative `/api` declared in each page's `api-base` meta tag.
+- **Catalogue.** Faceted exam/subject/language filters, free/paid filter, five sort orders, removable active-filter
+  chips, 9-per-page pagination, `?q=`/`?exam=`/`?subject=`/`?language=`/`?sort=` deep links.
+- **Batch detail.** Sticky purchase card, four tabs with hash deep-linking, per-subject curriculum with the first
+  two chapters marked free, faculty list, similar batches, access-code redemption that reports failures inline
+  (invalid code, expired session, offline) instead of silently failing.
+- **Exam player.** Palette with visited/answered/marked/current states, per-question timer accounting, mark/clear,
+  keyboard navigation, auto-submit at zero, +4/−1 scoring clamped at zero, result screen with score ring, section
+  breakdown, slowest questions and a wrong-only review filter.
+- **Accessibility.** Single `<h1>` per page, skip link, visible `:focus-visible` ring, 24×24 minimum targets,
+  `aria-current`/`aria-expanded`/`role="alert"` on stateful controls, `prefers-reduced-motion` support, `noscript`
+  notice on every interactive page.
+
+### Verification performed (local, 2026-10-23)
+
+| Check | Result |
+|---|---|
+| `node --check` on `sw.js` + 10 page/module scripts | exit 0, 11/11 |
+| Static class audit: every `class` used in HTML/JS exists in the CSS | 319 used, 0 missing |
+| Token audit: every `var(--…)` reference is declared | 0 undefined |
+| Import audit: every named import exists as an export | 0 unresolved |
+| DOM audit: every `$('#id')` / data-hook used by a page module exists in that page | 0 missing |
+| Headless render of 9 pages (jsdom, network disabled so fixtures are used) | 9/9 pages, 0 console errors |
+| Interaction suite (filters, pagination, tabs, redeem, full attempt → result, notes, auth) | 33/33 assertions |
+| `python3 -m http.server`, request every page and asset | 31/31 HTTP 200 |
+| Link audit of internal `href`/`src` targets | 0 broken |
+
+Not run: a real-browser visual pass (no browser in this environment), Lighthouse, and axe-core. Those remain
+manual follow-ups before public launch.
+
+### Known limitations
+
+- Fixtures are illustrative; batch names, faculty and ratings are sample data.
+- The redeem flow calls `/access-codes/redeem/` and degrades to an inline error when the API is unreachable;
+  end-to-end redemption needs the Django backend running.

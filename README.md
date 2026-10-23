@@ -29,7 +29,38 @@ Open `/admin/` to manage content and `/api/` for API routes.
 
 ## Frontend
 
-Serve the `frontend/` directory over HTTP/HTTPS. The API base URL is configured via `<meta name="api-base" content="/api">` in `index.html` - override at build time or serve dynamically.
+A static, framework-free PWA in `frontend/`. Serve the directory over HTTP/HTTPS:
+
+```bash
+cd frontend
+python3 -m http.server 8080 --bind 0.0.0.0
+# open http://localhost:8080
+```
+
+| Page | Purpose |
+|---|---|
+| `index.html` | Landing page: hero search, category rail, trending batches, tests, FAQ |
+| `courses.html` | Catalogue with faceted filters, sort, search and pagination |
+| `course.html` | Batch detail: purchase card, tabs, curriculum, faculty, similar batches |
+| `tests.html` | Test series listing with exam filters |
+| `test-player.html` | Exam shell: palette, timer, mark/clear, autosave, scored result |
+| `dashboard.html` | Streak, mock-trend chart, upcoming tests, notes |
+| `login.html` | Sign in / create account (`#register`) |
+| `legal.html` | Terms, privacy (DPDP), access codes, accessibility, contact |
+| `offline.html` | Service-worker fallback |
+
+**API base.** Every page declares `<meta name="api-base" content="/api">`. Reads go through
+`assets/js/core.js` → `live(path, fixture)`, which uses the Django API when it answers and falls back to
+the bundled fixtures in `assets/js/data.js` when it does not. When fixtures are in use the footer shows a
+`Preview · sample data` flag, so sample content is never mistaken for live data. Point the site at a
+different API by editing that meta tag (or templating it at deploy time).
+
+**Assets.** `assets/css/` holds `tokens → base → components → pages → app`, in that order; `assets/js/`
+holds the API client (`core.js`), fixtures (`data.js`), shared chrome and components (`ui.js`), and one
+module per page. Icons are a single inline SVG sprite — there are no external fonts, CDNs or trackers.
+
+**PWA.** `sw.js` caches the shell and static assets only; requests to `/api/`, `/token/`, `/auth/` and
+`/admin/` are never cached. Installation uses `manifest.webmanifest` plus the PNG icons in `assets/`.
 
 For production deployment, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -45,14 +76,22 @@ pw-style-learning-app/
 │   ├── requirements.txt
 │   ├── Procfile
 │   └── .env.example
-├── frontend/                # PWA (vanilla JS, CSS, HTML)
-│   ├── index.html
-│   ├── app.js              # Main application
-│   ├── api.js              # API client
-│   ├── sw.js               # Service worker
-│   ├── styles.css
+├── frontend/                # Static PWA (vanilla JS, CSS, HTML)
+│   ├── index.html          # Landing page
+│   ├── courses.html        # Catalogue
+│   ├── course.html         # Batch detail
+│   ├── tests.html          # Test series
+│   ├── test-player.html    # Exam + result screen
+│   ├── dashboard.html      # Student dashboard
+│   ├── login.html          # Sign in / register
+│   ├── legal.html          # Terms, privacy, accessibility
+│   ├── offline.html        # Offline fallback
+│   ├── sw.js               # Service worker (shell only, never API)
 │   ├── manifest.webmanifest
 │   └── assets/
+│       ├── css/            # tokens, base, components, pages, app
+│       ├── js/             # core, data, ui + one module per page
+│       └── icon*.png       # 192/512 + apple-touch icons
 ├── docs/                    # Documentation
 │   ├── BUILD_STATUS.md     # Milestone progress
 │   └── agent-prompts/      # Milestone specifications
@@ -83,7 +122,15 @@ See [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) for detailed milestone tracking
 ```bash
 cd backend
 ENVIRONMENT=test python manage.py test
-# Runs 96 tests covering all milestones
+# Runs 142 tests: models, serializers, permissions, API security regression
+```
+
+Frontend checks (no build step, no dependencies):
+
+```bash
+node --check frontend/sw.js
+for f in frontend/assets/js/*.js; do node --check "$f"; done
+# then serve frontend/ and walk the eight pages with the browser console open
 ```
 
 ## API Endpoints

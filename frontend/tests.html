@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="api-base" content="/api">
+  <title>Test series &amp; free mocks — StudySpace</title>
+  <meta name="description" content="Exam-pattern mock tests with All-India rank, percentile, sectional timing and a time-per-question breakdown.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript-bar" role="note">
+      StudySpace needs JavaScript for the catalogue, tests and dashboard.
+      Please enable it, or write to
+      <a href="mailto:support@studyspace.example">support@studyspace.example</a> for help.
+    </div>
+  </noscript>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <section class="page-head on-dark">
+      <div class="container">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="index.html">Home</a>
+          <svg><use href="#i-chevron-right"/></svg>
+          <span class="current">Test series</span>
+        </nav>
+        <h1>Practise under exam conditions</h1>
+        <p>Sectional timers, the real question palette and a server-scored result. Every scheduled mock returns an All-India rank once its window closes.</p>
+        <div class="row wrap" style="margin-top:22px;gap:10px">
+          <a class="btn btn-accent" href="test-player.html?test=1">
+            <svg><use href="#i-play"/></svg> Try a live mock
+          </a>
+          <a class="btn btn-on-dark" href="#series">
+            Browse series
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feature strip -->
+    <section class="section-tight">
+      <div class="container">
+        <div class="grid grid-4">
+          <div class="card card-pad" style="display:grid;gap:8px">
+            <span class="feature-icon" style="margin:0;width:40px;height:40px"><svg><use href="#i-trophy"/></svg></span>
+            <strong style="font-size:14px">All-India rank</strong>
+            <small class="tiny muted">Percentile and rank against everyone in the same window.</small>
+          </div>
+          <div class="card card-pad" style="display:grid;gap:8px">
+            <span class="feature-icon" style="margin:0;width:40px;height:40px;background:var(--amber-100);color:var(--amber-600)"><svg><use href="#i-timer"/></svg></span>
+            <strong style="font-size:14px">Sectional timing</strong>
+            <small class="tiny muted">Per-section clocks that behave like the real interface.</small>
+          </div>
+          <div class="card card-pad" style="display:grid;gap:8px">
+            <span class="feature-icon" style="margin:0;width:40px;height:40px;background:var(--success-100);color:var(--success-600)"><svg><use href="#i-chart"/></svg></span>
+            <strong style="font-size:14px">Time per question</strong>
+            <small class="tiny muted">See exactly which questions cost you minutes.</small>
+          </div>
+          <div class="card card-pad" style="display:grid;gap:8px">
+            <span class="feature-icon" style="margin:0;width:40px;height:40px;background:var(--info-100);color:var(--info-500)"><svg><use href="#i-refresh"/></svg></span>
+            <strong style="font-size:14px">Unlimited reattempts</strong>
+            <small class="tiny muted">Every attempt is stored separately, so old scores never change.</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight" id="series">
+      <div class="container">
+        <div class="row-between" style="margin-bottom:20px;flex-wrap:wrap;gap:12px">
+          <div>
+            <p class="eyebrow">Live and upcoming</p>
+            <h2 class="section-title">Scheduled tests</h2>
+          </div>
+          <div class="row wrap" style="gap:8px" id="test-filters"></div>
+        </div>
+        <div class="test-grid" id="test-grid" aria-live="polite"></div>
+        <div id="test-empty" hidden></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="stats-band on-dark">
+          <div class="stat-item"><strong>1.2<em>L</em></strong><span>Attempts this month</span></div>
+          <div class="stat-item"><strong>18,000<em>+</em></strong><span>Questions in the bank</span></div>
+          <div class="stat-item"><strong>&lt;2<em>s</em></strong><span>Average result time</span></div>
+          <div class="stat-item"><strong>99.9<em>%</em></strong><span>Attempts recovered after a drop</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="container" style="max-width:840px">
+        <p class="eyebrow">How it works</p>
+        <h2 class="section-title" style="margin-bottom:22px">From start to rank in four steps</h2>
+        <div class="stack" style="gap:12px" id="how-steps"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+  <div id="site-tabbar"></div>
+
+  <script type="module" src="assets/js/tests.js"></script>
+</body>
+</html>

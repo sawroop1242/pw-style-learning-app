@@ -1,0 +1,163 @@
+/* ==========================================================================
+   StudySpace — design tokens
+   One source of truth for colour, type, spacing, radius, elevation and
+   motion. Pages and components only ever consume these variables.
+   ========================================================================== */
+
+:root {
+  /* ---- Brand ---------------------------------------------------------- */
+  --violet-900: #3b1a86;
+  --violet-800: #4c1d95;
+  --violet-700: #5b21b6;
+  --violet-600: #6d28d9;
+  --violet-500: #7c3aed;
+  --violet-400: #a78bfa;
+  --violet-100: #ede9fe;
+  --violet-200: #ddd6fe;
+  --violet-50: #f5f3ff;
+
+  --amber-600: #d97706;
+  --amber-500: #f59e0b;
+  --amber-400: #fbbf24;
+  --amber-100: #fef3c7;
+
+  /* ---- Neutrals ------------------------------------------------------- */
+  --ink-950: #070a15;
+  --ink-900: #0b1020;
+  --ink-850: #0f1529;
+  --ink-800: #141a35;
+  --ink-700: #1d2547;
+  --ink-600: #2a3358;
+
+  --slate-700: #3b4256;
+  --slate-600: #575e73;
+  --slate-500: #717890;
+  --slate-400: #969cb0;
+  --slate-300: #c3c8d6;
+  --slate-200: #e3e6ef;
+  --slate-100: #f1f3f9;
+  --slate-50: #f7f8fc;
+
+  --paper: #ffffff;
+  --canvas: #f6f7fc;
+
+  /* ---- Semantics ------------------------------------------------------ */
+  --success-600: #15803d;
+  --success-500: #16a34a;
+  --success-100: #dcfce7;
+  --danger-600: #dc2626;
+  --danger-500: #ef4444;
+  --danger-100: #fee2e2;
+  --info-500: #2563eb;
+  --info-100: #dbeafe;
+
+  --live: #ef4444;
+
+  /* ---- Text ----------------------------------------------------------- */
+  --text-strong: #0b1020;
+  --text: #262d44;
+  --text-muted: #5f6779;
+  --text-subtle: #8a91a6;
+  --text-invert: #ffffff;
+  --text-invert-muted: rgba(255, 255, 255, 0.68);
+
+  /* ---- Surfaces ------------------------------------------------------- */
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f6f7fc;
+  --surface-inverse: #0b1020;
+
+  --border: #e6e9f2;
+  --border-strong: #d3d8e6;
+  --border-inverse: rgba(255, 255, 255, 0.09);
+
+  /* ---- Gradients ------------------------------------------------------ */
+  --grad-brand: linear-gradient(135deg, #6d28d9 0%, #8b5cf6 55%, #a78bfa 100%);
+  --grad-ink: linear-gradient(155deg, #121a38 0%, #0b1020 55%, #171238 100%);
+  --grad-amber: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --grad-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
+
+  /* ---- Type ----------------------------------------------------------- */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --text-2xs: 0.6875rem;   /* 11px */
+  --text-xs: 0.75rem;      /* 12px */
+  --text-sm: 0.8125rem;    /* 13px */
+  --text-base: 0.9375rem;  /* 15px */
+  --text-md: 1rem;         /* 16px */
+  --text-lg: 1.125rem;     /* 18px */
+  --text-xl: 1.375rem;     /* 22px */
+  --text-2xl: 1.75rem;     /* 28px */
+  --text-3xl: 2.25rem;     /* 36px */
+  --text-4xl: 3rem;        /* 48px */
+  --text-5xl: 3.75rem;     /* 60px */
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.6;
+
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.08em;
+
+  /* ---- Space ---------------------------------------------------------- */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+  --sp-7: 2rem;
+  --sp-8: 2.5rem;
+  --sp-9: 3rem;
+  --sp-10: 4rem;
+  --sp-11: 5rem;
+
+  /* ---- Radius --------------------------------------------------------- */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-2xl: 26px;
+  --r-3xl: 34px;
+  --r-pill: 999px;
+
+  /* ---- Elevation ------------------------------------------------------ */
+  --shadow-xs: 0 1px 2px rgba(11, 16, 32, 0.06);
+  --shadow-sm: 0 2px 8px rgba(11, 16, 32, 0.06), 0 1px 2px rgba(11, 16, 32, 0.04);
+  --shadow-md: 0 8px 24px rgba(11, 16, 32, 0.08), 0 2px 6px rgba(11, 16, 32, 0.04);
+  --shadow-lg: 0 18px 45px rgba(11, 16, 32, 0.12), 0 4px 12px rgba(11, 16, 32, 0.05);
+  --shadow-xl: 0 32px 80px rgba(11, 16, 32, 0.18);
+  --shadow-brand: 0 12px 30px rgba(109, 40, 217, 0.28);
+  --shadow-amber: 0 12px 26px rgba(245, 158, 11, 0.32);
+
+  /* ---- Motion --------------------------------------------------------- */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 130ms;
+  --dur: 220ms;
+  --dur-slow: 380ms;
+
+  /* ---- Layout --------------------------------------------------------- */
+  --container: 1200px;
+  --container-wide: 1360px;
+  --header-h: 68px;
+  --tabbar-h: 60px;
+
+  --z-sticky: 40;
+  --z-header: 50;
+  --z-overlay: 80;
+  --z-toast: 90;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+  }
+}
