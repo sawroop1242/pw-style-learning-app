@@ -984,3 +984,95 @@ renumbered by section on load, so numbering stays continuous even if the API ret
 | Orphan CSS pruned | base 5.9→5.2 kB, components 24.6→22.5 kB, pages 31.5→30.7 kB |
 
 Still not run: real-browser visual pass, Lighthouse, axe-core — no browser in this environment.
+
+---
+
+## Run 5 — complete exam window and account page (2026-10-23, branch `arena/22ff0f3c-pw-style-learning-app`)
+
+Run 4 rebuilt the *look* of the front end. Run 5 rebuilt the two screens the product is actually judged on
+and gave the design system one source of truth. Nothing was deployed; everything below was run locally.
+
+### Exam window (`test-player.html` + `test-player.js`)
+
+The page is one shell with three states — **instructions → test → answer sheet** — and no site chrome, so a
+candidate never scrolls past a marketing header mid-paper.
+
+- **Instructions gate.** Title, exam, question count, duration, maximum marks, marking scheme, conduct
+  rules and a section list. *Start* stays disabled until the candidate accepts the instructions, and, when
+  the API is live, until a session exists. A rejected start (401/403) re-enables it with an explanation
+  instead of leaving a dead button.
+- **Test window.** Sticky bar with test name, autosave state, countdown (critical style at ≤ 5 min,
+  auto-submit at zero), a question-paper drawer and *Submit*. Section tabs jump by section; the question
+  panel renders one question at a time with its number, marks, negative marks and difficulty, A–D options,
+  *Save & next*, *Clear response* and *Mark for review*.
+- **Palette.** Grouped by section, with the four candidate states plus *unvisited* and *current*, and a
+  live answered/unanswered count. States carry shape as well as colour: not-answered has a dashed border,
+  marked questions take a dot, current takes an outline — meeting WCAG 1.4.1 on its own.
+- **Submit.** A summary dialog lists answered, not answered, marked and total before confirming; a second
+  submit is rejected by the API and the UI reports it rather than silently replacing a score.
+- **Answer sheet.** Score, percentage, accuracy, correct/incorrect/unattempted counts, a section-wise
+  breakdown, and every question with the correct option, the candidate's option and a worked explanation.
+  Filters: all / correct / incorrect / unattempted. *Retake* and *Print*; the print sheet drops the chrome
+  and avoids breaking questions across pages.
+- **Engine details.** Autosave is debounced 450 ms over a serialised promise chain (no interleaved writes),
+  every attempt mirrors to `sessionStorage` so a refresh restores answers and the current question, the
+  countdown is derived from the server `deadline` rather than a local stopwatch, and grading runs on the
+  server when reachable. The quiz payload deliberately carries no answer key, so the local fallback grades
+  only the bundled sample paper and says so. Keyboard: `1`–`6` select, `←`/`→` move.
+
+### Account page (`login.html` + `auth.js`)
+
+Five views on one page: **sign in**, **create account**, **request a reset code**, **set a new password**,
+**done**. Field-level validation runs before the request (username shape, email, password length, password
+match, six-digit code, terms), server errors are mapped back to the field that caused them, and a
+non-field error is shown in a form alert. Sign-up shows a live strength meter. `login.html#register` opens
+the sign-up view directly. The reset flow talks to `/auth/forgot-password/`, `/auth/verify-otp/` and
+`/auth/resend-otp/`; sign-out is a header action on the page itself.
+
+When the API is unreachable — the static preview, where `/api/*` 404s — sign-in falls back to a clearly
+labelled **local demo session** with fixed `demo-*` tokens, and every such path raises a toast that says it
+is a preview. No screen claims to have authenticated against a server it never reached.
+
+### Design system
+
+- Semantic tint tokens added (`--success-200`, `--danger-200`, `--info-200`, `--amber-200`, `--amber-700`,
+  `--amber-800`, `--amber-900`, `--danger-800`, `--info-800`); literals outside `tokens.css` fell from 60 to
+  28, and the rest are intentional pure-white text on dark fills plus the print palette.
+- Avatars moved off the legacy teal/rose/navy gradients onto the paper tints, so a faculty row no longer
+  reads as a different product.
+- The duplicate `color` declaration in `.qoption.is-selected .qoption-key` is gone; dead `.demo-hint` and
+  `.grow` rules were pruned; service worker bumped to `studyspace-v6`.
+- The header chrome no longer injects inline `style` attributes: the sign-in button, the mobile nav rows
+  and the demo banner use `.btn-ghost-invert`, `.mobile-nav-link` and `.link` instead, and the mobile nav
+  now carries its own *Sign in* row because the header ghost button is hidden below 720 px.
+
+### Backend
+
+- `SECURE_HSTS_PRELOAD` now defaults to `true` only when `ENVIRONMENT=production` (it adds the header
+  directive; submission to the browser preload list stays a manual step), which makes
+  `manage.py check --deploy` report **0 issues**. `.env.example` documents the switch.
+
+### Verification (this run)
+
+| Check | Result |
+|---|---|
+| `node --check` on `sw.js` + 11 modules | 12/12 exit 0 |
+| Headless render of 9 pages (jsdom, API disabled) | 9/9, 0 console errors |
+| Interaction suite (rewritten for the new hooks) | **53/53** assertions |
+| CSS classes used vs defined | **328 used, 0 missing** |
+| Custom properties | 122 defined, 97 referenced, **0 undefined** |
+| HTTP 200 for every page, asset, icon, `sw.js` and the manifest | **28/28** |
+| Django test suite (`accounts` + `courses`) | **139 tests, OK** |
+| `manage.py check --deploy` (production env) | **0 issues** |
+| `makemigrations --check --dry-run` | No changes detected |
+| Structural a11y sweep (unique ids, one `h1`, labelled controls, accessible names, heading order) | 9/9 pages clean |
+| CSS parsed with `css-tree` | 736 rules, 0 parse errors |
+
+Known gap, stated rather than faked: the result sheet does **not** show a cohort rank or percentile. Those
+figures need a cohort (every other submitted attempt on the same quiz), and the API currently returns
+score, percentage, counts and section breakdown only. Showing a made-up rank would be worse than
+showing none; computing a real one is queued for the next backend pass.
+
+Still not run: a real-browser visual pass, Lighthouse, axe-core or a screen-reader sweep — there is no
+browser in this environment. The live-API path (start → autosave → submit → result) is exercised by the
+Django tests, but not end-to-end from a browser against the API, because the preview is a static host.

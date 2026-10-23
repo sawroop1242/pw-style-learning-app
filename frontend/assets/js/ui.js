@@ -226,14 +226,15 @@ export function renderHeader(active = '') {
                    <span class="avatar">${esc(initials(user.username || 'Student'))}</span>
                    <span class="truncate">${esc(user.username || 'Student')}</span>
                  </a>`
-              : `<a class="btn btn-ghost btn-sm" href="login.html" style="border-color:rgba(255,255,255,.16);color:#fff">Sign in</a>
+              : `<a class="btn btn-ghost-invert btn-sm" href="login.html">Sign in</a>
                  <a class="btn btn-accent btn-sm" href="login.html#register">Get started</a>`
           }
           <button class="icon-btn nav-toggle" aria-label="Open menu" aria-expanded="false" data-menu-toggle>${icon('menu')}</button>
         </div>
       </div>
-      <div class="container-wide" data-mobile-nav hidden style="padding-bottom:14px">
-        ${NAV.map((i) => `<a href="${i.href}" style="display:block;padding:11px 6px;color:rgba(255,255,255,.8);border-top:1px solid rgba(255,255,255,.07);font-size:14px;font-weight:600">${i.label}</a>`).join('')}
+      <div class="container-wide mobile-nav" data-mobile-nav hidden>
+        ${NAV.map((i) => `<a class="mobile-nav-link" href="${i.href}">${i.label}</a>`).join('')}
+        ${isSignedIn() ? '' : '<a class="mobile-nav-link" href="login.html">Sign in</a>'}
       </div>
     </header>`;
 
@@ -437,7 +438,7 @@ export function testCard(test) {
       </p>
       <div class="test-card-foot">
         <span class="tiny subtle">${countdown(test.startsAt) || shortDate(test.startsAt) || 'Always open'}</span>
-        <a class="btn btn-ghost btn-sm" href="test-player.html?test=${test.id}&amp;duration=${test.duration}">Start test</a>
+        <a class="btn btn-ghost btn-sm" href="test-player.html?test=${test.id}">Start test</a>
       </div>
     </article>`;
 }

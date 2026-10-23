@@ -435,7 +435,7 @@ function wireRedeem(course) {
     if (e.target.closest('[data-redeem]')) {
       open();
       if (!isSignedIn()) {
-        setError(`Sign in to redeem a code. <a href="login.html?next=${encodeURIComponent(`course.html?slug=${course.slug}`)}" style="text-decoration:underline">Sign in</a>`);
+        setError(`Sign in to redeem a code. <a href="login.html?next=${encodeURIComponent(`course.html?slug=${course.slug}`)}" class="link">Sign in</a>`);
       }
     }
     if (e.target.closest('[data-close-modal]')) close();
@@ -480,7 +480,7 @@ function wireRedeem(course) {
       return;
     }
     if (!isSignedIn()) {
-      setError(`Sign in to redeem a code. <a href="login.html?next=${encodeURIComponent(`course.html?slug=${course.slug}`)}" style="text-decoration:underline">Sign in</a>`);
+      setError(`Sign in to redeem a code. <a href="login.html?next=${encodeURIComponent(`course.html?slug=${course.slug}`)}" class="link">Sign in</a>`);
       return;
     }
 
@@ -502,7 +502,7 @@ function wireRedeem(course) {
       } else if (err.status === 404 || err.status === 400) {
         setError(err.message || 'That code is not valid for this batch. Check the characters and try again.');
       } else if (err.status === 401) {
-        setError(`Your session expired. <a href="login.html?next=${encodeURIComponent(`course.html?slug=${course.slug}`)}" style="text-decoration:underline">Sign in again</a>`);
+        setError(`Your session expired. <a href="login.html?next=${encodeURIComponent(`course.html?slug=${course.slug}`)}" class="link">Sign in again</a>`);
       } else {
         setError(err.message || 'That code did not work. Try again in a moment.');
       }

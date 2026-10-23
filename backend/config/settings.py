@@ -205,7 +205,9 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
         "SECURE_HSTS_INCLUDE_SUBDOMAINS", ENVIRONMENT == "production"
     )
-    SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
+    # `preload` only adds the directive to the header; submitting the domain to
+    # the browser preload list stays a manual, deliberate step.
+    SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", ENVIRONMENT == "production")
 
 # Email configuration
 EMAIL_BACKEND = os.getenv(

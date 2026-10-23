@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#1b1a17">
   <meta name="api-base" content="/api">
   <title>Sign in — StudySpace</title>
-  <meta name="description" content="Sign in to your StudySpace account to continue your batch, tests and notes.">
+  <meta name="description" content="Sign in to your StudySpace account, create one, or reset a forgotten password with an email code.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -18,12 +18,12 @@
 <body>
   <noscript>
     <div class="noscript-bar" role="note">
-      StudySpace needs JavaScript for the catalogue, tests and dashboard.
-      Please enable it, or write to
+      StudySpace needs JavaScript to sign you in. Please enable it, or write to
       <a href="mailto:support@studyspace.example">support@studyspace.example</a> for help.
     </div>
   </noscript>
-  <div class="auth-shell">
+
+  <main class="auth-shell">
     <!-- Brand side -->
     <aside class="auth-brand">
       <a class="brand" href="index.html">
@@ -34,6 +34,12 @@
       <div class="auth-brand-copy">
         <h2>Pick up exactly where you left off.</h2>
         <p>Your batches, question papers and notes, kept in one place on every device you sign in from.</p>
+
+        <ul class="auth-facts">
+          <li><svg><use href="#i-play"/></svg> Recorded classes resume at the second you stopped.</li>
+          <li><svg><use href="#i-trophy"/></svg> Every mock returns a score, section breakdown and solutions.</li>
+          <li><svg><use href="#i-shield-check"/></svg> Notes and bookmarks are visible only to you.</li>
+        </ul>
       </div>
 
       <div class="auth-brand-foot">
@@ -44,111 +50,180 @@
     </aside>
 
     <!-- Form side -->
-    <main class="auth-form-side">
+    <section class="auth-form-side">
       <div class="auth-form-wrap">
-        <a class="link tiny" href="index.html" style="margin-bottom:22px;display:inline-flex">
-          <svg><use href="#i-arrow-left"/></svg> Back to home
-        </a>
+        <div class="auth-session" id="session-banner" hidden></div>
 
         <h1 id="auth-title">Welcome back</h1>
         <p id="auth-sub">Sign in to continue your preparation.</p>
 
-        <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
-          <button role="tab" id="tab-signin" aria-selected="true" aria-controls="form-signin">Sign in</button>
-          <button role="tab" id="tab-signup" aria-selected="false" aria-controls="form-signup">Create account</button>
+        <div class="auth-tabs" id="auth-tabs" role="tablist" aria-label="Account">
+          <button type="button" role="tab" id="tab-signin" aria-selected="true" aria-controls="form-signin">Sign in</button>
+          <button type="button" role="tab" id="tab-signup" aria-selected="false" aria-controls="form-signup">Create account</button>
         </div>
 
-        <!-- Sign in -->
-        <form class="auth-form" id="form-signin" role="tabpanel" aria-labelledby="tab-signin" novalidate>
+        <!-- ------------------------------ SIGN IN ------------------------------ -->
+        <form class="auth-form" id="form-signin" novalidate>
+          <div class="form-alert" id="signin-error" role="alert" hidden></div>
+
           <div class="field">
-            <label for="login-user">Username or email</label>
-            <div class="input-group">
-              <svg><use href="#i-user"/></svg>
-              <input class="input" id="login-user" name="username" autocomplete="username" placeholder="aarav" required>
-            </div>
+            <label for="signin-identifier">Username or email</label>
+            <input class="input" id="signin-identifier" name="identifier" type="text"
+                   autocomplete="username" autocapitalize="none" spellcheck="false" required>
+            <p class="field-error" id="signin-identifier-error" hidden></p>
           </div>
+
           <div class="field">
-            <label for="login-pass">Password</label>
+            <label for="signin-password">Password</label>
             <div class="input-group">
-              <svg><use href="#i-lock"/></svg>
-              <input class="input" id="login-pass" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required style="padding-right:46px">
-              <button class="input-action" type="button" data-toggle-pass="login-pass" aria-label="Show password">
+              <input class="input" id="signin-password" name="password" type="password"
+                     autocomplete="current-password" required>
+              <button class="input-action" type="button" data-toggle-pass="signin-password" aria-label="Show password">
                 <svg><use href="#i-eye"/></svg>
               </button>
             </div>
+            <p class="field-error" id="signin-password-error" hidden></p>
           </div>
 
-          <div class="row-between">
+          <div class="auth-row">
             <label class="check">
               <input type="checkbox" name="remember" checked>
               <span>Keep me signed in</span>
             </label>
-            <a class="link tiny" href="#" data-forgot>Forgot password?</a>
+            <button class="link-button" type="button" data-forgot>Forgot password?</button>
           </div>
 
-          <button class="btn btn-primary btn-lg btn-block" type="submit" id="login-submit">Sign in</button>
-          <p class="field-error" id="login-error" hidden></p>
+          <button class="btn btn-primary btn-block" id="login-submit" type="submit">Sign in</button>
+
+          <p class="auth-alt">New to StudySpace?
+            <button class="link-button" type="button" data-switch="signup">Create an account</button>
+          </p>
+
+          <div class="auth-divider">or</div>
+
+          <button class="btn btn-ghost btn-block" type="button" data-demo-login>Continue with the demo account</button>
+          <p class="field-hint auth-demo-note">Demo sign-in works offline and stores a local session.</p>
         </form>
 
-        <!-- Sign up -->
-        <form class="auth-form" id="form-signup" role="tabpanel" aria-labelledby="tab-signup" hidden novalidate>
+        <!-- ------------------------------ SIGN UP ------------------------------ -->
+        <form class="auth-form" id="form-signup" novalidate hidden>
+          <div class="form-alert" id="signup-error" role="alert" hidden></div>
+
           <div class="field">
-            <label for="su-name">Full name</label>
-            <div class="input-group">
-              <svg><use href="#i-user"/></svg>
-              <input class="input" id="su-name" name="name" autocomplete="name" placeholder="Aarav Gupta" required>
-            </div>
+            <label for="signup-username">Username</label>
+            <input class="input" id="signup-username" name="username" type="text"
+                   autocomplete="username" autocapitalize="none" spellcheck="false" required>
+            <p class="field-hint">Letters, digits and @ . + - _ only.</p>
+            <p class="field-error" id="signup-username-error" hidden></p>
           </div>
+
           <div class="field">
-            <label for="su-email">Email</label>
-            <div class="input-group">
-              <svg><use href="#i-mail"/></svg>
-              <input class="input" id="su-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
-            </div>
+            <label for="signup-email">Email</label>
+            <input class="input" id="signup-email" name="email" type="email"
+                   autocomplete="email" autocapitalize="none" spellcheck="false" required>
+            <p class="field-error" id="signup-email-error" hidden></p>
           </div>
+
           <div class="field">
-            <label for="su-pass">Password</label>
+            <label for="signup-password">Password</label>
             <div class="input-group">
-              <svg><use href="#i-lock"/></svg>
-              <input class="input" id="su-pass" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required style="padding-right:46px">
-              <button class="input-action" type="button" data-toggle-pass="su-pass" aria-label="Show password">
+              <input class="input" id="signup-password" name="password" type="password"
+                     autocomplete="new-password" required>
+              <button class="input-action" type="button" data-toggle-pass="signup-password" aria-label="Show password">
                 <svg><use href="#i-eye"/></svg>
               </button>
             </div>
-            <span class="field-hint">Use a mix of letters, numbers and a symbol.</span>
+            <p class="field-hint" id="signup-strength" aria-live="polite">Use at least 8 characters.</p>
+            <p class="field-error" id="signup-password-error" hidden></p>
           </div>
+
           <div class="field">
-            <label for="su-pass2">Confirm password</label>
+            <label for="signup-confirm">Confirm password</label>
             <div class="input-group">
-              <svg><use href="#i-lock"/></svg>
-              <input class="input" id="su-pass2" name="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repeat your password" required>
+              <input class="input" id="signup-confirm" name="confirm" type="password"
+                     autocomplete="new-password" required>
+              <button class="input-action" type="button" data-toggle-pass="signup-confirm" aria-label="Show password">
+                <svg><use href="#i-eye"/></svg>
+              </button>
             </div>
+            <p class="field-error" id="signup-confirm-error" hidden></p>
           </div>
 
           <label class="check">
-            <input type="checkbox" name="terms" required>
-            <span>I agree to the <a href="legal.html#terms" style="color:var(--violet-600)">terms of use</a> and <a href="legal.html#privacy" style="color:var(--violet-600)">privacy policy</a>.</span>
+            <input type="checkbox" id="signup-terms" name="terms">
+            <span>I agree to the <a class="link" href="legal.html#terms">terms</a> and
+              <a class="link" href="legal.html#privacy">privacy policy</a>.</span>
           </label>
+          <p class="field-error" id="signup-terms-error" hidden></p>
 
-          <button class="btn btn-primary btn-lg btn-block" type="submit" id="signup-submit">Create account</button>
-          <p class="field-error" id="signup-error" hidden></p>
+          <button class="btn btn-primary btn-block" id="signup-submit" type="submit">Create account</button>
+
+          <p class="auth-alt">Already have an account?
+            <button class="link-button" type="button" data-switch="signin">Sign in</button>
+          </p>
         </form>
 
-        <div class="auth-divider">or</div>
+        <!-- --------------------------- PASSWORD RESET -------------------------- -->
+        <form class="auth-form" id="forgot-request" novalidate hidden>
+          <div class="form-alert" id="forgot-error" role="alert" hidden></div>
 
-        <button class="btn btn-ghost btn-block" data-demo-login>
-          <svg><use href="#i-sparkles"/></svg> Continue with the demo account
-        </button>
+          <p class="auth-lead">Enter the email on your account. We will send a six-digit code that expires in ten minutes.</p>
 
-        <div class="demo-hint">
-          <strong>Preview build.</strong> The demo account opens with sample batches, tests and notes.
-          No real account is created and no data leaves this browser.
+          <div class="field">
+            <label for="forgot-email">Email</label>
+            <input class="input" id="forgot-email" name="email" type="email"
+                   autocomplete="email" autocapitalize="none" spellcheck="false" required>
+            <p class="field-error" id="forgot-email-error" hidden></p>
+          </div>
+
+          <button class="btn btn-primary btn-block" id="forgot-send" type="submit">Send reset code</button>
+          <button class="btn btn-ghost btn-block" type="button" data-back-signin>Back to sign in</button>
+        </form>
+
+        <form class="auth-form" id="forgot-reset" novalidate hidden>
+          <div class="form-alert" id="reset-error" role="alert" hidden></div>
+          <p class="auth-lead">Enter the code sent to <strong id="reset-email">your email</strong>, then choose a new password.</p>
+
+          <div class="field">
+            <label for="reset-code">Six-digit code</label>
+            <input class="input" id="reset-code" name="otp" type="text" inputmode="numeric"
+                   autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required>
+            <p class="field-error" id="reset-code-error" hidden></p>
+          </div>
+
+          <div class="field">
+            <label for="reset-password">New password</label>
+            <div class="input-group">
+              <input class="input" id="reset-password" name="password" type="password"
+                     autocomplete="new-password" required>
+              <button class="input-action" type="button" data-toggle-pass="reset-password" aria-label="Show password">
+                <svg><use href="#i-eye"/></svg>
+              </button>
+            </div>
+            <p class="field-hint">At least 8 characters. Long phrases are fine.</p>
+            <p class="field-error" id="reset-password-error" hidden></p>
+          </div>
+
+          <div class="field">
+            <label for="reset-confirm">Confirm new password</label>
+            <input class="input" id="reset-confirm" name="confirm" type="password"
+                   autocomplete="new-password" required>
+            <p class="field-error" id="reset-confirm-error" hidden></p>
+          </div>
+
+          <button class="btn btn-primary btn-block" id="forgot-reset-btn" type="submit">Reset password</button>
+          <button class="btn btn-ghost btn-block" type="button" data-resend>Resend code</button>
+        </form>
+
+        <div class="auth-done" id="forgot-done" hidden>
+          <span class="auth-done-icon"><svg><use href="#i-check-circle"/></svg></span>
+          <h2>Password changed</h2>
+          <p>Sign in with your new password. Every other session has been signed out.</p>
+          <button class="btn btn-primary btn-block" type="button" data-back-signin>Back to sign in</button>
         </div>
       </div>
-    </main>
-  </div>
-
-  <div id="site-footer" hidden></div>
+    </section>
+  </main>
 
   <script type="module" src="assets/js/auth.js"></script>
 </body>

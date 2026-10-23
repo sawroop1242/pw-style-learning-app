@@ -21,7 +21,7 @@ function renderGreeting() {
   $('#greeting').textContent = `${part}, ${name}`;
   if (!isSignedIn()) {
     $('#greeting-sub').innerHTML =
-      'You are browsing the demo account. <a href="login.html" style="color:var(--amber-400);text-decoration:underline">Sign in</a> to keep your own progress.';
+      'You are browsing the demo account. <a class="link" href="login.html">Sign in</a> to keep your own progress.';
   }
 
   const stats = DASHBOARD.stats;

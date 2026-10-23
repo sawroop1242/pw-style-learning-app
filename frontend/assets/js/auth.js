@@ -1,81 +1,238 @@
-/** Sign in / sign up with a working preview fallback. */
+/**
+ * Account entry: sign in, create an account, and the email-code password reset.
+ *
+ * Every request matches the Django API contract exactly. When the API is not
+ * running (the static preview) a clearly-labelled local demo session is used
+ * instead, so the page is still demonstrable without pretending to be live.
+ */
 
-import { $, esc, auth, storage } from './core.js';
+import { $, esc, auth, storage, request } from './core.js';
 import { mountSprite, toast } from './ui.js';
 
 mountSprite();
 
-const state = { mode: 'signin' };
+const DEMO_USER = 'aarav.gupta';
 
 /* ------------------------------------------------------------------ */
-/* Tabs                                                               */
+/* Views                                                              */
 /* ------------------------------------------------------------------ */
 
-function setMode(mode) {
-  state.mode = mode;
-  const isSignin = mode === 'signin';
+const VIEWS = ['signin', 'signup', 'forgot-request', 'forgot-reset', 'forgot-done'];
 
-  $('#tab-signin').setAttribute('aria-selected', String(isSignin));
-  $('#tab-signup').setAttribute('aria-selected', String(!isSignin));
-  $('#form-signin').hidden = !isSignin;
-  $('#form-signup').hidden = isSignin;
+const COPY = {
+  signin: {
+    title: 'Welcome back',
+    sub: 'Sign in to continue your preparation.',
+    tab: true
+  },
+  signup: {
+    title: 'Create your account',
+    sub: 'Free to start. No card and no trial timer.',
+    tab: true
+  },
+  'forgot-request': {
+    title: 'Reset your password',
+    sub: 'We will email a six-digit code to your account address.',
+    tab: false
+  },
+  'forgot-reset': {
+    title: 'Choose a new password',
+    sub: 'The code is single use and expires ten minutes after it was sent.',
+    tab: false
+  },
+  'forgot-done': {
+    title: 'Password changed',
+    sub: 'Your other sessions have been signed out.',
+    tab: false
+  }
+};
 
-  $('#auth-title').textContent = isSignin ? 'Welcome back' : 'Create your account';
-  $('#auth-sub').textContent = isSignin
-    ? 'Sign in to continue your preparation.'
-    : 'Free to start. No card, no trial timer.';
+let view = 'signin';
 
-  document.title = `${isSignin ? 'Sign in' : 'Create account'} — StudySpace`;
+function show(next, { focus = true } = {}) {
+  view = next;
+  const copy = COPY[next];
+
+  for (const name of VIEWS) {
+    const node = viewNode(name);
+    if (node) node.hidden = name !== next;
+  }
+
+  const tabs = $('#auth-tabs');
+  if (tabs) tabs.hidden = !copy.tab;
+
+  tapTab(next === 'signup' ? 'signup' : 'signin', next === 'signup');
+
+  $('#auth-title').textContent = copy.title;
+  $('#auth-sub').textContent = copy.sub;
+  document.title = `${copy.title} — StudySpace`;
+
+  if (focus) {
+    const first = viewNode(next)?.querySelector('input, button');
+    first?.focus({ preventScroll: true });
+  }
 }
 
-$('#tab-signin').addEventListener('click', () => setMode('signin'));
-$('#tab-signup').addEventListener('click', () => setMode('signup'));
+const viewNode = (name) => ({
+  signin: $('#form-signin'),
+  signup: $('#form-signup'),
+  'forgot-request': $('#forgot-request'),
+  'forgot-reset': $('#forgot-reset'),
+  'forgot-done': $('#forgot-done')
+}[name]);
 
-if (location.hash === '#register') setMode('signup');
+function tapTab(which, active) {
+  const signin = $('#tab-signin');
+  const signup = $('#tab-signup');
+  if (!signin || !signup) return;
+  signin.setAttribute('aria-selected', String(which === 'signin' && active));
+  signup.setAttribute('aria-selected', String(which === 'signup' && active));
+}
+
+$('#tab-signin').addEventListener('click', () => show('signin'));
+$('#tab-signup').addEventListener('click', () => show('signup'));
+
+document.addEventListener('click', (e) => {
+  const switchTo = e.target.closest('[data-switch]');
+  if (switchTo) show(switchTo.dataset.switch === 'signup' ? 'signup' : 'signin');
+
+  if (e.target.closest('[data-forgot]')) show('forgot-request');
+  if (e.target.closest('[data-back-signin]')) {
+    resetForgotFlow();
+    show('signin');
+  }
+});
+
+/* Deep links: #register opens the sign-up tab. */
+if (location.hash === '#register') show('signup', { focus: false });
 
 /* ------------------------------------------------------------------ */
 /* Password visibility                                                */
 /* ------------------------------------------------------------------ */
 
 document.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-toggle-pass]');
-  if (!btn) return;
-  const input = document.getElementById(btn.dataset.togglePass);
+  const button = e.target.closest('[data-toggle-pass]');
+  if (!button) return;
+  const input = document.getElementById(button.dataset.togglePass);
   if (!input) return;
-  const show = input.type === 'password';
-  input.type = show ? 'text' : 'password';
-  btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-  btn.innerHTML = `<svg><use href="#i-${show ? 'eye-off' : 'eye'}"/></svg>`;
+
+  const showPassword = input.type === 'password';
+  input.type = showPassword ? 'text' : 'password';
+  button.setAttribute('aria-label', showPassword ? 'Hide password' : 'Show password');
+  const icon = button.querySelector('use');
+  if (icon) icon.setAttribute('href', showPassword ? '#i-eye-off' : '#i-eye');
+  input.focus({ preventScroll: true });
 });
 
 /* ------------------------------------------------------------------ */
-/* Helpers                                                            */
+/* Field errors                                                       */
 /* ------------------------------------------------------------------ */
 
-function fail(id, message) {
-  const node = $(id);
-  node.textContent = message;
-  node.hidden = false;
+function fieldError(inputId, message) {
+  const input = document.getElementById(inputId);
+  const node = document.getElementById(`${inputId}-error`);
+  if (input) {
+    input.setAttribute('aria-invalid', 'true');
+    if (node) input.setAttribute('aria-describedby', node.id);
+  }
+  if (node) {
+    node.textContent = message;
+    node.hidden = false;
+  }
 }
 
-function clearError(id) {
-  const node = $(id);
-  if (!node) return;
-  node.hidden = true;
-  node.textContent = '';
+function clearFieldError(inputId) {
+  const input = document.getElementById(inputId);
+  const node = document.getElementById(`${inputId}-error`);
+  if (input) {
+    input.removeAttribute('aria-invalid');
+    input.removeAttribute('aria-describedby');
+  }
+  if (node) {
+    node.hidden = true;
+    node.textContent = '';
+  }
+}
+
+function clearForm(form) {
+  form.querySelectorAll('input').forEach((input) => clearFieldError(input.id));
+  const alert = form.querySelector('.form-alert');
+  if (alert) {
+    alert.hidden = true;
+    alert.textContent = '';
+  }
+}
+
+function formAlert(form, message) {
+  const alert = form.querySelector('.form-alert');
+  if (!alert) return;
+  alert.textContent = message;
+  alert.hidden = false;
+}
+
+/** Focus the first invalid field so keyboard and screen-reader users land there. */
+function focusFirstError(form) {
+  const invalid = form.querySelector('[aria-invalid="true"]');
+  invalid?.focus({ preventScroll: false });
 }
 
 function busy(button, isBusy, label) {
   button.disabled = isBusy;
+  button.setAttribute('aria-busy', String(isBusy));
   if (isBusy) {
     button.dataset.label = button.textContent;
     button.textContent = label || 'Please wait…';
   } else if (button.dataset.label) {
     button.textContent = button.dataset.label;
+    delete button.dataset.label;
   }
 }
 
-/** The preview has no backend; fall back to a local demo session. */
+/** Map a DRF validation error payload onto our fields. */
+function applyServerErrors(form, err, mapping) {
+  const data = err?.data;
+
+  if (err?.status === 429) {
+    formAlert(form, 'Too many attempts. Wait a minute, then try again.');
+    return true;
+  }
+
+  if (!data || typeof data !== 'object') {
+    formAlert(form, err?.message || 'Something went wrong. Please try again.');
+    return true;
+  }
+
+  let handled = false;
+  for (const [field, value] of Object.entries(data)) {
+    const message = Array.isArray(value) ? value[0] : String(value);
+    const inputId = mapping[field];
+    if (inputId) {
+      fieldError(inputId, message);
+      handled = true;
+    }
+  }
+
+  const general = data.detail || data.non_field_errors?.[0];
+  if (general) {
+    formAlert(form, general);
+    handled = true;
+  }
+
+  if (!handled) formAlert(form, err.message || 'Please check the form and try again.');
+  focusFirstError(form);
+  return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Redirect after success                                             */
+/* ------------------------------------------------------------------ */
+
+function goNext() {
+  const next = new URLSearchParams(location.search).get('next');
+  const safe = next && /^[\w.-]+\.html(\?[^<>"'\s]*)?$/.test(next);
+  location.href = safe ? next : 'dashboard.html';
+}
+
 function demoSession(name) {
   storage.session = {
     access: 'demo-access-token',
@@ -84,50 +241,50 @@ function demoSession(name) {
   };
 }
 
-function goNext() {
-  const next = new URLSearchParams(location.search).get('next');
-  // Only same-site pages, and only a plain file name plus optional query.
-  const safe = next && /^[\w.-]+\.html(\?[^<>"'\s]*)?$/.test(next);
-  location.href = safe ? next : 'dashboard.html';
-}
-
 /* ------------------------------------------------------------------ */
 /* Sign in                                                            */
 /* ------------------------------------------------------------------ */
 
 $('#form-signin').addEventListener('submit', async (e) => {
   e.preventDefault();
-  clearError('#login-error');
+  const form = e.currentTarget;
+  clearForm(form);
 
-  const form = new FormData(e.currentTarget);
-  const username = String(form.get('username') || '').trim();
-  const password = String(form.get('password') || '');
+  const identifier = $('#signin-identifier').value.trim();
+  const password = $('#signin-password').value;
+  let invalid = false;
 
-  if (!username || !password) {
-    fail('#login-error', 'Enter both your username and password.');
-    return;
+  if (!identifier) {
+    fieldError('signin-identifier', 'Enter your username or email.');
+    invalid = true;
   }
+  if (!password) {
+    fieldError('signin-password', 'Enter your password.');
+    invalid = true;
+  }
+  if (invalid) return focusFirstError(form);
 
-  const btn = $('#login-submit');
-  busy(btn, true, 'Signing in…');
+  const button = $('#login-submit');
+  busy(button, true, 'Signing in…');
 
   try {
-    const user = await auth.login({ username, password });
-    toast(`Welcome back, ${user?.username || username}.`, 'success');
-    setTimeout(goNext, 400);
+    const user = await auth.login({ username: identifier, password });
+    toast(`Welcome back, ${user?.username || identifier}.`, 'success');
+    setTimeout(goNext, 350);
   } catch (err) {
     if (err.status === 0) {
-      // No API in the static preview — accept the demo credentials.
-      demoSession(username);
+      demoSession(identifier);
       toast('Preview mode: signed in with a local demo session.', 'info', 5000);
       setTimeout(goNext, 700);
     } else if (err.status === 401 || err.status === 400) {
-      fail('#login-error', 'Those details did not match an account. Check your password and try again.');
+      formAlert(form, 'That username or password did not match an account.');
+      fieldError('signin-password', 'Check your password and try again.');
+      focusFirstError(form);
     } else {
-      fail('#login-error', err.message || 'Could not sign in right now. Please try again.');
+      applyServerErrors(form, err, {});
     }
   } finally {
-    busy(btn, false);
+    busy(button, false);
   }
 });
 
@@ -135,83 +292,239 @@ $('#form-signin').addEventListener('submit', async (e) => {
 /* Sign up                                                            */
 /* ------------------------------------------------------------------ */
 
+function passwordScore(value) {
+  let score = 0;
+  if (value.length >= 8) score += 1;
+  if (value.length >= 12) score += 1;
+  if (/[A-Z]/.test(value) && /[a-z]/.test(value)) score += 1;
+  if (/\d/.test(value) && /[^A-Za-z0-9]/.test(value)) score += 1;
+  return score;
+}
+
+$('#signup-password').addEventListener('input', (e) => {
+  const value = e.target.value;
+  const node = $('#signup-strength');
+  if (!node) return;
+
+  if (!value) {
+    node.textContent = 'Use at least 8 characters.';
+    node.dataset.strength = '';
+    return;
+  }
+
+  const score = passwordScore(value);
+  const labels = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'];
+  node.textContent = `${labels[score]} · ${value.length} characters`;
+  node.dataset.strength = String(score);
+});
+
 $('#form-signup').addEventListener('submit', async (e) => {
   e.preventDefault();
-  clearError('#signup-error');
+  const form = e.currentTarget;
+  clearForm(form);
 
-  const form = new FormData(e.currentTarget);
-  const name = String(form.get('name') || '').trim();
-  const email = String(form.get('email') || '').trim();
-  const password = String(form.get('password') || '');
-  const confirm = String(form.get('passwordConfirm') || '');
-  const terms = form.get('terms');
+  const username = $('#signup-username').value.trim();
+  const email = $('#signup-email').value.trim();
+  const password = $('#signup-password').value;
+  const confirm = $('#signup-confirm').value;
+  const terms = $('#signup-terms').checked;
 
-  if (!name || !email || !password) {
-    fail('#signup-error', 'Fill in every field to create your account.');
-    return;
+  let invalid = false;
+
+  if (!/^[\w.@+-]{3,30}$/.test(username)) {
+    fieldError('signup-username', 'Use 3–30 characters: letters, digits or @ . + - _');
+    invalid = true;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    fail('#signup-error', 'That email address does not look right.');
-    return;
+    fieldError('signup-email', 'Enter a valid email address.');
+    invalid = true;
   }
   if (password.length < 8) {
-    fail('#signup-error', 'Use at least 8 characters for your password.');
-    return;
+    fieldError('signup-password', 'Use at least 8 characters.');
+    invalid = true;
   }
   if (password !== confirm) {
-    fail('#signup-error', 'The two passwords do not match.');
-    return;
+    fieldError('signup-confirm', 'The two passwords do not match.');
+    invalid = true;
   }
   if (!terms) {
-    fail('#signup-error', 'Please accept the terms to continue.');
-    return;
+    fieldError('signup-terms', 'Accept the terms to create an account.');
+    invalid = true;
   }
+  if (invalid) return focusFirstError(form);
 
-  const btn = $('#signup-submit');
-  busy(btn, true, 'Creating account…');
-
-  const username = name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '').slice(0, 30) || 'student';
+  const button = $('#signup-submit');
+  busy(button, true, 'Creating account…');
 
   try {
     await auth.register({ username, email, password, passwordConfirm: confirm });
     toast('Account created. Welcome to StudySpace.', 'success');
-    setTimeout(goNext, 500);
+    setTimeout(goNext, 400);
   } catch (err) {
     if (err.status === 0) {
       demoSession(username);
       toast('Preview mode: demo account created locally.', 'info', 5000);
       setTimeout(goNext, 700);
     } else {
-      fail('#signup-error', err.message || 'Could not create the account. Try a different username.');
+      applyServerErrors(form, err, {
+        username: 'signup-username',
+        email: 'signup-email',
+        password: 'signup-password',
+        password_confirm: 'signup-confirm'
+      });
     }
   } finally {
-    busy(btn, false);
+    busy(button, false);
   }
 });
 
 /* ------------------------------------------------------------------ */
-/* Demo & recovery                                                    */
+/* Password reset                                                     */
+/* ------------------------------------------------------------------ */
+
+let resetTarget = '';
+
+function resetForgotFlow() {
+  resetTarget = '';
+  const requestForm = $('#forgot-request');
+  const resetForm = $('#forgot-reset');
+  requestForm?.reset();
+  resetForm?.reset();
+  clearForm(requestForm);
+  clearForm(resetForm);
+  $('#reset-email').textContent = 'your email';
+}
+
+$('#forgot-request').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  clearForm(form);
+
+  const email = $('#forgot-email').value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    fieldError('forgot-email', 'Enter the email on your account.');
+    return focusFirstError(form);
+  }
+
+  const button = $('#forgot-send');
+  busy(button, true, 'Sending…');
+
+  try {
+    await request('/auth/forgot-password/', { method: 'POST', body: { email } });
+    resetTarget = email;
+    $('#reset-email').textContent = email;
+    show('forgot-reset');
+    toast('If that email has an account, a code is on its way.', 'success', 5000);
+  } catch (err) {
+    if (err.status === 0) {
+      // No API in the preview: explain instead of pretending a mail was sent.
+      formAlert(form, 'The API is not reachable from this preview, so a reset code cannot be sent. Start the Django server to use password reset.');
+    } else {
+      applyServerErrors(form, err, { email: 'forgot-email' });
+    }
+  } finally {
+    busy(button, false);
+  }
+});
+
+$('#forgot-reset').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  clearForm(form);
+
+  const code = $('#reset-code').value.trim();
+  const password = $('#reset-password').value;
+  const confirm = $('#reset-confirm').value;
+
+  let invalid = false;
+  if (!/^\d{6}$/.test(code)) {
+    fieldError('reset-code', 'Enter the six-digit code from the email.');
+    invalid = true;
+  }
+  if (password.length < 8) {
+    fieldError('reset-password', 'Use at least 8 characters.');
+    invalid = true;
+  }
+  if (password !== confirm) {
+    fieldError('reset-confirm', 'The two passwords do not match.');
+    invalid = true;
+  }
+  if (invalid) return focusFirstError(form);
+
+  const button = $('#forgot-reset-btn');
+  busy(button, true, 'Resetting…');
+
+  try {
+    await request('/auth/verify-otp/', {
+      method: 'POST',
+      body: {
+        email: resetTarget,
+        otp: code,
+        new_password: password,
+        new_password_confirm: confirm
+      }
+    });
+    storage.clear();
+    show('forgot-done');
+  } catch (err) {
+    if (err.status === 0) {
+      formAlert(form, 'The API is not reachable from this preview, so the code cannot be checked.');
+    } else {
+      applyServerErrors(form, err, {
+        otp: 'reset-code',
+        new_password: 'reset-password',
+        new_password_confirm: 'reset-confirm',
+        email: 'reset-code'
+      });
+    }
+  } finally {
+    busy(button, false);
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-resend]')) return;
+  if (!resetTarget) return;
+  try {
+    await request('/auth/resend-otp/', { method: 'POST', body: { email: resetTarget } });
+    toast('A new code is on its way.', 'success');
+  } catch (err) {
+    toast(err.status === 429 ? 'Too many requests. Wait a minute.' : 'Could not resend the code.', 'error');
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Demo & existing session                                            */
 /* ------------------------------------------------------------------ */
 
 document.addEventListener('click', (e) => {
-  if (e.target.closest('[data-demo-login]')) {
-    demoSession('aarav.gupta');
-    toast('Signed in with the demo account.', 'success');
-    setTimeout(goNext, 500);
-  }
-  if (e.target.closest('[data-forgot]')) {
-    e.preventDefault();
-    toast('Password reset is not available in the static preview.', 'info');
-  }
+  if (!e.target.closest('[data-demo-login]')) return;
+  demoSession(DEMO_USER);
+  toast('Signed in with the demo account.', 'success');
+  setTimeout(goNext, 500);
 });
 
-/* If a session already exists, offer to continue instead of re-authenticating. */
-if (storage.access && !new URLSearchParams(location.search).get('force')) {
-  const banner = document.createElement('div');
-  banner.className = 'alert alert-info';
-  banner.style.marginBottom = '18px';
-  banner.innerHTML = `<svg><use href="#i-info"/></svg>
-    <span>You are already signed in as <strong>${esc(storage.user?.username || 'Student')}</strong>.
-    <a class="link" href="dashboard.html" style="margin-left:4px">Continue</a></span>`;
-  $('.auth-form-wrap')?.prepend(banner);
+function renderSessionBanner() {
+  const host = $('#session-banner');
+  if (!host || !storage.access) return;
+
+  const name = storage.user?.username || 'Student';
+  host.hidden = false;
+  host.innerHTML = `
+    <span>Signed in as <strong>${esc(name)}</strong>.</span>
+    <span class="auth-session-actions">
+      <a class="link" href="dashboard.html">Continue</a>
+      <button class="link-button" type="button" data-sign-out>Sign out</button>
+    </span>`;
 }
+
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-sign-out]')) return;
+  await auth.logout().catch(() => {});
+  renderSessionBanner();
+  const host = $('#session-banner');
+  if (host) host.hidden = true;
+  toast('Signed out.', 'info');
+});
+
+renderSessionBanner();

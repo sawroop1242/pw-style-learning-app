@@ -67,7 +67,7 @@ table { border-collapse: collapse; width: 100%; }
   outline-color: var(--amber-400);
 }
 
-::selection { background: var(--violet-200, #ddd6fe); color: var(--ink-900); }
+::selection { background: var(--violet-200); color: var(--ink-900); }
 
 /* Scrollbars — subtle, not hidden (hidden scrollbars hurt a11y). */
 * { scrollbar-width: thin; scrollbar-color: var(--slate-300) transparent; }
@@ -121,7 +121,6 @@ table { border-collapse: collapse; width: 100%; }
 .row { display: flex; align-items: center; gap: var(--sp-3); }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); }
 .wrap { flex-wrap: wrap; }
-.grow { flex: 1 1 auto; min-width: 0; }
 .center { text-align: center; }
 
 .grid { display: grid; gap: var(--sp-5); }
@@ -169,9 +168,12 @@ table { border-collapse: collapse; width: 100%; }
 .noscript-bar {
   background: var(--amber-100);
   color: var(--ink-900);
-  border-bottom: 1px solid #fcd34d;
+  border-bottom: 1px solid var(--amber-400);
   padding: 10px 16px;
   font-size: 13px;
   text-align: center;
 }
 .noscript-bar a { text-decoration: underline; }
+
+/* The `hidden` attribute must win over component display rules. */
+[hidden] { display: none !important; }

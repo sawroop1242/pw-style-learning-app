@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#1b1a17">
-  <title>Question paper — StudySpace</title>
-  <meta name="description" content="A printed-style question paper: sections, marks in the margin, answer options and a scored answer sheet on submit.">
+  <meta name="api-base" content="/api">
+  <title>Test window — StudySpace</title>
+  <meta name="description" content="An exam-pattern test window: sections, countdown, question palette, save and next, mark for review, a submit summary and a scored answer review.">
   <meta name="robots" content="noindex">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
@@ -19,148 +20,222 @@
 <body class="exam-shell">
   <noscript>
     <div class="noscript-bar" role="note">
-      The question paper needs JavaScript to record your answers.
+      The test window needs JavaScript to record answers and keep time.
     </div>
   </noscript>
-  <a class="skip-link" href="#paper-view">Skip to the paper</a>
+  <a class="skip-link" href="#exam-main">Skip to the question</a>
 
-  <header class="paper-bar">
-    <div class="container paper-bar-inner">
-      <div class="paper-bar-title">
-        <strong id="exam-name">JEE Main Full Mock #12</strong>
-        <span id="exam-sub">Practice paper</span>
-      </div>
-      <div class="paper-bar-actions">
-        <span class="autosave-note" id="autosave-state">Answers save as you go</span>
-        <span class="paper-timer" id="exam-timer">
-          <span id="timer-value">--:--</span>
-        </span>
-        <button class="btn btn-ghost btn-sm qmap-toggle" id="qmap-toggle" type="button"
-                aria-expanded="false" aria-controls="qmap">
-          Question map
-        </button>
-        <button class="btn btn-ghost btn-sm" id="print-btn" type="button">Print</button>
-        <button class="btn btn-primary btn-sm" id="submit-btn" type="button">Submit</button>
-      </div>
-    </div>
-  </header>
-
-  <main class="container paper-layout" id="main">
-    <!-- ------------------------------ PAPER ------------------------------ -->
-    <article class="paper" id="paper-view" aria-labelledby="paper-title">
-      <header class="paper-head">
-        <p class="paper-eyebrow">StudySpace · practice paper</p>
-        <h1 id="paper-title">JEE Main Full Mock #12</h1>
-        <p class="paper-sub" id="paper-sub">Physics · Chemistry · Mathematics</p>
-        <div class="paper-meta">
-          <span>Time allowed: <b id="meta-time">3 hours</b></span>
-          <span>Maximum marks: <b id="meta-marks">—</b></span>
-          <span>Questions: <b id="meta-count">—</b></span>
-        </div>
+  <!-- ------------------------------ INSTRUCTIONS ------------------------------ -->
+  <main class="intro-shell" id="intro-view">
+    <div class="intro-card">
+      <header class="intro-head">
+        <p class="eyebrow">Test window</p>
+        <h1 id="intro-title">JEE Main Full Mock #12</h1>
+        <p id="intro-sub">Physics · Chemistry · Mathematics</p>
       </header>
 
-      <section class="instructions">
+      <dl class="intro-meta" id="intro-meta">
+        <div><dt>Questions</dt><dd id="intro-count">10</dd></div>
+        <div><dt>Duration</dt><dd id="intro-time">180 minutes</dd></div>
+        <div><dt>Maximum marks</dt><dd id="intro-marks">40</dd></div>
+        <div><dt>Marking</dt><dd id="intro-marking">+4 · −1</dd></div>
+      </dl>
+
+      <section class="intro-instructions">
         <h2>Instructions</h2>
-        <ol id="instruction-list">
-          <li>The paper has three sections. Section A is compulsory; answer every question.</li>
-          <li>Each question carries the marks shown in the right margin. There is a penalty for a wrong answer.</li>
-          <li>Select one option per question. You can change an answer until you submit.</li>
-          <li>Use the question map to jump between questions. The timer keeps running if you leave the page.</li>
+        <ol id="intro-list">
+          <li>The paper has several sections. Every question carries the marks shown next to it.</li>
+          <li>A correct answer adds the full marks; a wrong answer deducts the negative mark shown.</li>
+          <li>Unanswered questions score zero and never carry a penalty.</li>
+          <li>Use Save &amp; Next to move on, and Mark for Review if you want to come back.</li>
+          <li>The question palette shows what is answered, marked and still pending.</li>
+          <li>When the timer reaches zero the paper is submitted automatically.</li>
         </ol>
       </section>
 
-      <div id="paper-body"></div>
+      <div class="intro-note" id="intro-note" hidden></div>
 
-      <footer class="paper-foot">
-        <p>Check your answers before submitting. Unanswered questions score zero.</p>
-        <button class="btn btn-primary" id="submit-btn-foot" type="button">Submit paper</button>
-      </footer>
-    </article>
+      <label class="check intro-agree">
+        <input type="checkbox" id="agree" required>
+        <span>I have read the instructions and I am ready to begin.</span>
+      </label>
 
-    <!-- --------------------------- ANSWER SHEET ------------------------- -->
-    <section class="result-sheet" id="result-view" hidden aria-labelledby="result-title">
-      <div class="result-head">
-        <p class="paper-eyebrow" id="result-eyebrow">StudySpace · answer sheet</p>
-        <h2 id="result-title">Your attempt is scored</h2>
-        <p id="result-sub">Review every question below, or filter to the ones you got wrong.</p>
+      <div class="intro-actions">
+        <a class="btn btn-ghost" href="tests.html">Back to tests</a>
+        <button class="btn btn-primary" type="button" id="start-btn" disabled>Start test</button>
       </div>
-
-      <table class="score-table">
-        <caption class="visually-hidden">Score summary</caption>
-        <tbody id="score-rows"></tbody>
-      </table>
-
-      <div class="result-grid" id="result-stats"></div>
-
-      <div>
-        <h2 class="section-title" style="font-size:var(--text-lg);margin-bottom:var(--sp-4)">Section-wise marks</h2>
-        <div class="section-breakdown" id="section-breakdown"></div>
-      </div>
-
-      <div>
-        <div class="row-between" style="margin-bottom:var(--sp-4);gap:14px;flex-wrap:wrap">
-          <h2 class="section-title" style="font-size:var(--text-lg)">Solutions</h2>
-          <label class="review-filter">
-            <input type="checkbox" id="only-wrong">
-            Only incorrect answers
-          </label>
-        </div>
-        <div class="solution-block" id="solutions"></div>
-      </div>
-
-      <div class="row wrap" style="gap:10px">
-        <button class="btn btn-primary" id="retake-btn" type="button">Attempt again</button>
-        <a class="btn btn-ghost" href="tests.html">Back to test series</a>
-      </div>
-    </section>
-
-    <!-- ---------------------------- Q MAP ------------------------------- -->
-    <aside class="qmap" id="qmap" aria-label="Question map">
-      <h2>Question map</h2>
-      <div class="qmap-summary">
-        <span>Answered <b id="sum-answered">0</b></span>
-        <span>Left <b id="sum-unanswered">0</b></span>
-        <span>Marked <b id="sum-marked">0</b></span>
-      </div>
-      <div class="qmap-grid" id="palette"></div>
-      <div class="qmap-legend">
-        <div><i class="k-answered"></i> Answered</div>
-        <div><i class="k-marked"></i> Marked for review</div>
-        <div><i class="k-not"></i> Not answered</div>
-        <div><i class="k-current"></i> Question on screen</div>
-      </div>
-      <button class="btn btn-ghost btn-sm" id="qmap-close" type="button">Close map</button>
-    </aside>
+      <p class="tiny subtle intro-foot" id="intro-foot">
+        Answers are saved as you go. If the connection drops, an attempt can be resumed from this device.
+      </p>
+    </div>
   </main>
 
-  <!-- ------------------------------ SUBMIT ------------------------------- -->
-  <div class="modal" id="submit-modal">
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="submit-title">
+  <!-- --------------------------------- EXAM ---------------------------------- -->
+  <div id="exam-view" hidden>
+    <header class="exam-bar">
+      <div class="container exam-bar-inner">
+        <div class="exam-identity">
+          <span class="exam-mark" aria-hidden="true"><svg><use href="#i-file-text"/></svg></span>
+          <div class="exam-titles">
+            <strong id="exam-name">JEE Main Full Mock #12</strong>
+            <span id="exam-sub">Physics · Chemistry · Mathematics</span>
+          </div>
+        </div>
+
+        <div class="exam-status">
+          <span class="exam-save" id="autosave-state" aria-live="polite">All answers saved</span>
+          <span class="exam-timer" id="exam-timer" role="timer" aria-live="off">
+            <svg aria-hidden="true"><use href="#i-clock"/></svg>
+            <b id="timer-value">--:--</b>
+          </span>
+          <button class="btn btn-ghost btn-sm" type="button" id="paper-btn">Question paper</button>
+          <button class="btn btn-primary btn-sm" type="button" id="submit-btn">Submit</button>
+        </div>
+      </div>
+
+      <div class="container exam-sections" id="section-tabs" role="tablist" aria-label="Sections"></div>
+    </header>
+
+    <main class="container exam-layout" id="exam-main">
+      <section class="exam-question" aria-label="Question panel">
+        <div class="candidate-strip">
+          <span class="avatar avatar-sm" id="candidate-avatar">G</span>
+          <span class="candidate-name" id="candidate-name">Guest candidate</span>
+          <span class="badge badge-outline" id="attempt-badge">Sample paper</span>
+        </div>
+
+        <article class="qpanel" id="qpanel" tabindex="-1"></article>
+
+        <nav class="qpanel-actions" aria-label="Question actions">
+          <button class="btn btn-ghost" type="button" id="prev-btn">
+            <svg><use href="#i-arrow-left"/></svg> Previous
+          </button>
+          <span class="qpanel-spacer"></span>
+          <button class="btn btn-ghost" type="button" id="clear-btn">Clear response</button>
+          <button class="btn btn-ghost" type="button" id="mark-btn">
+            <svg><use href="#i-flag"/></svg> Mark for review &amp; next
+          </button>
+          <button class="btn btn-primary" type="button" id="next-btn">Save &amp; next</button>
+        </nav>
+      </section>
+
+      <aside class="exam-side" aria-label="Question palette">
+        <section class="palette-card">
+          <header class="palette-head">
+            <h2>Questions</h2>
+            <span class="tiny subtle" id="palette-progress">0 of 10 answered</span>
+          </header>
+
+          <div class="palette-groups" id="palette-groups"></div>
+
+          <div class="palette-legend">
+            <span><i class="lg is-answered"></i> Answered</span>
+            <span><i class="lg is-not-answered"></i> Not answered</span>
+            <span><i class="lg is-marked"></i> Marked</span>
+            <span><i class="lg is-marked-answered"></i> Answered &amp; marked</span>
+            <span><i class="lg is-unvisited"></i> Not visited</span>
+          </div>
+        </section>
+
+        <section class="exam-summary-card">
+          <h2 class="tiny subtle">Summary</h2>
+          <dl class="exam-summary">
+            <div><dt>Answered</dt><dd id="sum-answered">0</dd></div>
+            <div><dt>Not answered</dt><dd id="sum-unanswered">0</dd></div>
+            <div><dt>Marked</dt><dd id="sum-marked">0</dd></div>
+            <div><dt>Not visited</dt><dd id="sum-unvisited">0</dd></div>
+          </dl>
+          <button class="btn btn-primary btn-block" type="button" id="submit-btn-side">Submit test</button>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <!-- --------------------------------- RESULT --------------------------------- -->
+  <main class="container result-shell" id="result-view" hidden>
+    <section class="result-sheet" aria-labelledby="result-title">
+      <header class="result-head">
+        <p class="eyebrow">Answer sheet</p>
+        <h2 id="result-title">Your attempt is scored</h2>
+        <p id="result-sub">Every question is reviewed below.</p>
+      </header>
+
+      <div class="result-hero" id="result-hero"></div>
+      <div class="result-stats" id="result-stats"></div>
+
+      <section class="result-section">
+        <h2>Section-wise performance</h2>
+        <div class="section-table" id="section-breakdown"></div>
+      </section>
+
+      <section class="result-section">
+        <div class="review-head">
+          <h2>Question review</h2>
+          <div class="review-filter" role="group" aria-label="Filter questions">
+            <button class="chip is-active" type="button" data-filter="all">All</button>
+            <button class="chip" type="button" data-filter="correct">Correct</button>
+            <button class="chip" type="button" data-filter="incorrect">Incorrect</button>
+            <button class="chip" type="button" data-filter="unattempted">Unattempted</button>
+          </div>
+        </div>
+        <div class="solutions" id="solutions"></div>
+      </section>
+
+      <footer class="result-actions">
+        <a class="btn btn-ghost" href="tests.html">Back to tests</a>
+        <button class="btn btn-ghost" type="button" id="print-btn">Print answer sheet</button>
+        <button class="btn btn-primary" type="button" id="retake-btn">Take another test</button>
+      </footer>
+    </section>
+  </main>
+
+  <!-- ------------------------------- MODALS ---------------------------------- -->
+  <div class="modal" id="submit-modal" role="dialog" aria-modal="true" aria-labelledby="submit-title">
+    <div class="modal-panel">
       <div class="modal-head">
-        <h2 class="modal-title" id="submit-title">Submit this paper?</h2>
-        <button class="icon-btn" data-close-modal type="button" aria-label="Close"
-                style="width:32px;height:32px;color:var(--text-muted)">
+        <h2 class="modal-title" id="submit-title">Submit the test?</h2>
+        <button class="icon-btn" type="button" data-close-modal aria-label="Close">
           <svg><use href="#i-x"/></svg>
         </button>
       </div>
-      <p class="small muted" style="margin-bottom:16px">
-        Once submitted, the paper is scored and your answers are locked.
-      </p>
-      <div style="margin-bottom:20px">
-        <table class="score-table">
-          <tbody>
-            <tr><th>Answered</th><td id="modal-answered">0</td></tr>
-            <tr><th>Not answered</th><td id="modal-unanswered">0</td></tr>
-            <tr><th>Marked for review</th><td id="modal-marked">0</td></tr>
-          </tbody>
+      <div class="modal-body">
+        <p>Once submitted you cannot change your answers. Check the summary before you confirm.</p>
+        <table class="summary-table">
+          <thead>
+            <tr><th scope="col">Section</th><th scope="col">Answered</th><th scope="col">Not answered</th><th scope="col">Marked</th></tr>
+          </thead>
+          <tbody id="summary-rows"></tbody>
         </table>
+        <div class="summary-total">
+          <span>Answered <b id="modal-answered">0</b></span>
+          <span>Not answered <b id="modal-unanswered">0</b></span>
+          <span>Marked <b id="modal-marked">0</b></span>
+          <span>Not visited <b id="modal-unvisited">0</b></span>
+        </div>
       </div>
-      <div class="row" style="gap:10px">
-        <button class="btn btn-ghost grow" data-close-modal type="button">Keep working</button>
-        <button class="btn btn-primary grow" id="confirm-submit" type="button">Submit paper</button>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" type="button" data-close-modal>Keep working</button>
+        <button class="btn btn-primary" type="button" id="confirm-submit">Submit test</button>
       </div>
     </div>
   </div>
+
+  <div class="modal" id="paper-modal" role="dialog" aria-modal="true" aria-labelledby="paper-modal-title">
+    <div class="modal-panel modal-panel-lg">
+      <div class="modal-head">
+        <h2 class="modal-title" id="paper-modal-title">Question paper</h2>
+        <button class="icon-btn" type="button" data-close-paper aria-label="Close">
+          <svg><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="tiny subtle">Read-only view of the whole paper. Choose a question to jump back into the test.</p>
+        <div class="paper-list" id="paper-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
   <script type="module" src="assets/js/test-player.js"></script>
 </body>

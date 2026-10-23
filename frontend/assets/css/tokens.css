@@ -53,6 +53,16 @@
   --danger-100: #f7e7e4;
   --info-500: #35548f;
   --info-100: #e8edf6;
+  /* Tints used for borders on soft state fills, and their text pairs. */
+  --success-200: #b9d3c1;
+  --danger-200: #e3c0b9;
+  --info-200: #bfdbfe;
+  --amber-200: #e0c8a4;
+  --amber-700: #7f5015;
+  --amber-800: #6f4712;
+  --amber-900: #3a2400;
+  --danger-800: #7d2e27;
+  --info-800: #1e40af;
 
   --live: #a33a32;
 

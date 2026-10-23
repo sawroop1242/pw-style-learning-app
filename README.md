@@ -43,9 +43,9 @@ python3 -m http.server 8080 --bind 0.0.0.0
 | `courses.html` | Catalogue with faceted filters, sort, search and pagination |
 | `course.html` | Batch detail: purchase card, tabs, curriculum, faculty, similar batches |
 | `tests.html` | Test series listing with exam filters |
-| `test-player.html` | Exam shell: palette, timer, mark/clear, autosave, scored result |
+| `test-player.html` | Full exam window: instructions gate, section tabs, question palette, timer, mark/clear, autosave, submit summary, scored answer sheet with solutions and print |
 | `dashboard.html` | Streak, mock-trend chart, upcoming tests, notes |
-| `login.html` | Sign in / create account (`#register`) |
+| `login.html` | Sign in, create account, email-code password reset, demo session (`#register`) |
 | `legal.html` | Terms, privacy (DPDP), access codes, accessibility, contact |
 | `offline.html` | Service-worker fallback |
 
@@ -56,8 +56,11 @@ the bundled fixtures in `assets/js/data.js` when it does not. When fixtures are 
 different API by editing that meta tag (or templating it at deploy time).
 
 **Design.** Editorial rather than app-like: warm paper (`#faf8f2`), ink text, one muted indigo accent,
-serif headings, hairline rules instead of shadows, and generous vertical rhythm. The exam is a printed
-question paper — sections, marks in the margin, options A–D and a question map — not a dashboard.
+serif headings, hairline rules instead of shadows, and generous vertical rhythm. Pages are built from two
+shared stylesheets plus a per-page sheet; every colour, space and type step comes from
+`assets/css/tokens.css`, and the exam window keeps the printed-paper typography while using the
+question-palette mechanics candidates expect (answered / not answered / marked for review, with shape as
+well as colour cues so no state is colour-only).
 
 **Assets.** `assets/css/` holds `tokens → base → components → pages → app`, in that order; `assets/js/`
 holds the API client (`core.js`), fixtures (`data.js`), shared chrome and components (`ui.js`), and one
