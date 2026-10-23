@@ -309,34 +309,6 @@
 .test-meta { font-size: var(--text-xs); color: var(--text-subtle); }
 .test-card-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-top: auto; }
 
-/* ============================== STATS BAND ============================= */
-.stats-band {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  background: var(--paper);
-}
-.stat-item {
-  padding: var(--sp-5) var(--sp-4);
-  text-align: center;
-  border-right: 1px solid var(--border);
-}
-.stat-item:last-child { border-right: 0; }
-.stat-item strong {
-  display: block;
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: 600;
-  color: var(--text-strong);
-  line-height: 1.1;
-}
-.stat-item strong em { font-style: normal; font-size: var(--text-base); color: var(--text-subtle); margin-left: 2px; }
-.stat-item span {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-}
-
 /* ============================== PAGE HEAD ============================== */
 .page-head {
   background: var(--canvas);
@@ -735,8 +707,6 @@
   .category-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .batch-grid, .test-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .course-hero-grid, .course-layout { grid-template-columns: minmax(0, 1fr) 330px; }
-  .stats-band { grid-template-columns: repeat(2, 1fr); }
-  .stat-item:nth-child(3)::before { display: none; }
 }
 @media (max-width: 900px) {
   .course-hero-grid, .course-layout { grid-template-columns: minmax(0, 1fr); }
@@ -756,8 +726,6 @@
   .category-tile strong { font-size: 10px; }
   .category-tile small { display: none; }
   .batch-grid, .test-grid { grid-template-columns: minmax(0, 1fr); }
-  .stats-band { padding: var(--sp-6) var(--sp-4); gap: var(--sp-5); }
-  .stat-item + .stat-item::before { display: none; }
   .rail { grid-auto-columns: 82%; }
 }
 

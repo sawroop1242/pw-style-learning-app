@@ -958,6 +958,8 @@ renumbered by section on load, so numbering stays continuous even if the API ret
   sentence, and three footer links; the three feature bullets and testimonial were removed.
 - `course.html` skeleton placeholders were white-on-white after the hero moved to paper; they now use
   `--slate-100`.
+- `tests.html` carried both a fact strip and a numbers band; the duplicate band was removed, and the offline
+  page lost its last gradient/shadow leftovers.
 - Orphan CSS from earlier runs was pruned with a brace-matching script (`/tmp/prune.py`): trust strip, feature
   grid, app banner, phone mock, hero orbits, rail navigation, tab badges, switch control and the old stats band.
   Only runtime-composed modifiers (`avatar-*`, `toast-*`) remain unwritten in markup.
@@ -969,7 +971,7 @@ renumbered by section on load, so numbering stays continuous even if the API ret
 | `node --check` on `sw.js` + 11 modules | 12/12 exit 0 |
 | Headless render of 9 pages (jsdom, API disabled) | 9/9, 0 console errors |
 | Interaction suite | 46/46 assertions (was 33) |
-| CSS classes used vs defined | 277 used, 0 missing; 0 orphan selectors (5 are runtime-composed avatar/toast states) |
+| CSS classes used vs defined | 275 used, 0 missing; 0 orphan selectors (5 are runtime-composed avatar/toast states) |
 | Undefined custom properties / unresolved imports / broken links | 0 / 0 / 0 |
 | Contrast (body, muted, subtle, buttons, links) | all ≥ 4.5:1 |
 | HTTP 200 for every page and asset | 31/31 |

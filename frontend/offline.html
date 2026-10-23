@@ -30,7 +30,7 @@
         tests and notes need a connection.
       </p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="location.reload()">Try again</button>
+        <button class="btn btn-primary" type="button" id="retry">Try again</button>
         <a class="btn btn-ghost" href="index.html">Go to home</a>
       </div>
       <p class="offline-note">
@@ -38,5 +38,8 @@
       </p>
     </div>
   </main>
+  <script>
+    document.getElementById('retry')?.addEventListener('click', () => location.reload());
+  </script>
 </body>
 </html>

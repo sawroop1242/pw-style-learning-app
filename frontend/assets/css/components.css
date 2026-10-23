@@ -332,12 +332,12 @@
 .input:hover, .select:hover { border-color: var(--border-strong); }
 .input:focus, .select:focus, .textarea:focus {
   border-color: var(--violet-500);
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14);
+  box-shadow: 0 0 0 3px rgba(86, 84, 148, 0.16);
 }
 .textarea { min-height: 110px; resize: vertical; line-height: 1.6; }
 .select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23575e73' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236f685c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 14px center;
   padding-right: 40px;
@@ -675,19 +675,16 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background:
-    radial-gradient(70% 60% at 20% 0%, var(--violet-50), transparent 70%),
-    var(--canvas);
+  background: var(--canvas);
 }
 
 .offline-card {
   width: min(440px, 100%);
   background: var(--surface-raised);
   border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 32px 26px;
+  border-radius: var(--r-sm);
+  padding: clamp(28px, 5vw, 44px);
   text-align: center;
-  box-shadow: var(--shadow-md);
   display: grid;
   gap: 14px;
   justify-items: center;
@@ -708,11 +705,11 @@
 .offline-icon {
   width: 56px;
   height: 56px;
-  border-radius: 18px;
+  border-radius: var(--r-sm);
   display: grid;
   place-items: center;
-  background: var(--violet-50);
-  color: var(--violet-600);
+  background: var(--amber-100);
+  color: var(--amber-600);
 }
 
 .offline-icon svg {
