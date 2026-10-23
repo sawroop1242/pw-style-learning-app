@@ -1,22 +1,80 @@
 {
-  "name": "StudySpace Learning",
+  "id": "/",
+  "name": "StudySpace — Live batches, tests and revision",
   "short_name": "StudySpace",
-  "description": "Your personal learning space for courses, lessons, quizzes, and notes.",
-  "start_url": "./index.html",
+  "description": "Structured live batches, exam-pattern mock tests with All-India rank feedback, and one revision space for notes and bookmarks.",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "start_url": "./index.html?source=pwa",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#faf9fd",
-  "theme_color": "#6d28d9",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "background_color": "#0b0b16",
+  "theme_color": "#0b0b16",
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "icons": [
     {
-      "src": "assets/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
-  "categories": ["education", "productivity"],
-  "lang": "en",
-  "dir": "ltr"
+  "shortcuts": [
+    {
+      "name": "Browse batches",
+      "short_name": "Batches",
+      "url": "./courses.html",
+      "icons": [
+        {
+          "src": "assets/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Test series",
+      "short_name": "Tests",
+      "url": "./tests.html",
+      "icons": [
+        {
+          "src": "assets/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "My learning",
+      "short_name": "Dashboard",
+      "url": "./dashboard.html",
+      "icons": [
+        {
+          "src": "assets/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
 }

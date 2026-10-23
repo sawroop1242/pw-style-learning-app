@@ -179,8 +179,10 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle"
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/minute",
-        "user": "1000/minute",
+        # Per-IP ceiling for anonymous reads. Raise it if a whole campus shares
+        # one address; auth endpoints add their own tighter, scoped limits.
+        "anon": os.getenv("THROTTLE_ANON", "100/minute"),
+        "user": os.getenv("THROTTLE_USER", "1000/minute"),
     },
 }
 
@@ -205,7 +207,9 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
         "SECURE_HSTS_INCLUDE_SUBDOMAINS", ENVIRONMENT == "production"
     )
-    SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
+    # `preload` only adds the directive to the header; submitting the domain to
+    # the browser preload list stays a manual, deliberate step.
+    SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", ENVIRONMENT == "production")
 
 # Email configuration
 EMAIL_BACKEND = os.getenv(

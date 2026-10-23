@@ -23,7 +23,7 @@ Commands run from `backend/` with the venv interpreter:
 | Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 - "No changes detected" |
 | Django tests | `python manage.py test` | Exit 0 - "Ran 3 tests ... OK" |
 | Python compilation | `python -m compileall -q config courses` | Exit 0 |
-| Frontend syntax (separate check) | `node --check frontend/app.js` (repo root) | Exit 0 |
+| Frontend syntax (separate check) | `node --check` on `frontend/sw.js` and `frontend/assets/js/*.js` | Exit 0 (historical M1 check on the pre-rebuild shell) |
 
 Environment-guard verification in separate clean subprocesses (`import config.settings`):
 
@@ -843,3 +843,383 @@ Implements the M12 scope from `MILESTONE_12_ACCEPTANCE.md`: Audit and remediatio
 ## Next step
 
 No further milestones. Project complete.
+
+---
+
+## Run 3 — frontend rebuild (2026-10-23)
+
+The earlier `frontend/` was a single-page shell (`app.js`, `api.js`, `styles.css`). It has been replaced by a
+static, framework-free multi-page PWA with the structure of a commercial Indian learning platform, using
+StudySpace branding and original sample content only.
+
+### What ships
+
+| Area | Files |
+|---|---|
+| Pages | `index.html`, `courses.html`, `course.html`, `tests.html`, `test-player.html`, `dashboard.html`, `login.html`, `legal.html`, `offline.html` |
+| Styles | `assets/css/tokens.css` (design tokens), `base.css` (reset, focus, containers), `components.css` (chrome, buttons, cards, modals, toasts), `pages.css` (hero, catalogue, course detail, auth, legal), `app.css` (dashboard widgets, exam palette, results) |
+| Scripts | `assets/js/core.js` (API client with fixture fallback), `data.js` (15 batches, 12 tests, 10-question paper), `ui.js` (inline SVG sprite, header/tabbar/footer, cards), one module per page |
+| PWA | `sw.js` (shell + static assets only; `/api/`, `/token/`, `/auth/`, `/admin/` never cached), `manifest.webmanifest`, `assets/icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` |
+
+Deleted: `frontend/app.js`, `frontend/api.js`, `frontend/styles.css`.
+
+### Behaviour
+
+- **Data.** Every read goes through `live(path, fixture)` — the Django API when reachable, otherwise the
+  bundled fixtures, with a `Preview · sample data` flag in the footer. No page calls `localhost`; the API base
+  is the relative `/api` declared in each page's `api-base` meta tag.
+- **Catalogue.** Faceted exam/subject/language filters, free/paid filter, five sort orders, removable active-filter
+  chips, 9-per-page pagination, `?q=`/`?exam=`/`?subject=`/`?language=`/`?sort=` deep links.
+- **Batch detail.** Sticky purchase card, four tabs with hash deep-linking, per-subject curriculum with the first
+  two chapters marked free, faculty list, similar batches, access-code redemption that reports failures inline
+  (invalid code, expired session, offline) instead of silently failing.
+- **Exam player.** Palette with visited/answered/marked/current states, per-question timer accounting, mark/clear,
+  keyboard navigation, auto-submit at zero, +4/−1 scoring clamped at zero, result screen with score ring, section
+  breakdown, slowest questions and a wrong-only review filter.
+- **Accessibility.** Single `<h1>` per page, skip link, visible `:focus-visible` ring, 24×24 minimum targets,
+  `aria-current`/`aria-expanded`/`role="alert"` on stateful controls, `prefers-reduced-motion` support, `noscript`
+  notice on every interactive page.
+
+### Verification performed (local, 2026-10-23)
+
+| Check | Result |
+|---|---|
+| `node --check` on `sw.js` + 10 page/module scripts | exit 0, 11/11 |
+| Static class audit: every `class` used in HTML/JS exists in the CSS | 319 used, 0 missing |
+| Token audit: every `var(--…)` reference is declared | 0 undefined |
+| Import audit: every named import exists as an export | 0 unresolved |
+| DOM audit: every `$('#id')` / data-hook used by a page module exists in that page | 0 missing |
+| Headless render of 9 pages (jsdom, network disabled so fixtures are used) | 9/9 pages, 0 console errors |
+| Interaction suite (filters, pagination, tabs, redeem, full attempt → result, notes, auth) | 33/33 assertions |
+| `python3 -m http.server`, request every page and asset | 31/31 HTTP 200 |
+| Link audit of internal `href`/`src` targets | 0 broken |
+
+Not run: a real-browser visual pass (no browser in this environment), Lighthouse, and axe-core. Those remain
+manual follow-ups before public launch.
+
+### Known limitations
+
+- Fixtures are illustrative; batch names, faculty and ratings are sample data.
+- The redeem flow calls `/access-codes/redeem/` and degrades to an inline error when the API is unreachable;
+  end-to-end redemption needs the Django backend running.
+
+---
+
+## Run 4 — design pass and printed question paper (2026-10-23)
+
+Feedback on run 3: the interface felt crowded and app-like, and the test flow did not read like a textbook.
+Both were addressed at the token level first, then in the page markup.
+
+### Design system
+
+| Before | After |
+|---|---|
+| Cool violet/navy palette, gradient hero, coloured thumbnails | Warm paper (`#faf8f2`) + ink (`#1b1a17`) + one muted indigo accent; ochre used sparingly |
+| Sans headings at weight 800 | Serif display face (Iowan/Palatino/Georgia stack) at weight 600 |
+| Drop shadows, hover lift, pill badges, gradient buttons | Hairline borders, flat buttons, 4px badge radius, no lift |
+| 1200px container, 15px body | 1080px container, 16px body, 1.7 line height, larger section spacing |
+| Dark hero, trust strip, feature grid, stats band, app banner, testimonial cards | Light masthead, section rules, one pull quote, one CTA strip |
+
+Every colour was checked for contrast: body 12.4:1, muted 6.9:1, subtle 5.5:1, accent button 5.3:1,
+violet link 6.8:1 — all above WCAG AA for their size.
+
+### Home page
+
+Reduced from eight stacked sections to seven: masthead (headline, search, popular links, featured batch card),
+exam index (8 tiles in a 4×2 rule grid), three featured batches, three free mocks, one pull quote, FAQ, and a
+single CTA strip. The batch and test cards lost their badge soup: one meta line replaces the lesson/test/learner
+row, the language badge and the separate rating block.
+
+### Test and quiz system — printed question paper
+
+`test-player.html` was rebuilt as a paper rather than an app screen:
+
+- A four-line masthead: paper title, subject line, time allowed, maximum marks, question count.
+- Instructions block in a ruled callout, then **sections** with continuous question numbering (`1.` … `10.`).
+- Marks in the margin (`+4 −1`), options as A/B/C/D rows with circular keys, and per-question
+  "mark for review" / "clear answer" text controls.
+- A question map in the right rail (drawer on mobile) that shows answered, marked, not-answered and current.
+- A **Print** action and a print stylesheet: chrome, tool controls and the map drop out, questions avoid
+  breaking across pages, and the answer sheet prints with its solutions.
+- On submit, an **answer sheet** replaces the paper: score table, accuracy, section-wise marks, and every
+  question with the correct option, the attempted option and a worked explanation. "Only incorrect answers"
+  filters the list.
+- Attempt state persists to `sessionStorage`, so a refresh mid-paper does not lose answers.
+
+Player internals were also cleaned up: a single delegated `change` listener on the answer container (the old
+code re-bound a listener on every question render, which could overwrite earlier answers), the per-question
+stopwatch interval is cleared on submit, and restore applies checked radios and mark states.
+
+Test cards now link to `test-player.html?test=<id>&duration=<minutes>`, and the paper reads that test's title,
+exam and duration, so a NEET sectional no longer opens titled "JEE Main Full Mock". Paper rows are grouped and
+renumbered by section on load, so numbering stays continuous even if the API returns sections interleaved.
+
+### Also in this run
+
+- Login was the last page still using the dark marketing aside. It is now a quiet title page: identity, one
+  sentence, and three footer links; the three feature bullets and testimonial were removed.
+- `course.html` skeleton placeholders were white-on-white after the hero moved to paper; they now use
+  `--slate-100`.
+- `tests.html` carried both a fact strip and a numbers band; the duplicate band was removed, and the offline
+  page lost its last gradient/shadow leftovers.
+- The service worker now serves CSS/JS/icons **network-first** with the cache as the offline fallback (it was
+  stale-while-revalidate), and bumps to `studyspace-v5`. A deploy can no longer pair fresh HTML with the
+  previous release's stylesheet on the first visit. Registration also passes `updateViaCache: 'none'`, asks a
+  newly installed worker to skip waiting, and reloads once when an already-controlled tab changes hands.
+- Orphan CSS from earlier runs was pruned with a brace-matching script (`/tmp/prune.py`): trust strip, feature
+  grid, app banner, phone mock, hero orbits, rail navigation, tab badges, switch control and the old stats band.
+  Only runtime-composed modifiers (`avatar-*`, `toast-*`) remain unwritten in markup.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `node --check` on `sw.js` + 11 modules | 12/12 exit 0 |
+| Headless render of 9 pages (jsdom, API disabled) | 9/9, 0 console errors |
+| Interaction suite | 46/46 assertions (was 33) |
+| CSS classes used vs defined | 275 used, 0 missing; 0 orphan selectors (5 are runtime-composed avatar/toast states) |
+| Undefined custom properties / unresolved imports / broken links | 0 / 0 / 0 |
+| Contrast (body, muted, subtle, buttons, links) | all ≥ 4.5:1 |
+| HTTP 200 for every page and asset | 31/31 |
+| Orphan CSS pruned | base 5.9→5.2 kB, components 24.6→22.5 kB, pages 31.5→30.7 kB |
+
+Still not run: real-browser visual pass, Lighthouse, axe-core — no browser in this environment.
+
+---
+
+## Run 5 — complete exam window and account page (2026-10-23, branch `arena/22ff0f3c-pw-style-learning-app`)
+
+Run 4 rebuilt the *look* of the front end. Run 5 rebuilt the two screens the product is actually judged on
+and gave the design system one source of truth. Nothing was deployed; everything below was run locally.
+
+### Exam window (`test-player.html` + `test-player.js`)
+
+The page is one shell with three states — **instructions → test → answer sheet** — and no site chrome, so a
+candidate never scrolls past a marketing header mid-paper.
+
+- **Instructions gate.** Title, exam, question count, duration, maximum marks, marking scheme, conduct
+  rules and a section list. *Start* stays disabled until the candidate accepts the instructions, and, when
+  the API is live, until a session exists. A rejected start (401/403) re-enables it with an explanation
+  instead of leaving a dead button.
+- **Test window.** Sticky bar with test name, autosave state, countdown (critical style at ≤ 5 min,
+  auto-submit at zero), a question-paper drawer and *Submit*. Section tabs jump by section; the question
+  panel renders one question at a time with its number, marks, negative marks and difficulty, A–D options,
+  *Save & next*, *Clear response* and *Mark for review*.
+- **Palette.** Grouped by section, with the four candidate states plus *unvisited* and *current*, and a
+  live answered/unanswered count. States carry shape as well as colour: not-answered has a dashed border,
+  marked questions take a dot, current takes an outline — meeting WCAG 1.4.1 on its own.
+- **Submit.** A summary dialog lists answered, not answered, marked and total before confirming; a second
+  submit is rejected by the API and the UI reports it rather than silently replacing a score.
+- **Answer sheet.** Score, percentage, accuracy, correct/incorrect/unattempted counts, a section-wise
+  breakdown, and every question with the correct option, the candidate's option and a worked explanation.
+  Filters: all / correct / incorrect / unattempted. *Retake* and *Print*; the print sheet drops the chrome
+  and avoids breaking questions across pages.
+- **Engine details.** Autosave is debounced 450 ms over a serialised promise chain (no interleaved writes),
+  every attempt mirrors to `sessionStorage` so a refresh restores answers and the current question, the
+  countdown is derived from the server `deadline` rather than a local stopwatch, and grading runs on the
+  server when reachable. The quiz payload deliberately carries no answer key, so the local fallback grades
+  only the bundled sample paper and says so. Keyboard: `1`–`6` select, `←`/`→` move.
+
+### Account page (`login.html` + `auth.js`)
+
+Five views on one page: **sign in**, **create account**, **request a reset code**, **set a new password**,
+**done**. Field-level validation runs before the request (username shape, email, password length, password
+match, six-digit code, terms), server errors are mapped back to the field that caused them, and a
+non-field error is shown in a form alert. Sign-up shows a live strength meter. `login.html#register` opens
+the sign-up view directly. The reset flow talks to `/auth/forgot-password/`, `/auth/verify-otp/` and
+`/auth/resend-otp/`; sign-out is a header action on the page itself.
+
+When the API is unreachable — the static preview, where `/api/*` 404s — sign-in falls back to a clearly
+labelled **local demo session** with fixed `demo-*` tokens, and every such path raises a toast that says it
+is a preview. No screen claims to have authenticated against a server it never reached.
+
+### Design system
+
+- Semantic tint tokens added (`--success-200`, `--danger-200`, `--info-200`, `--amber-200`, `--amber-700`,
+  `--amber-800`, `--amber-900`, `--danger-800`, `--info-800`); literals outside `tokens.css` fell from 60 to
+  28, and the rest are intentional pure-white text on dark fills plus the print palette.
+- Avatars moved off the legacy teal/rose/navy gradients onto the paper tints, so a faculty row no longer
+  reads as a different product.
+- The duplicate `color` declaration in `.qoption.is-selected .qoption-key` is gone; dead `.demo-hint` and
+  `.grow` rules were pruned; service worker bumped to `studyspace-v6`.
+- The header chrome no longer injects inline `style` attributes: the sign-in button, the mobile nav rows
+  and the demo banner use `.btn-ghost-invert`, `.mobile-nav-link` and `.link` instead, and the mobile nav
+  now carries its own *Sign in* row because the header ghost button is hidden below 720 px.
+
+### Backend
+
+- `SECURE_HSTS_PRELOAD` now defaults to `true` only when `ENVIRONMENT=production` (it adds the header
+  directive; submission to the browser preload list stays a manual step), which makes
+  `manage.py check --deploy` report **0 issues**. `.env.example` documents the switch.
+
+### Verification (this run)
+
+| Check | Result |
+|---|---|
+| `node --check` on `sw.js` + 11 modules | 12/12 exit 0 |
+| Headless render of 9 pages (jsdom, API disabled) | 9/9, 0 console errors |
+| Interaction suite (rewritten for the new hooks) | **53/53** assertions |
+| CSS classes used vs defined | **328 used, 0 missing** |
+| Custom properties | 122 defined, 97 referenced, **0 undefined** |
+| HTTP 200 for every page, asset, icon, `sw.js` and the manifest | **28/28** |
+| Django test suite (`accounts` + `courses`) | **139 tests, OK** |
+| `manage.py check --deploy` (production env) | **0 issues** |
+| `makemigrations --check --dry-run` | No changes detected |
+| Structural a11y sweep (unique ids, one `h1`, labelled controls, accessible names, heading order) | 9/9 pages clean |
+| CSS parsed with `css-tree` | 736 rules, 0 parse errors |
+
+Known gap, stated rather than faked: the result sheet does **not** show a cohort rank or percentile. Those
+figures need a cohort (every other submitted attempt on the same quiz), and the API currently returns
+score, percentage, counts and section breakdown only. Showing a made-up rank would be worse than
+showing none; computing a real one is queued for the next backend pass.
+
+Still not run: a real-browser visual pass, Lighthouse, axe-core or a screen-reader sweep — there is no
+browser in this environment. The live-API path (start → autosave → submit → result) is exercised by the
+Django tests, but not end-to-end from a browser against the API, because the preview is a static host.
+
+---
+
+## Run 6 — authentication actually works end to end (2026-10-23)
+
+Reported symptom: *"auth setup is not working perfectly"*. Three separate defects were behind it; all three
+are fixed and covered by tests.
+
+### 1. Every password-reset and change-password call returned 404
+
+DRF derives an action's URL from the **method name** unless `url_path` is given, so the router published
+`/api/auth/forgot_password/`, `/verify_otp/`, `/resend_otp/` and `/change_password/`, while the client (and
+the docs) called the dashed forms. Registration, sign-in, `/auth/me/` and logout worked, which is why the
+page looked half-alive: resetting a password always failed.
+
+* The actions now declare `url_path="forgot-password"`, `"verify-otp"`, `"resend-otp"`, `"change-password"`.
+* The underscore paths stay as deprecated aliases (`AuthViewSet.as_view(...)`), carrying the same
+  permission and throttle classes as the canonical route — an alias without them would have been an
+  unauthenticated change-password endpoint.
+* `AuthRouteAliasTests` asserts both spellings reach the same action and that the alias is still guarded.
+
+Verified over HTTP against a running server: reset request `200` (was `404`), verify `200`/`400` with the
+console e-mail OTP, replay rejected, new password logs in, old password rejected, change-password `400` on a
+wrong current password and `200` on the right one.
+
+### 2. The static preview reported "Request failed (501)"
+
+A file server answers `POST /api/token/` with **501**, not a network error, and the page only treated
+`status === 0` as "no API here" — so signing in on the preview showed a raw `501` instead of the demo
+session. `core.js` now exports `isUnreachable(err)` (0, 404, 405, 408, ≥500) and the account page uses it.
+Real answers (400, 401, 403, 429) are never swallowed. The reset flow still refuses to pretend a mail went
+out: it says no API is answering and names the dev server.
+
+### 3. Reset throttling locked out shared connections
+
+`forgot_password` and `resend_otp` shared one **3/hour per IP** bucket. On a campus or office address that
+is three password resets an hour for the whole building, and a student who mistyped their address burned
+it before their first mail arrived. Now:
+
+| Guard | Limit | Key |
+|---|---|---|
+| reset request (IP) | 6/hour | client address |
+| reset resend (IP) | 6/hour | client address |
+| reset mail (shared by request + resend) | 3/hour | SHA-256 of the address |
+| login (IP) | 20/minute | client address |
+| login (account) | 10/minute | SHA-256 of the identifier |
+| registration (IP) | 10/minute | client address |
+| OTP verification (IP) | 10/minute | client address |
+
+Every rate is overridable through `THROTTLE_*` in `.env.example`. The per-account login guard exists so a
+shared address cannot be used to spray one account, without one class throttling its neighbours.
+
+### 4. The page itself
+
+* A **signed-in account panel** replaces the sign-in forms: name, email, continue, change password, sign
+  out. Change-password posts to the API, then signs in again with the new password (the API blacklists
+  every refresh token on rotation, so the old one would otherwise strand the tab).
+* **Resend cooldown**: 60 s countdown on the button, longer if the throttled response quotes a wait.
+* Demo sessions are labelled as such, and change-password is hidden for them — a local token cannot
+  change a server password.
+* Successful sign-in shows the panel before redirecting, so a slow redirect never shows a stale form.
+* Service worker cache bumped to `studyspace-v7`, so a tab that already has the old shell picks up the
+  new account page on its next load.
+
+### 5. A dev server where the real thing runs
+
+`tools/serve.py` (standard library only) serves `frontend/` and proxies `/api/*` to Django, so the same
+relative `/api` base used in production works locally with no CORS and no build step:
+
+```bash
+python manage.py runserver 127.0.0.1:8000      # backend
+python3 tools/serve.py --port 8080             # site + proxy
+```
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Django suite (`accounts` + `courses`) | **146 tests, OK** (was 139) |
+| New tests | route aliases + guards, per-IP reset, per-email reset, resend budget, per-identifier login |
+| Live end-to-end through `tools/serve.py` | **18/18** checks: register → sign in → `/auth/me/` → change password → re-login, old password rejected |
+| Live reset flow (console e-mail backend) | code delivered, verify `200`, replay `400`, new password `200`, old `400` |
+| jsdom interaction suite | **64/64** (includes the 501-preview regression) |
+| Headless render · structural a11y | 9/9 · 9/9 pages clean |
+| CSS classes · custom properties | 332 used / 0 missing · 0 undefined |
+| HTTP through the proxy (pages, assets, API) | 28/28 + `/api/auth/me/` 401 without a token |
+| `check --deploy` (production env) · `makemigrations --check` | 0 issues · no changes |
+
+The preview runs the site through `tools/serve.py` against a local Django instance, so accounts created in
+the preview are real accounts in that sandbox database. They are not deployed users: the sandbox database
+is disposable and no production host is configured.
+
+No SMTP account is configured in the sandbox, so the console e-mail backend prints reset codes to the
+Django log instead of delivering them. The reset flow itself is exercised end to end in tests; only the
+final delivery hop is missing until `EMAIL_*` settings are supplied in deployment secrets.
+
+## Run 7 — dark app shell (2026-10-23, branch `arena/22ff0f3c-pw-style-learning-app`)
+
+The light "paper" theme is retired. The frontend now uses a dark navy/indigo system modelled on the
+app-style reference board: deep canvas, raised charcoal cards, one violet action colour, coloured
+subject bands, a desktop sidebar with a sticky top bar, mobile bottom tabs, and a dark exam window.
+The brand, copy and content are StudySpace's own — no third-party logo, photography or wording is
+reproduced.
+
+### What changed
+
+| Area | Change |
+|---|---|
+| `assets/css/tokens.css` | Rewritten to a dark palette. **Every historical token name is kept** so ~3,000 `var()` references keep resolving; `--ink-900` is the violet action colour, `--text-invert` is near-white. Added subject-band gradients, a page-head gradient, `--border-input` (3:1 control boundary) and `--danger-solid`. |
+| `assets/css/components.css` | New shell: fixed 248 px sidebar (brand, seven primary links, sign-in/account card), sticky translucent top bar (search, notifications, avatar), off-canvas drawer + scrim under 1024 px, scrim scroll-lock, 5-item bottom tab bar. Radius/colour pass over buttons, chips, badges, cards, forms, overlays, footer. |
+| `assets/css/pages.css` | Hero is now a gradient banner with a violet CTA and a glass featured-batch card; category tiles and batch cards use rounded icon/keyline treatments; new Khazana, announcements and community panels; pill tab strips on batch pages; accented auth panel. |
+| `assets/css/app.css` | Dashboard cards, exam bar, question panel, options, palette and action bar restyled dark; print stylesheet force-restores light tokens so a printed paper stays black-on-white. |
+| `assets/js/ui.js` | Shell rewritten (`renderHeader`, `renderTabbar`), new `megaphone`/`wrench`/`flask` glyphs, seven-item nav, five-tab bar, drawer focus/escape handling, search toggle, batch-card facts row. |
+| `assets/js/home.js` | New `renderKhazana()` — subject tiles derived from the live catalogue (batches + lesson counts), not hand-written fake rows. |
+| `index.html` | Khazana section plus announcements/community panels with real product copy; `theme-color` updated. |
+| `manifest.webmanifest`, `sw.js` | Splash/theme colours match the dark canvas; cache bumped to `studyspace-v8`. |
+
+### Contrast (WCAG 2.2 AA, computed)
+
+| Pair | Ratio |
+|---|---|
+| body text on canvas / card | 16.1 / 14.8 |
+| muted text on canvas / card | 7.8 / 7.2 |
+| subtle text on canvas / card | 5.9 / 5.4 |
+| white on violet action | 4.9 |
+| soft-state text on its tint (success, danger, amber, info) | 6.1 – 11.9 |
+| form-control boundary vs card | 3.1 (`--border-input`) |
+
+`.btn-accent` was flipped to dark ink on amber after measuring white-on-amber at 1.74:1; `.btn-danger`
+uses a solid red (`#c8263a`) that keeps white text at 5.5:1.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Django suite (`accounts` + `courses`) | **146 tests, OK** (no backend change this run; re-run for the record) |
+| jsdom interaction suite | **64/64** |
+| Live auth through `tools/serve.py` | **18/18** |
+| Headless render · structural a11y | 9/9 · 9/9 pages clean |
+| CSS classes · custom properties | **352 used / 0 missing** · 141 defined / 119 referenced / **0 undefined** |
+| Literal hex outside `tokens.css` | 38 (28 baseline + 10 inside the print stylesheet, which must be light) |
+| CSS parse (css-tree) | 5 stylesheets, **no parse errors** |
+| HTTP through the proxy | 28/28 URLs 200 |
+| `node --check` | 12/12 modules |
+
+The theme is a view-layer change only: API contracts, permissions, throttles and grading are untouched,
+and the earlier runs' test evidence still holds.

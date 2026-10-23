@@ -1,113 +1,149 @@
-// StudySpace Service Worker - Safe offline behavior
-// Cache version - increment when static assets change
-const CACHE_VERSION = "v2";
-const CACHE_NAME = `studyspace-${CACHE_VERSION}`;
+/* StudySpace service worker — offline shell, never caches student data.
+ *
+ * Strategy
+ *   • Navigations + HTML  : network-first, fall back to cache, then offline.html
+ *   • CSS / JS / icons    : network-first, so a deploy never pairs new HTML with
+ *                           last release's stylesheet; cache is the offline fallback
+ *   • API requests        : never cached, never served from cache
+ *
+ * Bump CACHE_VERSION whenever a shell asset changes so old clients refresh.
+ */
 
-// Static assets that are safe to cache (no auth, no private data)
-const STATIC_ASSETS = [
-  "./",
-  "./index.html",
-  "./styles.css",
-  "./app.js",
-  "./api.js",
-  "./manifest.webmanifest",
-  "./assets/icon.svg"
+const CACHE_VERSION = 'studyspace-v8';
+const SHELL = [
+  './',
+  './index.html',
+  './courses.html',
+  './course.html',
+  './tests.html',
+  './test-player.html',
+  './dashboard.html',
+  './login.html',
+  './legal.html',
+  './offline.html',
+  './manifest.webmanifest',
+  './assets/icon.svg',
+  './assets/icon-192.png',
+  './assets/icon-512.png',
+  './assets/apple-touch-icon.png',
+  './assets/css/tokens.css',
+  './assets/css/base.css',
+  './assets/css/components.css',
+  './assets/css/pages.css',
+  './assets/css/app.css',
+  './assets/js/core.js',
+  './assets/js/data.js',
+  './assets/js/ui.js',
+  './assets/js/home.js',
+  './assets/js/courses.js',
+  './assets/js/course.js',
+  './assets/js/tests.js',
+  './assets/js/test-player.js',
+  './assets/js/dashboard.js',
+  './assets/js/auth.js',
+  './assets/js/legal.js'
 ];
 
-// API paths that should NEVER be cached
-const API_PATHS = ["/api/", "/token/", "/auth/"];
+const API_PREFIXES = ['/api/', '/token/', '/auth/', '/admin/'];
 
-// Check if request is for an API endpoint
-function isApiRequest(request) {
-  const url = new URL(request.url);
-  return API_PATHS.some(path => url.pathname.startsWith(path));
-}
+const isApi = (url) => API_PREFIXES.some((p) => url.pathname.startsWith(p));
+const isHtml = (req) => req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
 
-// Check if request is for a static asset we should cache
-function isStaticAsset(request) {
-  const url = new URL(request.url);
-  return STATIC_ASSETS.some(asset => url.pathname.endsWith(asset.replace("./", "/")));
-}
+/* ------------------------------------------------------------------ */
+/* Install                                                            */
+/* ------------------------------------------------------------------ */
 
-self.addEventListener("install", event => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
+    caches
+      .open(CACHE_VERSION)
+      // addAll rejects the whole install if one asset 404s — add individually.
+      .then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => null))))
       .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener("activate", event => {
+/* ------------------------------------------------------------------ */
+/* Activate                                                           */
+/* ------------------------------------------------------------------ */
+
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(key => key.startsWith("studyspace-") && key !== CACHE_NAME)
-          .map(key => caches.delete(key))
-      ))
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((key) => key.startsWith('studyspace-') && key !== CACHE_VERSION).map((key) => caches.delete(key)))
+      )
       .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener("fetch", event => {
-  // Only handle GET requests
-  if (event.request.method !== "GET") return;
+/* ------------------------------------------------------------------ */
+/* Fetch                                                              */
+/* ------------------------------------------------------------------ */
 
-  // NEVER cache API requests - always go to network
-  if (isApiRequest(event.request)) {
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+
+  // Cross-origin (fonts, APIs on another host) — leave to the network.
+  if (url.origin !== self.location.origin) return;
+
+  // Student data must never be stored on disk.
+  if (isApi(url)) {
     event.respondWith(
-      fetch(event.request)
-        .catch(() => {
-          // Return a proper error response, NOT the app shell
-          return new Response(
-            JSON.stringify({ error: "Network error. Check your connection." }),
-            { status: 503, headers: { "Content-Type": "application/json" } }
-          );
+      fetch(request).catch(
+        () =>
+          new Response(JSON.stringify({ detail: 'You are offline. Reconnect to load this data.' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' }
+          })
+      )
+    );
+    return;
+  }
+
+  if (isHtml(request)) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy)).catch(() => {});
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(request, { ignoreSearch: true });
+          if (cached) return cached;
+          const shell = await caches.match('./index.html');
+          const offline = await caches.match('./offline.html');
+          return offline || shell || new Response('Offline', { status: 503 });
         })
     );
     return;
   }
 
-  // For static assets: cache-first with network fallback
-  if (isStaticAsset(event.request)) {
-    event.respondWith(
-      caches.match(event.request)
-        .then(cached => cached || fetch(event.request)
-          .then(response => {
-            // Only cache successful responses
-            if (response.ok) {
-              const copy = response.clone();
-              caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-            }
-            return response;
-          })
-          .catch(() => {
-            // For static assets, return cached version if available
-            // But don't return app shell for arbitrary paths
-            return caches.match(event.request)
-              .then(cached => cached || new Response("Not found", { status: 404 }));
-          })
-        )
-    );
-    return;
-  }
-
-  // For other requests (images, fonts, etc.): network-first with cache fallback
+  // Static assets: prefer the network so a new release is picked up immediately,
+  // fall back to the cache when offline.
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        if (response.ok) {
+    fetch(request)
+      .then((response) => {
+        if (response && response.ok) {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy)).catch(() => {});
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(async () => (await caches.match(request)) || new Response('', { status: 504 }))
   );
 });
 
-// Notify clients when a new SW is ready
-self.addEventListener("message", event => {
-  if (event.data === "skipWaiting") {
-    self.skipWaiting();
-  }
+/* ------------------------------------------------------------------ */
+/* Messages                                                           */
+/* ------------------------------------------------------------------ */
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });

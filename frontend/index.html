@@ -1,2 +1,227 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#6d28d9"><meta name="description" content="StudySpace: courses, lessons and notes in one place"><meta name="api-base" content="/api"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="assets/icon.svg"><link rel="apple-touch-icon" href="assets/icon.svg"><link rel="stylesheet" href="styles.css"><title>StudySpace — Learn better</title></head><body><header class="topbar"><a class="brand" href="#top"><span class="logo">S</span><span>StudySpace</span></a><div class="topbar-actions"><div id="offlineIndicator" class="offline-indicator" hidden><span class="offline-dot"></span>Offline</div><button id="installBtn" class="btn btn-light" hidden>Install app</button><div class="auth-buttons auth-hidden"><button id="loginBtn" class="btn btn-light">Sign in</button><button id="signupBtn" class="btn btn-primary">Sign up</button></div><div class="user-menu auth-required" hidden><span id="userDisplay" class="user-name"></span><button id="logoutBtn" class="btn btn-light" data-logout>Sign out</button></div></div></header><main id="top" class="container"><section class="hero"><div><p class="eyebrow">YOUR LEARNING SPACE</p><h1>Small steps.<br><span>Big progress.</span></h1><p class="hero-copy">Keep your courses, lessons and notes together. Learn at your own pace.</p><a href="#courses" class="btn btn-primary">Explore courses ↓</a></div><div class="hero-art"><div class="art-card"><span>✦</span><strong>Keep learning</strong><small>One lesson at a time</small><div class="art-line"></div><div class="art-line short"></div></div></div></section><section class="stats"><div><strong id="courseCount">0</strong><span>Courses</span></div><div><strong id="doneCount">0</strong><span>Lessons completed</span></div><div><strong id="noteCount">0</strong><span>Saved notes</span></div></section><section id="courses" class="section"><div class="section-head"><div><p class="eyebrow">PICK UP WHERE YOU LEFT OFF</p><h2>Explore courses</h2></div><input id="search" type="search" placeholder="Search courses…" aria-label="Search courses"></div><div id="courseGrid" class="course-grid"><p class="muted">Loading courses…</p></div></section><section class="section notes-section"><div><p class="eyebrow">REMEMBER WHAT MATTERS</p><h2>Quick notes</h2><p class="muted auth-hidden">Notes are saved on this device in this starter version.</p><p class="muted auth-required" hidden>Notes sync to your account.</p></div><form id="noteForm" class="note-form auth-required" hidden><input id="noteTitle" maxlength="120" placeholder="Note title (optional)"><textarea id="noteBody" rows="3" placeholder="Write a key idea, formula or reminder…" required></textarea><button class="btn btn-primary" type="submit">Save note</button></form><div id="notesList" class="notes-list"></div></section><section id="attempts" class="section auth-required" hidden><div class="section-head"><div><p class="eyebrow">YOUR QUIZ HISTORY</p><h2>Attempt history</h2></div></div><div id="attemptHistory" class="attempt-list"></div></section><section id="profile" class="section auth-required" hidden><div class="section-head"><div><p class="eyebrow">ACCOUNT</p><h2>Profile</h2></div></div><div id="profileSection"></div></section><footer>StudySpace · Independent learning project · Not affiliated with PW</footer></main><div id="authModal" class="auth-modal" hidden role="dialog" aria-modal="true" aria-labelledby="authModalTitle"></div><script type="module" src="app.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <meta name="api-base" content="/api">
+  <title>StudySpace — live batches, printed notes and exam-pattern tests</title>
+  <meta name="description" content="Structured live batches, chapter notes and exam-pattern mock tests with All-India rank feedback. JEE, NEET, UPSC, SSC and school boards.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript-bar" role="note">
+      StudySpace needs JavaScript for the catalogue, tests and dashboard.
+      Please enable it, or write to
+      <a href="mailto:support@studyspace.example">support@studyspace.example</a> for help.
+    </div>
+  </noscript>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <!-- ============================ MASTHEAD ============================ -->
+    <section class="masthead">
+      <div class="container masthead-grid">
+        <div>
+          <p class="masthead-kicker">JEE · NEET · UPSC · SSC · Class 10 &amp; 12</p>
+          <h1>Study from a <em>properly organised</em> syllabus.</h1>
+          <p class="masthead-lead">
+            Live classes, printed-style notes and exam-pattern tests in one account.
+            Every chapter closes with a test; every test comes back with a rank,
+            a percentile and a worked solution for each question.
+          </p>
+
+          <form class="masthead-search" role="search" id="hero-search">
+            <svg aria-hidden="true"><use href="#i-search"/></svg>
+            <input type="search" name="q" placeholder="Search a batch, subject or exam" aria-label="Search batches">
+            <button class="btn btn-primary" type="submit">Search</button>
+          </form>
+
+          <p class="masthead-links">
+            <span>Popular</span>
+            <a href="courses.html?exam=JEE">JEE Main</a>
+            <a href="courses.html?exam=NEET">NEET</a>
+            <a href="courses.html?exam=SSC">SSC CGL</a>
+            <a href="courses.html?exam=Class%2010">Class 10</a>
+            <a href="tests.html">Free mocks</a>
+          </p>
+        </div>
+
+        <aside class="masthead-card" id="featured-batch" aria-label="Featured batch"></aside>
+      </div>
+    </section>
+
+    <!-- ============================ CATEGORIES ========================== -->
+    <section class="section-tight">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Browse by goal</p>
+            <h2 class="section-title">Choose your exam</h2>
+          </div>
+          <a class="link" href="courses.html">All batches <svg><use href="#i-arrow-right"/></svg></a>
+        </div>
+        <div class="category-rail" id="category-rail"></div>
+      </div>
+    </section>
+
+    <!-- ============================= KHAZANA ============================ -->
+    <section class="section-tight" id="khazana">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Free library</p>
+            <h2 class="section-title">Khazana — notes, DPPs and practice</h2>
+          </div>
+          <a class="link" href="tests.html">Open test series <svg><use href="#i-arrow-right"/></svg></a>
+        </div>
+        <div class="khazana-grid" id="khazana-grid"></div>
+      </div>
+    </section>
+
+    <!-- ============================= BATCHES ============================ -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Most enrolled this week</p>
+            <h2 class="section-title">Batches students are joining</h2>
+          </div>
+          <a class="link" href="courses.html?sort=popular">See all <svg><use href="#i-arrow-right"/></svg></a>
+        </div>
+        <div class="batch-grid" id="trending-grid"></div>
+      </div>
+    </section>
+
+    <!-- ============================== TESTS ============================= -->
+    <section class="section-tight">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Exam pattern · scored on submit</p>
+            <h2 class="section-title">Free mock tests</h2>
+          </div>
+          <a class="link" href="tests.html">All tests <svg><use href="#i-arrow-right"/></svg></a>
+        </div>
+        <div class="test-grid" id="home-tests"></div>
+      </div>
+    </section>
+
+    <!-- ======================= ANNOUNCEMENTS · COMMUNITY ================ -->
+    <section class="section-tight">
+      <div class="container split-grid">
+        <div class="panel" id="announcements">
+          <div class="panel-head">
+            <h2 class="panel-title">Announcements</h2>
+            <span class="badge badge-new">3 new</span>
+          </div>
+          <ul class="notice-list">
+            <li class="notice-item">
+              <span class="notice-icon"><svg><use href="#i-file-text"/></svg></span>
+              <div>
+                <strong>Free mock tests are open to everyone</strong>
+                <p>Attempt any public test without an account; sign in to keep your attempt history.</p>
+              </div>
+            </li>
+            <li class="notice-item">
+              <span class="notice-icon"><svg><use href="#i-calendar"/></svg></span>
+              <div>
+                <strong>New 2027 batches are listed with start dates</strong>
+                <p>Every batch page shows the schedule, subjects and what is included before you enrol.</p>
+              </div>
+            </li>
+            <li class="notice-item">
+              <span class="notice-icon"><svg><use href="#i-download"/></svg></span>
+              <div>
+                <strong>Notes stay readable offline</strong>
+                <p>Install the web app once and opened lessons, notes and tests remain available without a network.</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="panel" id="community">
+          <div class="panel-head">
+            <h2 class="panel-title">Community</h2>
+            <span class="badge badge-paid">Inside every batch</span>
+          </div>
+          <p class="panel-lead">
+            Ask a doubt under the exact lesson that raised it. Faculty replies land in the same
+            thread, so the answer stays next to the chapter for everyone who follows.
+          </p>
+          <ul class="feature-list">
+            <li><svg><use href="#i-message"/></svg><span>Threaded doubts on any lesson or question</span></li>
+            <li><svg><use href="#i-users"/></svg><span>Batch announcements from your faculty</span></li>
+            <li><svg><use href="#i-trophy"/></svg><span>Rank, percentile and accuracy after every test</span></li>
+          </ul>
+          <a class="btn btn-primary" href="login.html#register">Join a batch</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== QUOTE ============================= -->
+    <section class="section">
+      <div class="container container-narrow">
+        <blockquote class="pull-quote">
+          <p>
+            “The daily practice problems are what changed things for me. Two months in,
+            my mock percentile moved from 61 to 88 — mostly because I finally knew which
+            chapters were costing me marks.”
+          </p>
+          <footer>
+            <span class="avatar avatar-amber">IV</span>
+            Ishita Verma · JEE Main aspirant, Jaipur
+          </footer>
+        </blockquote>
+      </div>
+    </section>
+
+    <!-- =============================== FAQ ============================== -->
+    <section class="section-tight">
+      <div class="container container-narrow">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Before you start</p>
+            <h2 class="section-title">Questions, answered</h2>
+          </div>
+        </div>
+        <div class="accordion" id="faq-list"></div>
+      </div>
+    </section>
+
+    <!-- ============================ CTA STRIP =========================== -->
+    <section class="section-tight">
+      <div class="container">
+        <div class="cta-strip">
+          <div>
+            <h2>Keep your batch in your pocket</h2>
+            <p>
+              Install the web app in one tap — no store account needed. Opened lessons stay
+              readable offline, and test reminders arrive even on a slow connection.
+            </p>
+          </div>
+          <div class="row wrap" style="gap:10px">
+            <button class="btn btn-primary" data-install-pwa>
+              <svg><use href="#i-download"/></svg> Install app
+            </button>
+            <a class="btn btn-ghost" href="tests.html">Try a free mock</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+  <div id="site-tabbar"></div>
+
+  <script type="module" src="assets/js/home.js"></script>
+</body>
+</html>

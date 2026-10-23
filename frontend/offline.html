@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <title>You are offline — StudySpace</title>
+  <meta name="description" content="StudySpace needs a connection for new lessons, tests and notes. Pages you already opened stay available offline.">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+</head>
+<body>
+  <main class="offline-shell">
+    <div class="offline-card">
+      <span class="offline-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m3 4 18 18"/>
+          <path d="M9.5 17.5a3.5 3.5 0 0 1 5 0"/>
+          <path d="M6.5 14.2a8 8 0 0 1 3-1.7"/>
+          <path d="M17.8 15.4a8 8 0 0 0-3-2.1"/>
+          <path d="M3.5 10.4A13 13 0 0 1 8 8.1"/>
+          <path d="M16 8.1a13 13 0 0 1 4.5 2.3"/>
+        </svg>
+      </span>
+      <h1>You are offline</h1>
+      <p>
+        Pages you have already visited still open from this device, but new lessons,
+        tests and notes need a connection.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary" type="button" id="retry">Try again</button>
+        <a class="btn btn-ghost" href="index.html">Go to home</a>
+      </div>
+      <p class="offline-note">
+        Downloads you saved for offline viewing are available inside the batch page.
+      </p>
+    </div>
+  </main>
+  <script>
+    document.getElementById('retry')?.addEventListener('click', () => location.reload());
+  </script>
+</body>
+</html>

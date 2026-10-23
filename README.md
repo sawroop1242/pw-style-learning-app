@@ -1,6 +1,6 @@
 # StudySpace — PW-inspired learning PWA + Django API
 
-A mobile-first learning platform starter with a purple/white PWA frontend and Django REST Framework backend. This is an independent project and is not affiliated with Physics Wallah (PW). Use only course/video URLs you are authorized to access.
+A mobile-first learning platform with a dark, app-style PWA frontend (desktop sidebar, phone bottom tabs) and a Django REST Framework backend. This is an independent project and is not affiliated with Physics Wallah (PW). Use only course/video URLs you are authorized to access.
 
 ## Features
 
@@ -29,7 +29,57 @@ Open `/admin/` to manage content and `/api/` for API routes.
 
 ## Frontend
 
-Serve the `frontend/` directory over HTTP/HTTPS. The API base URL is configured via `<meta name="api-base" content="/api">` in `index.html` - override at build time or serve dynamically.
+A static, framework-free PWA in `frontend/`. Serve the directory over HTTP/HTTPS:
+
+```bash
+# terminal 1 — the API
+cd backend
+python manage.py runserver 127.0.0.1:8000
+
+# terminal 2 — the site, with /api proxied to the API above
+python3 tools/serve.py --port 8080
+# open http://localhost:8080
+```
+
+`tools/serve.py` is a standard-library only dev server: it serves `frontend/` and forwards
+`/api/*` to Django, so sign-in, registration and password reset work exactly as they do in
+production. Point it elsewhere with `--api https://api.example.com`.
+
+Browsing the files with a plain `python -m http.server` also works — every page falls back to
+bundled sample data — but a static file server answers `POST /api/...` with 501, so the account
+page can only offer a clearly-labelled local demo session there.
+
+| Page | Purpose |
+|---|---|
+| `index.html` | Landing page: hero search, category rail, trending batches, tests, FAQ |
+| `courses.html` | Catalogue with faceted filters, sort, search and pagination |
+| `course.html` | Batch detail: purchase card, tabs, curriculum, faculty, similar batches |
+| `tests.html` | Test series listing with exam filters |
+| `test-player.html` | Full exam window: instructions gate, section tabs, question palette, timer, mark/clear, autosave, submit summary, scored answer sheet with solutions and print |
+| `dashboard.html` | Streak, mock-trend chart, upcoming tests, notes |
+| `login.html` | Sign in, create account, email-code reset, signed-in account panel with change-password, demo session (`#register`) |
+| `legal.html` | Terms, privacy (DPDP), access codes, accessibility, contact |
+| `offline.html` | Service-worker fallback |
+
+**API base.** Every page declares `<meta name="api-base" content="/api">`. Reads go through
+`assets/js/core.js` → `live(path, fixture)`, which uses the Django API when it answers and falls back to
+the bundled fixtures in `assets/js/data.js` when it does not. When fixtures are in use the footer shows a
+`Preview · sample data` flag, so sample content is never mistaken for live data. Point the site at a
+different API by editing that meta tag (or templating it at deploy time).
+
+**Design.** Editorial rather than app-like: warm paper (`#faf8f2`), ink text, one muted indigo accent,
+serif headings, hairline rules instead of shadows, and generous vertical rhythm. Pages are built from two
+shared stylesheets plus a per-page sheet; every colour, space and type step comes from
+`assets/css/tokens.css`, and the exam window keeps the printed-paper typography while using the
+question-palette mechanics candidates expect (answered / not answered / marked for review, with shape as
+well as colour cues so no state is colour-only).
+
+**Assets.** `assets/css/` holds `tokens → base → components → pages → app`, in that order; `assets/js/`
+holds the API client (`core.js`), fixtures (`data.js`), shared chrome and components (`ui.js`), and one
+module per page. Icons are a single inline SVG sprite — there are no external fonts, CDNs or trackers.
+
+**PWA.** `sw.js` caches the shell and static assets only; requests to `/api/`, `/token/`, `/auth/` and
+`/admin/` are never cached. Installation uses `manifest.webmanifest` plus the PNG icons in `assets/`.
 
 For production deployment, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -45,14 +95,22 @@ pw-style-learning-app/
 │   ├── requirements.txt
 │   ├── Procfile
 │   └── .env.example
-├── frontend/                # PWA (vanilla JS, CSS, HTML)
-│   ├── index.html
-│   ├── app.js              # Main application
-│   ├── api.js              # API client
-│   ├── sw.js               # Service worker
-│   ├── styles.css
+├── frontend/                # Static PWA (vanilla JS, CSS, HTML)
+│   ├── index.html          # Landing page
+│   ├── courses.html        # Catalogue
+│   ├── course.html         # Batch detail
+│   ├── tests.html          # Test series
+│   ├── test-player.html    # Exam + result screen
+│   ├── dashboard.html      # Student dashboard
+│   ├── login.html          # Sign in / register
+│   ├── legal.html          # Terms, privacy, accessibility
+│   ├── offline.html        # Offline fallback
+│   ├── sw.js               # Service worker (shell only, never API)
 │   ├── manifest.webmanifest
 │   └── assets/
+│       ├── css/            # tokens, base, components, pages, app
+│       ├── js/             # core, data, ui + one module per page
+│       └── icon*.png       # 192/512 + apple-touch icons
 ├── docs/                    # Documentation
 │   ├── BUILD_STATUS.md     # Milestone progress
 │   └── agent-prompts/      # Milestone specifications
@@ -83,7 +141,16 @@ See [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) for detailed milestone tracking
 ```bash
 cd backend
 ENVIRONMENT=test python manage.py test
-# Runs 96 tests covering all milestones
+# Runs 142 tests: models, serializers, permissions, API security regression
+```
+
+Frontend checks (no build step, no dependencies):
+
+```bash
+node --check frontend/sw.js
+for f in frontend/assets/js/*.js; do node --check "$f"; done
+# then serve frontend/ and walk these pages with the browser console open:
+#   index, courses, course, tests, test-player, dashboard, login, legal, offline
 ```
 
 ## API Endpoints

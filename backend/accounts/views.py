@@ -1,4 +1,5 @@
 import logging
+import os
 import secrets
 import hashlib
 import hmac
@@ -12,7 +13,7 @@ from django.utils import timezone
 from rest_framework import status, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+from rest_framework.throttling import AnonRateThrottle, SimpleRateThrottle, UserRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -31,19 +32,70 @@ logger = logging.getLogger(__name__)
 
 
 class RegistrationThrottle(AnonRateThrottle):
-    rate = "5/minute"
+    rate = os.getenv("THROTTLE_REGISTRATION", "10/minute")
 
 
 class LoginThrottle(AnonRateThrottle):
-    rate = "10/minute"
+    """Per-IP login guard. Generous enough for a shared campus connection."""
+
+    rate = os.getenv("THROTTLE_LOGIN", "20/minute")
+
+
+class LoginIdentifierThrottle(SimpleRateThrottle):
+    """Per-account login guard, so one IP cannot be used to spray one account.
+
+    Keyed on the submitted identifier, hashed: password guessing against a
+    single account is capped even when the attacker rotates IPs, and a class
+    logging in from one address is not throttled by its neighbours.
+    """
+
+    scope = "login_identifier"
+    rate = os.getenv("THROTTLE_LOGIN_IDENTIFIER", "10/minute")
+
+    def get_cache_key(self, request, view):
+        identifier = (request.data.get("username_or_email") or "").strip().lower()
+        if not identifier:
+            return None
+        digest = hashlib.sha256(identifier.encode("utf-8")).hexdigest()[:32]
+        return self.cache_format % {"scope": self.scope, "ident": digest}
 
 
 class ForgotPasswordThrottle(AnonRateThrottle):
-    rate = "3/hour"
+    """Per-IP guard for reset requests.
+
+    Kept intentionally loose-ish: a campus or office shares one address, so a
+    tight per-IP cap locks out everybody because one student forgot a password.
+    The per-address throttle below is the real limit.
+    """
+
+    rate = os.getenv("THROTTLE_RESET_REQUEST", "6/hour")
+
+
+class ResendOTPThrottle(AnonRateThrottle):
+    rate = os.getenv("THROTTLE_RESET_RESEND", "6/hour")
+
+
+class EmailResetThrottle(SimpleRateThrottle):
+    """Per-email guard shared by "send code" and "resend code".
+
+    Three messages per address per hour: enough to survive a typo or a late
+    mail, small enough that the endpoint cannot be used to flood an inbox. The
+    email is hashed so the address itself never lands in the cache backend.
+    """
+
+    scope = "reset_email"
+    rate = os.getenv("THROTTLE_RESET_EMAIL", "3/hour")
+
+    def get_cache_key(self, request, view):
+        email = (request.data.get("email") or "").strip().lower()
+        if not email:
+            return None  # nothing to key on; the per-IP throttle still applies
+        digest = hashlib.sha256(email.encode("utf-8")).hexdigest()[:32]
+        return self.cache_format % {"scope": self.scope, "ident": digest}
 
 
 class OTPThrottle(AnonRateThrottle):
-    rate = "10/minute"
+    rate = os.getenv("THROTTLE_OTP_VERIFY", "10/minute")
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -56,7 +108,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [permissions.AllowAny]
-    throttle_classes = [LoginThrottle]
+    throttle_classes = [LoginThrottle, LoginIdentifierThrottle]
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -88,11 +140,11 @@ class AuthViewSet(viewsets.GenericViewSet):
         if self.action == "register":
             return [RegistrationThrottle()]
         if self.action == "forgot_password":
-            return [ForgotPasswordThrottle()]
+            return [ForgotPasswordThrottle(), EmailResetThrottle()]
         if self.action == "verify_otp":
             return [OTPThrottle()]
         if self.action == "resend_otp":
-            return [ForgotPasswordThrottle()]
+            return [ResendOTPThrottle(), EmailResetThrottle()]
         return super().get_throttles()
 
     @action(detail=False, methods=["post"], throttle_classes=[RegistrationThrottle])
@@ -148,7 +200,10 @@ class AuthViewSet(viewsets.GenericViewSet):
         return Response(serializer.data)
 
     @action(
-        detail=False, methods=["post"], permission_classes=[permissions.IsAuthenticated]
+        detail=False,
+        methods=["post"],
+        url_path="change-password",
+        permission_classes=[permissions.IsAuthenticated],
     )
     def change_password(self, request):
         """Change password for authenticated user."""
@@ -207,7 +262,12 @@ class AuthViewSet(viewsets.GenericViewSet):
         from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
         send_mail(subject, message, from_email, [user.email], fail_silently=False)
 
-    @action(detail=False, methods=["post"], throttle_classes=[ForgotPasswordThrottle])
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="forgot-password",
+        throttle_classes=[ForgotPasswordThrottle, EmailResetThrottle],
+    )
     def forgot_password(self, request):
         """Request password reset OTP. Always returns generic response."""
         serializer = ForgotPasswordSerializer(data=request.data)
@@ -272,7 +332,12 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         return Response(response_data)
 
-    @action(detail=False, methods=["post"], throttle_classes=[OTPThrottle])
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="verify-otp",
+        throttle_classes=[OTPThrottle],
+    )
     @transaction.atomic
     def verify_otp(self, request):
         """Verify OTP and reset password atomically."""
@@ -391,7 +456,12 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         return Response({"message": "Password has been reset successfully."})
 
-    @action(detail=False, methods=["post"], throttle_classes=[ForgotPasswordThrottle])
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="resend-otp",
+        throttle_classes=[ResendOTPThrottle, EmailResetThrottle],
+    )
     def resend_otp(self, request):
         """Resend OTP for password reset."""
         # Same logic as forgot_password - reuse the endpoint

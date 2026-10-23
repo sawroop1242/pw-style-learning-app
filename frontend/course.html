@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <meta name="api-base" content="/api">
+  <title>Batch details — StudySpace</title>
+  <meta name="description" content="Batch overview, full curriculum, schedule, faculty and included tests.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript-bar" role="note">
+      StudySpace needs JavaScript for the catalogue, tests and dashboard.
+      Please enable it, or write to
+      <a href="mailto:support@studyspace.example">support@studyspace.example</a> for help.
+    </div>
+  </noscript>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <section class="course-hero" id="course-hero">
+      <div class="container">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="index.html">Home</a>
+          <svg><use href="#i-chevron-right"/></svg>
+          <a href="courses.html">Batches</a>
+          <svg><use href="#i-chevron-right"/></svg>
+          <span class="current" id="crumb-title">Batch</span>
+        </nav>
+
+        <div class="course-hero-grid">
+          <h1 id="course-headline">
+            <span class="skeleton skeleton-text" style="display:block;width:180px;height:20px;background:var(--slate-100)"></span>
+            <span class="skeleton" style="display:block;height:44px;width:80%;margin:16px 0;background:var(--slate-100)"></span>
+            <span class="skeleton" style="display:block;height:16px;width:60%;background:var(--slate-100)"></span>
+          </h1>
+          <div id="purchase-slot"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="container">
+        <div class="course-layout">
+          <div>
+            <div class="tabs" role="tablist" aria-label="Batch sections">
+              <button class="tab" role="tab" aria-selected="true" aria-controls="panel-overview" id="tab-overview">Overview</button>
+              <button class="tab" role="tab" aria-selected="false" aria-controls="panel-curriculum" id="tab-curriculum">Curriculum</button>
+              <button class="tab" role="tab" aria-selected="false" aria-controls="panel-tests" id="tab-tests">Tests</button>
+              <button class="tab" role="tab" aria-selected="false" aria-controls="panel-faculty" id="tab-faculty">Faculty</button>
+            </div>
+
+            <section class="tab-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview"></section>
+            <section class="tab-panel" id="panel-curriculum" role="tabpanel" aria-labelledby="tab-curriculum" hidden></section>
+            <section class="tab-panel" id="panel-tests" role="tabpanel" aria-labelledby="tab-tests" hidden></section>
+            <section class="tab-panel" id="panel-faculty" role="tabpanel" aria-labelledby="tab-faculty" hidden></section>
+          </div>
+
+          <aside aria-label="Batch summary" id="course-aside"></aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="container">
+        <div class="row-between" style="margin-bottom:20px">
+          <div>
+            <p class="eyebrow">Students also enrolled</p>
+            <h2 class="section-title">Similar batches</h2>
+          </div>
+          <a class="link" href="courses.html">See all <svg><use href="#i-arrow-right"/></svg></a>
+        </div>
+        <div class="batch-grid" id="similar-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+  <div id="site-tabbar"></div>
+
+  <div class="modal" id="redeem-modal">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="redeem-title">
+      <div class="modal-head">
+        <div>
+          <h2 class="modal-title" id="redeem-title">Redeem access code</h2>
+          <p class="tiny muted" style="margin-top:4px">Paid batches unlock with a 12-character code from your institute.</p>
+        </div>
+        <button class="icon-btn" data-close-modal aria-label="Close" style="width:32px;height:32px"><svg><use href="#i-x"/></svg></button>
+      </div>
+      <form id="redeem-form" class="stack" style="gap:14px">
+        <div class="field">
+          <label for="code-input">Access code</label>
+          <input class="input" id="code-input" name="code" placeholder="ABCD-2345-EFGH" autocomplete="off" spellcheck="false" required style="letter-spacing:.12em;text-transform:uppercase;font-family:var(--font-mono)">
+          <span class="field-hint">Codes are case-insensitive. One code unlocks one batch for your account.</span>
+        </div>
+        <div class="alert alert-info">
+          <svg><use href="#i-info"/></svg>
+          <span>There is no checkout on StudySpace. If you have not received a code, contact your institute.</span>
+        </div>
+        <p class="field-error" id="redeem-error" role="alert" hidden></p>
+        <button class="btn btn-primary btn-block" type="submit">Unlock batch</button>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="assets/js/course.js"></script>
+</body>
+</html>
