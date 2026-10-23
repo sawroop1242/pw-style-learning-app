@@ -962,6 +962,10 @@ renumbered by section on load, so numbering stays continuous even if the API ret
   `--slate-100`.
 - `tests.html` carried both a fact strip and a numbers band; the duplicate band was removed, and the offline
   page lost its last gradient/shadow leftovers.
+- The service worker now serves CSS/JS/icons **network-first** with the cache as the offline fallback (it was
+  stale-while-revalidate), and bumps to `studyspace-v5`. A deploy can no longer pair fresh HTML with the
+  previous release's stylesheet on the first visit. Registration also passes `updateViaCache: 'none'`, asks a
+  newly installed worker to skip waiting, and reloads once when an already-controlled tab changes hands.
 - Orphan CSS from earlier runs was pruned with a brace-matching script (`/tmp/prune.py`): trust strip, feature
   grid, app banner, phone mock, hero orbits, rail navigation, tab badges, switch control and the old stats band.
   Only runtime-composed modifiers (`avatar-*`, `toast-*`) remain unwritten in markup.

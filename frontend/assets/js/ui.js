@@ -481,9 +481,40 @@ export function mountChrome(active) {
 
 /** Registered once per page so offline works from any entry point. */
 function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register(new URL('../../sw.js', import.meta.url)).catch(() => {});
+  const sw = navigator.serviceWorker;
+  if (!sw || location.protocol === 'file:') return;
+
+  // A page that was already controlled should reload once when the new worker
+  // takes over, so a deploy is never shown as new HTML with last release's CSS.
+  const wasControlled = Boolean(sw.controller);
+  let reloaded = false;
+
+  if (typeof sw.addEventListener === 'function') {
+    sw.addEventListener('controllerchange', () => {
+      if (!wasControlled || reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
+  }
+
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await sw.register(new URL('../../sw.js', import.meta.url), {
+        updateViaCache: 'none'
+      });
+      if (typeof registration?.update === 'function') registration.update().catch(() => {});
+
+      if (typeof registration?.addEventListener === 'function') {
+        registration.addEventListener('updatefound', () => {
+          const worker = registration.installing;
+          worker?.addEventListener('statechange', () => {
+            if (worker.state === 'installed' && sw.controller) worker.postMessage('SKIP_WAITING');
+          });
+        });
+      }
+    } catch {
+      /* unsupported, private mode or a sandboxed iframe — the site still works */
+    }
   });
 }
 

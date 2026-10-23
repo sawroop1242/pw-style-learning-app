@@ -2,13 +2,14 @@
  *
  * Strategy
  *   • Navigations + HTML  : network-first, fall back to cache, then offline.html
- *   • CSS / JS / icons    : stale-while-revalidate
+ *   • CSS / JS / icons    : network-first, so a deploy never pairs new HTML with
+ *                           last release's stylesheet; cache is the offline fallback
  *   • API requests        : never cached, never served from cache
  *
  * Bump CACHE_VERSION whenever a shell asset changes so old clients refresh.
  */
 
-const CACHE_VERSION = 'studyspace-v4';
+const CACHE_VERSION = 'studyspace-v5';
 const SHELL = [
   './',
   './index.html',
@@ -124,20 +125,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets.
+  // Static assets: prefer the network so a new release is picked up immediately,
+  // fall back to the cache when offline.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy)).catch(() => {});
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(request)
+      .then((response) => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy)).catch(() => {});
+        }
+        return response;
+      })
+      .catch(async () => (await caches.match(request)) || new Response('', { status: 504 }))
   );
 });
 
