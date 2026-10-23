@@ -648,7 +648,7 @@ body.exam-shell { background: var(--canvas); }
   border-bottom: 1px solid var(--border);
 }
 
-.result-head h1 { font-size: var(--text-2xl); margin-bottom: 6px; }
+.result-head :is(h1, h2) { font-size: var(--text-2xl); margin-bottom: 6px; }
 .result-head p { color: var(--text-muted); font-size: var(--text-sm); }
 
 .score-table {
