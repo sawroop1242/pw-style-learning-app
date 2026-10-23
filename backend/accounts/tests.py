@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
@@ -384,7 +385,7 @@ class ChangePasswordTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.change_password_url = "/api/auth/change_password/"
+        self.change_password_url = "/api/auth/change-password/"
         self.user = User.objects.create_user(
             "testuser", "test@example.com", "SecurePass123!"
         )
@@ -499,7 +500,7 @@ class ForgotPasswordTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.forgot_url = "/api/auth/forgot_password/"
+        self.forgot_url = "/api/auth/forgot-password/"
         self.user = User.objects.create_user(
             "testuser", "test@example.com", "SecurePass123!"
         )
@@ -594,7 +595,7 @@ class VerifyOTPTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.verify_url = "/api/auth/verify_otp/"
+        self.verify_url = "/api/auth/verify-otp/"
         self.user = User.objects.create_user(
             "testuser", "test@example.com", "SecurePass123!"
         )
@@ -602,7 +603,7 @@ class VerifyOTPTests(TestCase):
         from django.core.cache import cache
         cache.clear()
         # Request OTP
-        self.client.post("/api/auth/forgot_password/", {"email": "test@example.com"})
+        self.client.post("/api/auth/forgot-password/", {"email": "test@example.com"})
         self.otp_record = PasswordResetOTP.objects.get(user=self.user)
         # Get the actual OTP from email (since we use locmem backend)
         self.otp = mail.outbox[0].body.split("Your password reset code is: ")[1].split("\n")[0]
@@ -725,7 +726,7 @@ class VerifyOTPTests(TestCase):
         """Test OTP cannot be used for different user."""
         user2 = User.objects.create_user("testuser2", "test2@example.com", "SecurePass123!")
         # Request OTP for user2
-        self.client.post("/api/auth/forgot_password/", {"email": "test2@example.com"})
+        self.client.post("/api/auth/forgot-password/", {"email": "test2@example.com"})
         otp2 = PasswordResetOTP.objects.get(user=user2)
         otp2_code = mail.outbox[1].body.split("Your password reset code is: ")[1].split("\n")[0]
 
@@ -788,7 +789,7 @@ class ResendOTPTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.resend_url = "/api/auth/resend_otp/"
+        self.resend_url = "/api/auth/resend-otp/"
         self.user = User.objects.create_user(
             "testuser", "test@example.com", "SecurePass123!"
         )
@@ -799,7 +800,7 @@ class ResendOTPTests(TestCase):
     def test_resend_otp_success(self):
         """Test resend OTP works same as forgot_password."""
         # Initial request
-        self.client.post("/api/auth/forgot_password/", {"email": "test@example.com"})
+        self.client.post("/api/auth/forgot-password/", {"email": "test@example.com"})
         self.assertEqual(len(mail.outbox), 1)
         otp1 = mail.outbox[0].body.split("Your password reset code is: ")[1].split("\n")[0]
 
@@ -842,7 +843,7 @@ class ThrottlingTests(TestCase):
     def test_registration_throttle(self):
         """Test registration is throttled."""
         url = "/api/auth/register/"
-        for i in range(5):
+        for i in range(10):
             response = self.client.post(
                 url,
                 {
@@ -853,12 +854,12 @@ class ThrottlingTests(TestCase):
                 },
             )
             self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        # 6th request should be throttled
+        # the 11th request should be throttled
         response = self.client.post(
             url,
             {
-                "username": "user5",
-                "email": "user5@example.com",
+                "username": "user10",
+                "email": "user10@example.com",
                 "password": "SecurePass123!",
                 "password_confirm": "SecurePass123!",
             },
@@ -869,30 +870,67 @@ class ThrottlingTests(TestCase):
         """Test login is throttled."""
         url = "/api/token/"
         user = User.objects.create_user("testuser", "test@example.com", "SecurePass123!")
-        for i in range(10):
+        # Distinct identifiers, so this measures the per-IP budget only.
+        for i in range(20):
             response = self.client.post(
-                url, {"username_or_email": "testuser", "password": "SecurePass123!"}
+                url, {"username_or_email": f"person{i}", "password": "SecurePass123!"}
             )
             self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
-        # 11th request should be throttled
+        # the 21st request should be throttled
         response = self.client.post(
-            url, {"username_or_email": "testuser", "password": "SecurePass123!"}
+            url, {"username_or_email": "person20", "password": "SecurePass123!"}
         )
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
-    def test_forgot_password_throttle(self):
-        """Test forgot password is throttled."""
-        url = "/api/auth/forgot_password/"
+    def test_login_throttle_per_identifier(self):
+        """One account is capped even if the IP budget still has room."""
+        url = "/api/token/"
+        User.objects.create_user("target", "target@example.com", "SecurePass123!")
+        for i in range(10):
+            response = self.client.post(
+                url, {"username_or_email": "target", "password": "wrong-password"}
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, i)
+        response = self.client.post(url, {"username_or_email": "target", "password": "wrong-password"})
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_forgot_password_throttle_per_ip(self):
+        """Six reset requests per address per hour, counted per client IP."""
+        url = "/api/auth/forgot-password/"
+        for i in range(6):
+            response = self.client.post(url, {"email": f"person{i}@example.com"})
+            self.assertEqual(response.status_code, status.HTTP_200_OK, i)
+        response = self.client.post(url, {"email": "person7@example.com"})
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_forgot_password_throttle_per_email(self):
+        """One address gets three mails an hour, so a shared IP cannot flood it.
+
+        The IP budget is six, so the fourth request for the *same* address is the
+        one that trips -- which is what a student retrying their own reset sees.
+        """
+        url = "/api/auth/forgot-password/"
         for i in range(3):
-            response = self.client.post(url, {"email": f"test{i}@example.com"})
+            response = self.client.post(url, {"email": "repeat@example.com"})
+            self.assertEqual(response.status_code, status.HTTP_200_OK, i)
+        response = self.client.post(url, {"email": "repeat@example.com"})
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        # A different address on the same IP still has budget left.
+        response = self.client.post(url, {"email": "someone-else@example.com"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_resend_shares_the_email_budget(self):
+        """Resend is not a way around the per-address limit."""
+        self.client.post("/api/auth/forgot-password/", {"email": "shared@example.com"})
+        for _ in range(2):
+            response = self.client.post("/api/auth/resend-otp/", {"email": "shared@example.com"})
             self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # 4th request should be throttled
-        response = self.client.post(url, {"email": "test3@example.com"})
+        response = self.client.post("/api/auth/resend-otp/", {"email": "shared@example.com"})
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
     def test_otp_verify_throttle(self):
         """Test OTP verification is throttled."""
-        url = "/api/auth/verify_otp/"
+        url = "/api/auth/verify-otp/"
         for i in range(10):
             response = self.client.post(
                 url,
@@ -938,7 +976,7 @@ class EmailDeliveryFailureTests(TestCase):
         client = APIClient()
         user = User.objects.create_user("testuser", "test@example.com", "SecurePass123!")
 
-        response = client.post("/api/auth/forgot_password/", {"email": "test@example.com"})
+        response = client.post("/api/auth/forgot-password/", {"email": "test@example.com"})
         # Should still return generic success (no enumeration)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # OTP should still be created
@@ -968,3 +1006,59 @@ class CrossUserIsolationTests(TestCase):
     def test_placeholder(self):
         """Placeholder test - cross-user isolation tests should be in courses app tests."""
         self.assertTrue(True)
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    OTP_EXPIRY_MINUTES=10,
+    OTP_MAX_ATTEMPTS=5,
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "auth-route-alias-tests",
+        }
+    },
+    REST_FRAMEWORK={
+        "DEFAULT_THROTTLE_RATES": {
+            "auth_register": "100/min",
+            "forgot_password": "100/min",
+            "otp_verify": "100/min",
+        }
+    },
+)
+class AuthRouteAliasTests(TestCase):
+    """The dashed paths are canonical; the older underscore paths stay as aliases.
+
+    The front end (and the API docs) call `/auth/forgot-password/` and friends.
+    DRF used to derive the route from the method name, which published
+    `/auth/forgot_password/` instead -- every reset request 404'd against a live
+    API while the interface reported a generic failure. Both spellings now
+    resolve to the same action, and these tests keep it that way.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="aliasuser", email="alias@example.com", password="SecurePass123!"
+        )
+
+    def test_forgot_password_paths_are_equivalent(self):
+        for path in ("/api/auth/forgot-password/", "/api/auth/forgot_password/"):
+            cache.clear()  # each spelling gets its own throttle budget
+            response = self.client.post(path, {"email": self.user.email})
+            self.assertEqual(response.status_code, status.HTTP_200_OK, path)
+
+    def test_verify_otp_paths_are_reachable(self):
+        for path in ("/api/auth/verify-otp/", "/api/auth/verify_otp/"):
+            cache.clear()
+            response = self.client.post(path, {"email": self.user.email, "otp": "000000"})
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, path)
+
+    def test_resend_otp_paths_are_reachable(self):
+        for path in ("/api/auth/resend-otp/", "/api/auth/resend_otp/"):
+            cache.clear()
+            response = self.client.post(path, {"email": self.user.email})
+            self.assertEqual(response.status_code, status.HTTP_200_OK, path)
+
+    def test_change_password_paths_require_auth(self):
+        for path in ("/api/auth/change-password/", "/api/auth/change_password/"):
+            response = self.client.post(path, {})
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED, path)

@@ -6,7 +6,7 @@
  * instead, so the page is still demonstrable without pretending to be live.
  */
 
-import { $, esc, auth, storage, request } from './core.js';
+import { $, esc, auth, storage, request, isUnreachable } from './core.js';
 import { mountSprite, toast } from './ui.js';
 
 mountSprite();
@@ -52,6 +52,9 @@ let view = 'signin';
 function show(next, { focus = true } = {}) {
   view = next;
   const copy = COPY[next];
+
+  const account = $('#account-panel');
+  if (account) account.hidden = true;
 
   for (const name of VIEWS) {
     const node = viewNode(name);
@@ -193,7 +196,8 @@ function applyServerErrors(form, err, mapping) {
   const data = err?.data;
 
   if (err?.status === 429) {
-    formAlert(form, 'Too many attempts. Wait a minute, then try again.');
+    const wait = err.message && /available in/i.test(err.message) ? err.message : '';
+    formAlert(form, `Too many attempts. ${wait || 'Please wait a little while, then try again.'}`.trim());
     return true;
   }
 
@@ -269,14 +273,16 @@ $('#form-signin').addEventListener('submit', async (e) => {
 
   try {
     const user = await auth.login({ username: identifier, password });
+    renderAccount();
     toast(`Welcome back, ${user?.username || identifier}.`, 'success');
     setTimeout(goNext, 350);
   } catch (err) {
-    if (err.status === 0) {
+    if (isUnreachable(err)) {
       demoSession(identifier);
-      toast('Preview mode: signed in with a local demo session.', 'info', 5000);
+      renderAccount();
+      toast('Preview mode: no API behind this page, so you are signed in with a local demo session.', 'info', 6000);
       setTimeout(goNext, 700);
-    } else if (err.status === 401 || err.status === 400) {
+    } else if (err.status === 400 || err.status === 401) {
       formAlert(form, 'That username or password did not match an account.');
       fieldError('signin-password', 'Check your password and try again.');
       focusFirstError(form);
@@ -358,12 +364,14 @@ $('#form-signup').addEventListener('submit', async (e) => {
 
   try {
     await auth.register({ username, email, password, passwordConfirm: confirm });
+    renderAccount();
     toast('Account created. Welcome to StudySpace.', 'success');
     setTimeout(goNext, 400);
   } catch (err) {
-    if (err.status === 0) {
+    if (isUnreachable(err)) {
       demoSession(username);
-      toast('Preview mode: demo account created locally.', 'info', 5000);
+      renderAccount();
+      toast('Preview mode: no API behind this page, so a local demo account was created.', 'info', 6000);
       setTimeout(goNext, 700);
     } else {
       applyServerErrors(form, err, {
@@ -386,6 +394,7 @@ let resetTarget = '';
 
 function resetForgotFlow() {
   resetTarget = '';
+  resetResendCooldown();
   const requestForm = $('#forgot-request');
   const resetForm = $('#forgot-reset');
   requestForm?.reset();
@@ -414,11 +423,12 @@ $('#forgot-request').addEventListener('submit', async (e) => {
     resetTarget = email;
     $('#reset-email').textContent = email;
     show('forgot-reset');
+    startResendCooldown();
     toast('If that email has an account, a code is on its way.', 'success', 5000);
   } catch (err) {
-    if (err.status === 0) {
+    if (isUnreachable(err)) {
       // No API in the preview: explain instead of pretending a mail was sent.
-      formAlert(form, 'The API is not reachable from this preview, so a reset code cannot be sent. Start the Django server to use password reset.');
+      formAlert(form, 'No API is answering this page, so a reset code cannot be sent. Start the Django server and open the site through tools/serve.py to use password reset.');
     } else {
       applyServerErrors(form, err, { email: 'forgot-email' });
     }
@@ -467,8 +477,8 @@ $('#forgot-reset').addEventListener('submit', async (e) => {
     storage.clear();
     show('forgot-done');
   } catch (err) {
-    if (err.status === 0) {
-      formAlert(form, 'The API is not reachable from this preview, so the code cannot be checked.');
+    if (isUnreachable(err)) {
+      formAlert(form, 'No API is answering this page, so the code cannot be checked.');
     } else {
       applyServerErrors(form, err, {
         otp: 'reset-code',
@@ -482,49 +492,218 @@ $('#forgot-reset').addEventListener('submit', async (e) => {
   }
 });
 
+/* ------------------------------------------------------------------ */
+/* Resend cooldown                                                     */
+/* ------------------------------------------------------------------ */
+
+const RESEND_FALLBACK_SECONDS = 60;
+let resendTimer = null;
+
+function startResendCooldown(seconds = RESEND_FALLBACK_SECONDS) {
+  const button = $('[data-resend]');
+  const label = $('[data-resend-label]');
+  if (!button || !label) return;
+
+  let left = Math.max(1, Math.round(seconds));
+  clearInterval(resendTimer);
+  button.disabled = true;
+  label.textContent = `Resend in ${left}s`;
+
+  resendTimer = setInterval(() => {
+    left -= 1;
+    if (left <= 0) {
+      clearInterval(resendTimer);
+      resendTimer = null;
+      button.disabled = false;
+      label.textContent = 'Resend code';
+      return;
+    }
+    label.textContent = `Resend in ${left}s`;
+  }, 1000);
+}
+
+function resetResendCooldown() {
+  clearInterval(resendTimer);
+  resendTimer = null;
+  const button = $('[data-resend]');
+  const label = $('[data-resend-label]');
+  if (button) button.disabled = false;
+  if (label) label.textContent = 'Resend code';
+}
+
+/** Seconds quoted by DRF's throttled response, if it gave one. */
+function throttleSeconds(message = '') {
+  const match = /available in (\d+) second/i.exec(message);
+  return match ? Number(match[1]) : RESEND_FALLBACK_SECONDS;
+}
+
 document.addEventListener('click', async (e) => {
-  if (!e.target.closest('[data-resend]')) return;
-  if (!resetTarget) return;
+  const button = e.target.closest('[data-resend]');
+  if (!button || button.disabled || !resetTarget) return;
+
   try {
     await request('/auth/resend-otp/', { method: 'POST', body: { email: resetTarget } });
     toast('A new code is on its way.', 'success');
+    startResendCooldown();
   } catch (err) {
-    toast(err.status === 429 ? 'Too many requests. Wait a minute.' : 'Could not resend the code.', 'error');
+    if (err.status === 429) {
+      toast(err.message || 'Too many codes requested. Please wait before asking again.', 'error', 6000);
+      startResendCooldown(throttleSeconds(err.message));
+    } else if (isUnreachable(err)) {
+      toast('No API is answering this page, so a new code cannot be sent.', 'error', 6000);
+    } else {
+      toast('Could not resend the code. Please try again later.', 'error');
+    }
   }
 });
 
 /* ------------------------------------------------------------------ */
-/* Demo & existing session                                            */
+/* Demo & signed-in account panel                                     */
 /* ------------------------------------------------------------------ */
+
+function renderAccount() {
+  const signedIn = Boolean(storage.access);
+  const demo = Boolean(storage.user?.demo);
+  const panel = $('#account-panel');
+  const banner = $('#session-banner');
+  const tabs = $('#auth-tabs');
+  const passwordForm = $('#form-change-password');
+  const passwordToggle = $('#toggle-password-form');
+
+  if (!signedIn) {
+    panel.hidden = true;
+    if (banner) banner.hidden = true;
+    passwordForm?.reset();
+    passwordForm.hidden = true;
+    passwordToggle.hidden = false;
+    passwordToggle.setAttribute('aria-expanded', 'false');
+    if (view === 'signin' || view === 'signup') {
+      tabs.hidden = false;
+      show(view, { focus: false });
+    }
+    return;
+  }
+
+  for (const name of VIEWS) {
+    const node = viewNode(name);
+    if (node) node.hidden = true;
+  }
+  tabs.hidden = true;
+  panel.hidden = false;
+  passwordForm.hidden = true;
+  passwordToggle.hidden = demo;
+  passwordToggle.setAttribute('aria-expanded', 'false');
+
+  $('#auth-title').textContent = 'Your account';
+  $('#auth-sub').textContent = demo
+    ? 'Preview demo session — nothing is stored on a server.'
+    : 'Signed in on this device.';
+  $('#account-name').textContent = storage.user?.username || 'Student';
+  $('#account-email').textContent = storage.user?.email || '—';
+  $('#account-demo-note').hidden = !demo;
+  document.title = 'Your account — StudySpace';
+
+  if (banner) {
+    banner.hidden = !demo;
+    if (demo) {
+      banner.innerHTML = '<span>Demo session: sign-in worked locally, not on the API.</span>';
+    }
+  }
+}
 
 document.addEventListener('click', (e) => {
   if (!e.target.closest('[data-demo-login]')) return;
   demoSession(DEMO_USER);
+  renderAccount();
   toast('Signed in with the demo account.', 'success');
-  setTimeout(goNext, 500);
 });
 
-function renderSessionBanner() {
-  const host = $('#session-banner');
-  if (!host || !storage.access) return;
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#toggle-password-form')) return;
+  const form = $('#form-change-password');
+  const button = e.target.closest('#toggle-password-form');
+  const open = form.hidden;
+  form.hidden = !open;
+  button.setAttribute('aria-expanded', String(open));
+  if (open) $('#current-password').focus({ preventScroll: true });
+});
 
-  const name = storage.user?.username || 'Student';
-  host.hidden = false;
-  host.innerHTML = `
-    <span>Signed in as <strong>${esc(name)}</strong>.</span>
-    <span class="auth-session-actions">
-      <a class="link" href="dashboard.html">Continue</a>
-      <button class="link-button" type="button" data-sign-out>Sign out</button>
-    </span>`;
-}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('[data-cancel-password]')) return;
+  const form = $('#form-change-password');
+  form.reset();
+  clearForm(form);
+  form.hidden = true;
+  $('#toggle-password-form').setAttribute('aria-expanded', 'false');
+  $('#toggle-password-form').focus({ preventScroll: true });
+});
+
+$('#form-change-password').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  clearForm(form);
+
+  const current = $('#current-password').value;
+  const next = $('#new-password').value;
+  const confirm = $('#confirm-password').value;
+  let invalid = false;
+
+  if (!current) {
+    fieldError('current-password', 'Enter your current password.');
+    invalid = true;
+  }
+  if (next.length < 8) {
+    fieldError('new-password', 'Use at least 8 characters.');
+    invalid = true;
+  }
+  if (next !== confirm) {
+    fieldError('confirm-password', 'The two passwords do not match.');
+    invalid = true;
+  }
+  if (invalid) return focusFirstError(form);
+
+  const button = $('#password-submit');
+  busy(button, true, 'Updating…');
+
+  try {
+    await request('/auth/change-password/', {
+      method: 'POST',
+      body: {
+        current_password: current,
+        new_password: next,
+        new_password_confirm: confirm
+      }
+    });
+    // Changing the password blacklists every refresh token, including this
+    // tab's, so sign in again with the new password to keep the session alive.
+    const username = storage.user?.username || $('#account-name').textContent;
+    await auth.login({ username, password: next }).catch(() => {});
+    form.reset();
+    form.hidden = true;
+    $('#toggle-password-form').setAttribute('aria-expanded', 'false');
+    renderAccount();
+    toast('Password updated. Other devices were signed out.', 'success', 5000);
+  } catch (err) {
+    if (isUnreachable(err)) {
+      formAlert(form, 'No API is answering this page, so the password cannot be changed.');
+    } else {
+      applyServerErrors(form, err, {
+        current_password: 'current-password',
+        new_password: 'new-password',
+        new_password_confirm: 'confirm-password'
+      });
+    }
+  } finally {
+    busy(button, false);
+  }
+});
 
 document.addEventListener('click', async (e) => {
   if (!e.target.closest('[data-sign-out]')) return;
   await auth.logout().catch(() => {});
-  renderSessionBanner();
-  const host = $('#session-banner');
-  if (host) host.hidden = true;
+  resetForgotFlow();
+  renderAccount();
   toast('Signed out.', 'info');
 });
 
-renderSessionBanner();
+renderAccount();

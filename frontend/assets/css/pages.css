@@ -686,6 +686,56 @@
   background: var(--border);
 }
 
+/* ---- Signed-in account panel ---------------------------------------- */
+.account-panel { display: grid; gap: var(--sp-5); }
+.account-panel[hidden] { display: none; }
+
+.account-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  margin: 0;
+  border: 1px solid var(--border);
+  background: var(--slate-50);
+}
+
+.account-facts dt {
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin-bottom: 4px;
+}
+
+.account-facts dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.account-note {
+  padding: 10px 12px;
+  border: 1px solid var(--amber-200);
+  background: var(--amber-100);
+  color: var(--amber-800);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+.account-actions { display: grid; gap: 10px; }
+
+.account-password {
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 560px) {
+  .account-facts { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ============================== RESPONSIVE ============================= */
 @media (max-width: 1080px) {
   .category-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); }

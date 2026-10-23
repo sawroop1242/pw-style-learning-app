@@ -32,10 +32,22 @@ Open `/admin/` to manage content and `/api/` for API routes.
 A static, framework-free PWA in `frontend/`. Serve the directory over HTTP/HTTPS:
 
 ```bash
-cd frontend
-python3 -m http.server 8080 --bind 0.0.0.0
+# terminal 1 — the API
+cd backend
+python manage.py runserver 127.0.0.1:8000
+
+# terminal 2 — the site, with /api proxied to the API above
+python3 tools/serve.py --port 8080
 # open http://localhost:8080
 ```
+
+`tools/serve.py` is a standard-library only dev server: it serves `frontend/` and forwards
+`/api/*` to Django, so sign-in, registration and password reset work exactly as they do in
+production. Point it elsewhere with `--api https://api.example.com`.
+
+Browsing the files with a plain `python -m http.server` also works — every page falls back to
+bundled sample data — but a static file server answers `POST /api/...` with 501, so the account
+page can only offer a clearly-labelled local demo session there.
 
 | Page | Purpose |
 |---|---|
@@ -45,7 +57,7 @@ python3 -m http.server 8080 --bind 0.0.0.0
 | `tests.html` | Test series listing with exam filters |
 | `test-player.html` | Full exam window: instructions gate, section tabs, question palette, timer, mark/clear, autosave, submit summary, scored answer sheet with solutions and print |
 | `dashboard.html` | Streak, mock-trend chart, upcoming tests, notes |
-| `login.html` | Sign in, create account, email-code password reset, demo session (`#register`) |
+| `login.html` | Sign in, create account, email-code reset, signed-in account panel with change-password, demo session (`#register`) |
 | `legal.html` | Terms, privacy (DPDP), access codes, accessibility, contact |
 | `offline.html` | Service-worker fallback |
 

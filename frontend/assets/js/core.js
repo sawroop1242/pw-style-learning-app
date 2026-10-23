@@ -50,6 +50,25 @@ export const storage = {
 
 export const isSignedIn = () => Boolean(storage.access);
 
+/**
+ * True when the API cannot be reached at all, as opposed to answering with a
+ * real error.
+ *
+ * A static preview has no API behind it: `POST /api/...` is answered by the
+ * file server with 501 or 404, not with a network failure. Treating those as
+ * "the server said no" used to surface `Request failed (501)` on the sign-in
+ * form. 404/405/408 and 5xx all mean "there is no working API here", which is
+ * exactly the case the offline demo exists for. 400/401/403/429 are real
+ * answers and are never swallowed by this helper.
+ */
+export const isUnreachable = (err) =>
+  !err ||
+  err.status === 0 ||
+  err.status === 404 ||
+  err.status === 405 ||
+  err.status === 408 ||
+  err.status >= 500;
+
 /** True once any read has fallen back to fixtures. */
 export const isPreview = () => sessionStorage.getItem(K.preview) === '1';
 const markPreview = () => sessionStorage.setItem(K.preview, '1');

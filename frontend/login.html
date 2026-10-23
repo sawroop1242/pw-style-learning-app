@@ -212,7 +212,9 @@
           </div>
 
           <button class="btn btn-primary btn-block" id="forgot-reset-btn" type="submit">Reset password</button>
-          <button class="btn btn-ghost btn-block" type="button" data-resend>Resend code</button>
+          <button class="btn btn-ghost btn-block" type="button" data-resend>
+            <span data-resend-label>Resend code</span>
+          </button>
         </form>
 
         <div class="auth-done" id="forgot-done" hidden>
@@ -221,6 +223,70 @@
           <p>Sign in with your new password. Every other session has been signed out.</p>
           <button class="btn btn-primary btn-block" type="button" data-back-signin>Back to sign in</button>
         </div>
+
+        <!-- --------------------------- SIGNED IN ------------------------------ -->
+        <section class="account-panel" id="account-panel" hidden>
+          <dl class="account-facts">
+            <div>
+              <dt>Signed in as</dt>
+              <dd id="account-name">—</dd>
+            </div>
+            <div>
+              <dt>Email</dt>
+              <dd id="account-email">—</dd>
+            </div>
+          </dl>
+
+          <p class="account-note" id="account-demo-note" hidden>
+            Preview demo session: no server is attached, so the password cannot be changed.
+          </p>
+
+          <div class="account-actions">
+            <a class="btn btn-primary btn-block" href="dashboard.html">Continue to dashboard</a>
+            <button class="btn btn-ghost btn-block" type="button" id="toggle-password-form"
+                    aria-expanded="false" aria-controls="form-change-password">Change password</button>
+            <button class="btn btn-ghost btn-block" type="button" data-sign-out>Sign out</button>
+          </div>
+
+          <form class="auth-form account-password" id="form-change-password" novalidate hidden>
+            <div class="form-alert" id="password-error" role="alert" hidden></div>
+
+            <div class="field">
+              <label for="current-password">Current password</label>
+              <div class="input-group">
+                <input class="input" id="current-password" name="current_password" type="password"
+                       autocomplete="current-password" required>
+                <button class="input-action" type="button" data-toggle-pass="current-password" aria-label="Show password">
+                  <svg><use href="#i-eye"/></svg>
+                </button>
+              </div>
+              <p class="field-error" id="current-password-error" hidden></p>
+            </div>
+
+            <div class="field">
+              <label for="new-password">New password</label>
+              <div class="input-group">
+                <input class="input" id="new-password" name="new_password" type="password"
+                       autocomplete="new-password" required>
+                <button class="input-action" type="button" data-toggle-pass="new-password" aria-label="Show password">
+                  <svg><use href="#i-eye"/></svg>
+                </button>
+              </div>
+              <p class="field-hint">At least 8 characters. Long phrases are fine.</p>
+              <p class="field-error" id="new-password-error" hidden></p>
+            </div>
+
+            <div class="field">
+              <label for="confirm-password">Confirm new password</label>
+              <input class="input" id="confirm-password" name="new_password_confirm" type="password"
+                     autocomplete="new-password" required>
+              <p class="field-error" id="confirm-password-error" hidden></p>
+            </div>
+
+            <button class="btn btn-primary btn-block" id="password-submit" type="submit">Update password</button>
+            <button class="btn btn-ghost btn-block" type="button" data-cancel-password>Cancel</button>
+          </form>
+        </section>
       </div>
     </section>
   </main>

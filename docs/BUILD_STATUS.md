@@ -1076,3 +1076,94 @@ showing none; computing a real one is queued for the next backend pass.
 Still not run: a real-browser visual pass, Lighthouse, axe-core or a screen-reader sweep — there is no
 browser in this environment. The live-API path (start → autosave → submit → result) is exercised by the
 Django tests, but not end-to-end from a browser against the API, because the preview is a static host.
+
+---
+
+## Run 6 — authentication actually works end to end (2026-10-23)
+
+Reported symptom: *"auth setup is not working perfectly"*. Three separate defects were behind it; all three
+are fixed and covered by tests.
+
+### 1. Every password-reset and change-password call returned 404
+
+DRF derives an action's URL from the **method name** unless `url_path` is given, so the router published
+`/api/auth/forgot_password/`, `/verify_otp/`, `/resend_otp/` and `/change_password/`, while the client (and
+the docs) called the dashed forms. Registration, sign-in, `/auth/me/` and logout worked, which is why the
+page looked half-alive: resetting a password always failed.
+
+* The actions now declare `url_path="forgot-password"`, `"verify-otp"`, `"resend-otp"`, `"change-password"`.
+* The underscore paths stay as deprecated aliases (`AuthViewSet.as_view(...)`), carrying the same
+  permission and throttle classes as the canonical route — an alias without them would have been an
+  unauthenticated change-password endpoint.
+* `AuthRouteAliasTests` asserts both spellings reach the same action and that the alias is still guarded.
+
+Verified over HTTP against a running server: reset request `200` (was `404`), verify `200`/`400` with the
+console e-mail OTP, replay rejected, new password logs in, old password rejected, change-password `400` on a
+wrong current password and `200` on the right one.
+
+### 2. The static preview reported "Request failed (501)"
+
+A file server answers `POST /api/token/` with **501**, not a network error, and the page only treated
+`status === 0` as "no API here" — so signing in on the preview showed a raw `501` instead of the demo
+session. `core.js` now exports `isUnreachable(err)` (0, 404, 405, 408, ≥500) and the account page uses it.
+Real answers (400, 401, 403, 429) are never swallowed. The reset flow still refuses to pretend a mail went
+out: it says no API is answering and names the dev server.
+
+### 3. Reset throttling locked out shared connections
+
+`forgot_password` and `resend_otp` shared one **3/hour per IP** bucket. On a campus or office address that
+is three password resets an hour for the whole building, and a student who mistyped their address burned
+it before their first mail arrived. Now:
+
+| Guard | Limit | Key |
+|---|---|---|
+| reset request (IP) | 6/hour | client address |
+| reset resend (IP) | 6/hour | client address |
+| reset mail (shared by request + resend) | 3/hour | SHA-256 of the address |
+| login (IP) | 20/minute | client address |
+| login (account) | 10/minute | SHA-256 of the identifier |
+| registration (IP) | 10/minute | client address |
+| OTP verification (IP) | 10/minute | client address |
+
+Every rate is overridable through `THROTTLE_*` in `.env.example`. The per-account login guard exists so a
+shared address cannot be used to spray one account, without one class throttling its neighbours.
+
+### 4. The page itself
+
+* A **signed-in account panel** replaces the sign-in forms: name, email, continue, change password, sign
+  out. Change-password posts to the API, then signs in again with the new password (the API blacklists
+  every refresh token on rotation, so the old one would otherwise strand the tab).
+* **Resend cooldown**: 60 s countdown on the button, longer if the throttled response quotes a wait.
+* Demo sessions are labelled as such, and change-password is hidden for them — a local token cannot
+  change a server password.
+* Successful sign-in shows the panel before redirecting, so a slow redirect never shows a stale form.
+* Service worker cache bumped to `studyspace-v7`, so a tab that already has the old shell picks up the
+  new account page on its next load.
+
+### 5. A dev server where the real thing runs
+
+`tools/serve.py` (standard library only) serves `frontend/` and proxies `/api/*` to Django, so the same
+relative `/api` base used in production works locally with no CORS and no build step:
+
+```bash
+python manage.py runserver 127.0.0.1:8000      # backend
+python3 tools/serve.py --port 8080             # site + proxy
+```
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Django suite (`accounts` + `courses`) | **146 tests, OK** (was 139) |
+| New tests | route aliases + guards, per-IP reset, per-email reset, resend budget, per-identifier login |
+| Live end-to-end through `tools/serve.py` | **18/18** checks: register → sign in → `/auth/me/` → change password → re-login, old password rejected |
+| Live reset flow (console e-mail backend) | code delivered, verify `200`, replay `400`, new password `200`, old `400` |
+| jsdom interaction suite | **64/64** (includes the 501-preview regression) |
+| Headless render · structural a11y | 9/9 · 9/9 pages clean |
+| CSS classes · custom properties | 332 used / 0 missing · 0 undefined |
+| HTTP through the proxy (pages, assets, API) | 28/28 + `/api/auth/me/` 401 without a token |
+| `check --deploy` (production env) · `makemigrations --check` | 0 issues · no changes |
+
+The preview runs the site through `tools/serve.py` against a local Django instance, so accounts created in
+the preview are real accounts in that sandbox database. They are not deployed users: the sandbox database
+is disposable and no production host is configured.
