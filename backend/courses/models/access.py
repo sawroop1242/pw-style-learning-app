@@ -1,12 +1,18 @@
 import hashlib
+import hmac
 import secrets
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
 from .catalog import Course
 from .common import TimeStampedModel
+
+# Domain separation string, so the same SECRET_KEY used for other purposes
+# cannot produce a colliding code hash.
+_CODE_HASH_CONTEXT = b"studyspace:access-code:v2:"
 
 
 def generate_access_code():
@@ -15,13 +21,48 @@ def generate_access_code():
     return "".join(secrets.choice(alphabet) for _ in range(12))
 
 
+def _normalise(code):
+    return (code or "").strip().upper()
+
+
 def hash_access_code(code):
-    """Keyed hash so database contents alone cannot be used to redeem codes
-    or mount offline comparisons across deployments."""
+    """Keyed (HMAC-SHA256) hash of an access code.
+
+    A plain ``sha256(secret + code)`` construction is vulnerable to length
+    extension and leaks the secret's prefix relationship, so the keyed MAC is
+    used instead. The ``v2$`` prefix lets legacy ``sha256$`` rows keep
+    verifying while new codes use the stronger construction.
+    """
+    digest = hmac.new(
+        settings.SECRET_KEY.encode(), _CODE_HASH_CONTEXT + _normalise(code).encode(), hashlib.sha256
+    ).hexdigest()
+    return f"v2${digest}"
+
+
+def legacy_hash_access_code(code):
+    """The pre-hardening construction. Verification only; never issued."""
     digest = hashlib.sha256(
-        (settings.SECRET_KEY + ":access-code:" + code.strip().upper()).encode()
+        (settings.SECRET_KEY + ":access-code:" + _normalise(code)).encode()
     ).hexdigest()
     return f"sha256${digest}"
+
+
+def verify_access_code(code, stored_hash):
+    """Constant-time check that ``code`` matches ``stored_hash``.
+
+    Supports both the current ``v2$`` MAC and the legacy ``sha256$`` value so
+    codes already issued before the upgrade keep working. Returns a tuple of
+    ``(matches, needs_upgrade)``.
+    """
+    if not stored_hash:
+        return False, False
+    if stored_hash.startswith("v2$"):
+        return hmac.compare_digest(stored_hash, hash_access_code(code)), False
+    if stored_hash.startswith("sha256$"):
+        candidate = legacy_hash_access_code(code)
+        if hmac.compare_digest(stored_hash, candidate):
+            return True, True
+    return False, False
 
 
 class AccessCode(TimeStampedModel):
@@ -66,10 +107,25 @@ class AccessCode(TimeStampedModel):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["course", "code_hash"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(max_uses__gte=1),
+                name="access_code_max_uses_at_least_one",
+            )
+        ]
 
     @classmethod
     def hash_code(cls, raw_code):
         return hash_access_code(raw_code)
+
+    def clean(self):
+        errors = {}
+        if not self.max_uses or self.max_uses < 1:
+            errors["max_uses"] = "A code must be usable at least once."
+        if self.uses_count is not None and self.max_uses and self.uses_count > self.max_uses:
+            errors["uses_count"] = "Uses cannot exceed the maximum number of uses."
+        if errors:
+            raise ValidationError(errors)
 
     @property
     def status(self):

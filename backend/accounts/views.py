@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from rest_framework import status, permissions, viewsets
 from rest_framework.decorators import action
@@ -46,32 +47,35 @@ class OTPThrottle(AnonRateThrottle):
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
-    """Login endpoint accepting username or email."""
+    """Login endpoint accepting username or email.
+
+    The serializer runs exactly once: the previous implementation validated a
+    second time just to read the user back, which doubled the password hashing
+    cost on every login and made brute-force attempts cheaper to hide.
+    """
 
     serializer_class = CustomTokenObtainPairSerializer
+    permission_classes = [permissions.AllowAny]
     throttle_classes = [LoginThrottle]
 
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        if response.status_code == 200:
-            # Get user from serializer
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            user = serializer.user
-            if user:
-                AuditEvent.objects.create(
-                    actor=user,
-                    action="user_login",
-                    target_type="user",
-                    target_id=str(user.id),
-                    outcome="success",
-                )
-        return response
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.user
+        AuditEvent.objects.create(
+            actor=user,
+            action="user_login",
+            target_type="user",
+            target_id=str(user.id),
+            outcome="success",
+        )
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 
 class CustomTokenRefreshView(TokenRefreshView):
     """Token refresh endpoint."""
 
+    permission_classes = [permissions.AllowAny]
     throttle_classes = [AnonRateThrottle]
 
 
@@ -269,6 +273,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         return Response(response_data)
 
     @action(detail=False, methods=["post"], throttle_classes=[OTPThrottle])
+    @transaction.atomic
     def verify_otp(self, request):
         """Verify OTP and reset password atomically."""
         serializer = VerifyOTPSerializer(data=request.data)
@@ -287,9 +292,10 @@ class AuthViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Find active OTP
+        # Find and lock the active OTP so two concurrent requests cannot both
+        # consume the same code or race past the attempt limit.
         try:
-            otp_record = PasswordResetOTP.objects.get(
+            otp_record = PasswordResetOTP.objects.select_for_update().get(
                 user=user,
                 purpose=PasswordResetOTP.Purpose.PASSWORD_RESET,
                 consumed_at__isnull=True,
@@ -338,11 +344,13 @@ class AuthViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Verify OTP (constant-time comparison)
+        # Verify OTP (constant-time comparison). The row is locked above, so
+        # this counter cannot be raced past max_attempts.
         otp_hash = self._hash_otp(otp)
         if not hmac.compare_digest(otp_record.otp_hash, otp_hash):
-            otp_record.attempts_used += 1
+            otp_record.attempts_used = F("attempts_used") + 1
             otp_record.save(update_fields=["attempts_used"])
+            otp_record.refresh_from_db(fields=["attempts_used"])
 
             AuditEvent.objects.create(
                 actor=user,

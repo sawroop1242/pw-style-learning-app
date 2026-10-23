@@ -152,7 +152,9 @@ class AccessCodeAdminTests(AdminTestDataMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         code = AccessCode.objects.filter(course=self.own_course).first()
         self.assertIsNotNone(code)
-        self.assertTrue(code.code_hash.startswith("sha256$"))
+        # Codes are now stored as a keyed HMAC; the legacy prefix is only
+        # accepted for verification of already-issued codes.
+        self.assertTrue(code.code_hash.startswith("v2$"))
         messages = [str(m) for m in response.context["messages"]]
         raw_codes = [m for m in messages if "will not be shown again" in m]
         self.assertEqual(len(raw_codes), 1)

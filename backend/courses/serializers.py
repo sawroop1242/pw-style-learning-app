@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.contenttypes.models import ContentType
+from . import grading, policy
 from .models import (
     Course, CourseFolder, Lesson, PdfResource, Quiz, Question, Choice, Note, Progress,
     QuizAttempt, AttemptAnswer, Bookmark, RevisionItem, StudyTask
@@ -29,14 +30,34 @@ def validate_video_url(value):
     return value
 
 
+def _request_user(serializer):
+    request = serializer.context.get("request")
+    return getattr(request, "user", None)
+
+
 class PdfResourceSerializer(serializers.ModelSerializer):
+    """PDF metadata. ``file_url`` is withheld unless the caller may read the
+    course, so a protected chapter cannot be fetched from a public payload."""
+
+    file_url = serializers.SerializerMethodField()
+    is_locked = serializers.SerializerMethodField()
+
     class Meta:
         model = PdfResource
         fields = [
             "id", "folder", "title", "description", "file_url", "position",
-            "is_published", "is_protected"
+            "is_published", "is_protected", "is_locked"
         ]
         read_only_fields = ["id"]
+
+    def get_file_url(self, obj):
+        course = getattr(obj.folder, "course", None)
+        if obj.is_protected and not policy.can_read_media(_request_user(self), course):
+            return None
+        return obj.file_url
+
+    def get_is_locked(self, obj):
+        return self.get_file_url(obj) is None
 
 
 class CourseFolderSerializer(serializers.ModelSerializer):
@@ -58,13 +79,64 @@ class CourseFolderSerializer(serializers.ModelSerializer):
 
 
 class LessonSerializer(serializers.ModelSerializer):
-    video_url = serializers.URLField(validators=[validate_video_url])
+    """Public lesson payload. ``video_url`` is only returned to learners who
+    may consume the course; titles stay visible for curriculum previews."""
+
+    video_url = serializers.SerializerMethodField()
+    is_locked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Lesson
+        fields = [
+            "id", "course", "folder", "title", "description", "video_url",
+            "duration_minutes", "position", "is_published", "is_locked"
+        ]
+        read_only_fields = fields
+
+    def get_video_url(self, obj):
+        if not policy.can_read_media(_request_user(self), obj.course):
+            return None
+        return obj.video_url
+
+    def get_is_locked(self, obj):
+        return bool(obj.video_url) and self.get_video_url(obj) is None
+
+
+class StaffLessonSerializer(serializers.ModelSerializer):
+    """Write serializer for staff; ``video_url`` is optional and validated."""
+
+    video_url = serializers.URLField(
+        required=False, allow_blank=True, validators=[validate_video_url]
+    )
 
     class Meta:
         model = Lesson
         fields = [
             "id", "course", "folder", "title", "description", "video_url",
             "duration_minutes", "position", "is_published"
+        ]
+        read_only_fields = ["id"]
+
+    def validate(self, attrs):
+        course = attrs.get("course") or getattr(self.instance, "course", None)
+        folder = attrs.get("folder") or getattr(self.instance, "folder", None)
+        if folder is not None and course is not None and folder.course_id != course.id:
+            raise serializers.ValidationError(
+                {"folder": "Folder must belong to the same course as the lesson."}
+            )
+        return attrs
+
+
+class StaffPdfResourceSerializer(serializers.ModelSerializer):
+    """Write serializer for staff; the storage URL is writable here only."""
+
+    file_url = serializers.URLField()
+
+    class Meta:
+        model = PdfResource
+        fields = [
+            "id", "folder", "title", "description", "file_url", "position",
+            "is_published", "is_protected"
         ]
         read_only_fields = ["id"]
 
@@ -85,9 +157,14 @@ class CourseListSerializer(serializers.ModelSerializer):
 
 
 class CourseDetailSerializer(serializers.ModelSerializer):
-    """Full serializer for course detail with nested folders/lessons/PDFs."""
+    """Full serializer for course detail with nested folders/lessons/PDFs.
+
+    ``has_access`` tells the client whether media URLs are present or locked;
+    the URLs themselves are gated by the nested serializers.
+    """
     lesson_count = serializers.IntegerField(source="lessons.count", read_only=True)
     folder_count = serializers.IntegerField(source="folders.count", read_only=True)
+    has_access = serializers.SerializerMethodField()
     folders = serializers.SerializerMethodField()
 
     class Meta:
@@ -96,8 +173,11 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             "id", "title", "slug", "description", "subject", "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
             "is_published", "lesson_count", "folder_count", "position",
-            "folders", "created_at", "updated_at"
+            "has_access", "folders", "created_at", "updated_at"
         ]
+
+    def get_has_access(self, course):
+        return policy.can_access_course(_request_user(self), course)
 
     def get_folders(self, course):
         folders = course.folders.all().prefetch_related("lessons", "pdf_resources")
@@ -123,7 +203,12 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 class QuizSerializer(serializers.ModelSerializer):
-    questions = QuestionSerializer(many=True, read_only=True)
+    """Quiz metadata. Questions and choices are only included when the caller
+    may sit the test; a paid test must not be readable from a public list."""
+
+    questions = serializers.SerializerMethodField()
+    question_count = serializers.SerializerMethodField()
+    has_access = serializers.SerializerMethodField()
 
     class Meta:
         model = Quiz
@@ -133,19 +218,40 @@ class QuizSerializer(serializers.ModelSerializer):
             "shuffle_questions", "shuffle_options", "result_release_policy",
             "marks_per_question", "negative_marks_per_wrong",
             "pass_threshold_percent", "opens_at", "closes_at",
-            "is_published", "questions", "created_at", "updated_at"
+            "is_published", "has_access", "question_count", "questions",
+            "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
+    def _question_count(self, quiz):
+        annotated = getattr(quiz, "question_total", None)
+        if annotated is not None:
+            return annotated
+        return quiz.questions.count()
+
+    def get_question_count(self, quiz):
+        return self._question_count(quiz)
+
+    def get_has_access(self, quiz):
+        return policy.can_access_quiz(_request_user(self), quiz)
+
+    def get_questions(self, quiz):
+        if not self.get_has_access(quiz):
+            return []
+        return QuestionSerializer(quiz.questions.all(), many=True, context=self.context).data
+
 
 class QuizAttemptSerializer(serializers.ModelSerializer):
+    """Read-only view of an attempt. Every field is server-owned: a client may
+    never set status, score, snapshot or release state directly."""
+
     class Meta:
         model = QuizAttempt
         fields = [
             "id", "quiz", "status", "started_at", "deadline", "submitted_at",
             "score", "max_score", "question_order", "rules_snapshot", "result_released_at"
         ]
-        read_only_fields = ["id", "started_at", "deadline", "submitted_at", "score", "max_score", "rules_snapshot", "question_order"]
+        read_only_fields = fields
 
 
 class AttemptAnswerSerializer(serializers.ModelSerializer):
@@ -209,71 +315,56 @@ class QuizResultSerializer(serializers.Serializer):
             return int((obj.submitted_at - obj.started_at).total_seconds())
         return None
 
+    def _graded(self, obj):
+        """Grade once per serialization and cache it on the instance."""
+        cached = getattr(obj, "_graded_cache", None)
+        if cached is None:
+            cached = grading.grade_attempt(obj)
+            obj._graded_cache = cached
+        return cached
+
     def get_correct_count(self, obj):
-        correct = 0
-        for ans in obj.answers.all():
-            question = ans.question
-            correct_choice_ids = set(
-                question.choices.filter(is_correct=True).values_list("id", flat=True)
-            )
-            selected = set(ans.selected_choices.values_list("id", flat=True))
-            if question.question_type == Question.QuestionType.SINGLE_CHOICE:
-                if len(selected) == 1 and selected == correct_choice_ids:
-                    correct += 1
-            elif question.question_type == Question.QuestionType.MULTIPLE_CHOICE:
-                if selected == correct_choice_ids:
-                    correct += 1
-            elif question.question_type == Question.QuestionType.TRUE_FALSE:
-                if len(selected) == 1 and selected == correct_choice_ids:
-                    correct += 1
-        return correct
+        return self._graded(obj)["correct"]
 
     def get_incorrect_count(self, obj):
-        incorrect = 0
-        for ans in obj.answers.all():
-            question = ans.question
-            correct_choice_ids = set(
-                question.choices.filter(is_correct=True).values_list("id", flat=True)
-            )
-            selected = set(ans.selected_choices.values_list("id", flat=True))
-            if not ans.answered:
-                continue
-            is_correct = False
-            if question.question_type == Question.QuestionType.SINGLE_CHOICE:
-                if len(selected) == 1 and selected == correct_choice_ids:
-                    is_correct = True
-            elif question.question_type == Question.QuestionType.MULTIPLE_CHOICE:
-                if selected == correct_choice_ids:
-                    is_correct = True
-            elif question.question_type == Question.QuestionType.TRUE_FALSE:
-                if len(selected) == 1 and selected == correct_choice_ids:
-                    is_correct = True
-            if not is_correct:
-                incorrect += 1
-        return incorrect
+        return self._graded(obj)["incorrect"]
 
     def get_unanswered_count(self, obj):
-        return obj.answers.filter(answered=False).count()
+        return self._graded(obj)["unanswered"]
 
     def get_marked_for_review_count(self, obj):
-        return obj.answers.filter(marked_for_review=True).count()
+        return self._graded(obj)["marked_for_review"]
 
     def get_answers_detail(self, obj):
         # Only include if result is released
         if not obj.is_released:
             return None
-        return AttemptAnswerDetailSerializer(obj.answers.all(), many=True, context=self.context).data
+        answers = obj.answers.select_related("question").prefetch_related(
+            "selected_choices", "question__choices"
+        ).order_by("question__position", "question_id")
+        return AttemptAnswerDetailSerializer(answers, many=True, context=self.context).data
 
     def get_section_breakdown(self, obj):
-        # Placeholder for section-wise breakdown
-        return None
+        if not obj.is_released:
+            return None
+        return [
+            {
+                "section": bucket["section"],
+                "correct": bucket["correct"],
+                "incorrect": bucket["incorrect"],
+                "unanswered": bucket["unanswered"],
+                "score": str(bucket["score"]),
+                "max_score": str(bucket["max_score"]),
+            }
+            for bucket in self._graded(obj)["sections"]
+        ]
 
 
 class AttemptAnswerDetailSerializer(serializers.ModelSerializer):
     """Detailed answer with correct answer info - only for released results."""
     selected_choices = ChoiceSerializer(many=True, read_only=True)
-    correct_choices = ChoiceSerializer(many=True, read_only=True, source="question.choices.filter(is_correct=True)")
-    is_correct = serializers.BooleanField(read_only=True)
+    correct_choices = serializers.SerializerMethodField()
+    is_correct = serializers.SerializerMethodField()
     explanation = serializers.CharField(source="question.explanation", read_only=True)
 
     class Meta:
@@ -282,6 +373,13 @@ class AttemptAnswerDetailSerializer(serializers.ModelSerializer):
             "id", "question", "selected_choices", "correct_choices",
             "answered", "marked_for_review", "is_correct", "explanation"
         ]
+
+    def get_correct_choices(self, answer):
+        correct = [choice for choice in answer.question.choices.all() if choice.is_correct]
+        return ChoiceSerializer(correct, many=True).data
+
+    def get_is_correct(self, answer):
+        return grading.answer_is_correct(answer.question, grading.selected_ids(answer))
 
 
 class NoteSerializer(serializers.ModelSerializer):
@@ -301,6 +399,28 @@ class ProgressSerializer(serializers.ModelSerializer):
         model = Progress
         fields = ["id", "lesson", "lesson_title", "completed", "completed_at", "updated_at"]
         read_only_fields = ["id", "updated_at", "completed_at"]
+
+    def validate_lesson(self, lesson):
+        """A progress row may only point at a published lesson the caller can
+        actually access. Without this, a student could re-point an existing row
+        at a draft lesson and read its title back from the response."""
+        user = _request_user(self)
+        if not lesson.is_published:
+            raise serializers.ValidationError("Cannot record progress on a draft lesson.")
+        if not policy.can_access_course(user, lesson.course):
+            raise serializers.ValidationError(
+                "You do not have access to this lesson."
+            )
+        if self.instance is not None and self.instance.lesson_id != lesson.id:
+            raise serializers.ValidationError(
+                "The lesson of a progress record cannot be changed."
+            )
+        return lesson
+
+    def validate(self, attrs):
+        if self.instance is not None and "lesson" in attrs:
+            attrs.pop("lesson")
+        return attrs
 
 
 class BookmarkSerializer(serializers.ModelSerializer):

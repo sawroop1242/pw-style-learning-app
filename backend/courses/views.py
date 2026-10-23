@@ -1,29 +1,80 @@
-from rest_framework import viewsets, permissions, status, filters, serializers
-from rest_framework.decorators import api_view, action
-from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError, PermissionDenied, NotFound
+from datetime import timedelta
+
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Count
 from django.utils import timezone
+from rest_framework import filters, permissions, serializers, status, viewsets
+from rest_framework.decorators import (
+    action,
+    api_view,
+    permission_classes,
+    throttle_classes,
+)
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
+
+from accounts.models import Role
+from . import grading, policy
 from .models import (
-    Course, Lesson, Quiz, Note, Progress, CourseAccessGrant,
-    CourseFolder, PdfResource, AccessCode, Question, Choice,
-    QuizAttempt, AttemptAnswer, CsvImportJob, TestSeries,
-    Bookmark, RevisionItem, StudyTask
+    AccessCode,
+    AttemptAnswer,
+    Bookmark,
+    Choice,
+    Course,
+    CourseAccessGrant,
+    CourseFolder,
+    CsvImportJob,
+    Lesson,
+    Note,
+    PdfResource,
+    Progress,
+    Question,
+    Quiz,
+    QuizAttempt,
+    RevisionItem,
+    StudyTask,
+    TestSeries,
 )
-from .models.access import generate_access_code, hash_access_code
+from .models.access import (
+    generate_access_code,
+    hash_access_code,
+    legacy_hash_access_code,
+    verify_access_code,
+)
 from .serializers import (
-    CourseListSerializer, CourseDetailSerializer, LessonSerializer,
-    QuizSerializer, QuizAttemptSerializer, AttemptAnswerSerializer,
-    QuizSubmissionSerializer, QuizResultSerializer,
-    NoteSerializer, ProgressSerializer, BookmarkSerializer,
-    RevisionItemSerializer, StudyTaskSerializer,
-    PdfResourceSerializer, CourseFolderSerializer
+    AttemptAnswerSerializer,
+    BookmarkSerializer,
+    CourseDetailSerializer,
+    CourseFolderSerializer,
+    CourseListSerializer,
+    LessonSerializer,
+    NoteSerializer,
+    PdfResourceSerializer,
+    ProgressSerializer,
+    QuizAttemptSerializer,
+    QuizResultSerializer,
+    QuizSerializer,
+    QuizSubmissionSerializer,
+    RevisionItemSerializer,
+    StaffLessonSerializer,
+    StaffPdfResourceSerializer,
+    StudyTaskSerializer,
 )
-from accounts.models import Role, Profile
 import random
-import json
+
+
+class RedeemThrottle(UserRateThrottle):
+    """Stops automated guessing of access codes from a compromised account."""
+
+    rate = "20/hour"
+
+
+class StartAttemptThrottle(UserRateThrottle):
+    """Keeps a scripted client from opening attempts in a tight loop."""
+
+    rate = "60/hour"
 
 
 class IsSubAdminOrMainAdmin(permissions.BasePermission):
@@ -127,35 +178,46 @@ class StaffCourseFolderViewSet(viewsets.ModelViewSet):
 
 class StaffLessonViewSet(viewsets.ModelViewSet):
     """Staff CRUD for lessons - owner-scoped."""
-    
-    serializer_class = LessonSerializer
+
+    serializer_class = StaffLessonSerializer
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["position", "title", "created_at"]
     ordering = ["position", "id"]
-    
+
     def get_queryset(self):
         user = self.request.user
         profile = getattr(user, "profile", None)
         if profile and profile.role == Role.MAIN_ADMIN:
             return Lesson.objects.all().select_related("course", "folder")
         return Lesson.objects.filter(course__owner=user).select_related("course", "folder")
-    
-    def perform_create(self, serializer):
-        course_id = self.kwargs.get("course_pk") or self.request.data.get("course")
+
+    def _resolve_course(self, request):
+        course_id = self.kwargs.get("course_pk") or request.data.get("course")
+        if course_id in (None, ""):
+            raise ValidationError({"course": ["This field is required."]})
         course = get_object_or_404(Course, pk=course_id)
-        if course.owner != self.request.user:
-            profile = getattr(self.request.user, "profile", None)
-            if not (profile and profile.role == Role.MAIN_ADMIN):
-                raise PermissionDenied("You can only create lessons in your own courses.")
-        
-        # Validate folder belongs to same course
-        folder = self.request.data.get("folder")
-        if folder:
-            if folder.course_id != course.id:
-                raise ValidationError({"folder": "Folder must belong to the same course."})
-        
+        if course.owner != request.user and not policy.is_main_admin(request.user):
+            raise PermissionDenied("You can only create lessons in your own courses.")
+        return course
+
+    def perform_create(self, serializer):
+        course = self._resolve_course(self.request)
+        # ``folder`` is a primary key once validated, so compare IDs rather
+        # than attribute access on raw request data.
+        folder = serializer.validated_data.get("folder")
+        if folder is not None and folder.course_id != course.id:
+            raise ValidationError({"folder": ["Folder must belong to the same course."]})
         serializer.save(course=course)
+
+    def perform_update(self, serializer):
+        # Object-level ownership is already enforced by get_object().
+        instance = serializer.instance
+        course = serializer.validated_data.get("course", instance.course)
+        folder = serializer.validated_data.get("folder", instance.folder)
+        if folder is not None and folder.course_id != course.id:
+            raise ValidationError({"folder": ["Folder must belong to the same course."]})
+        serializer.save()
     
     @action(detail=True, methods=["post"])
     def publish(self, request, pk=None):
@@ -174,8 +236,8 @@ class StaffLessonViewSet(viewsets.ModelViewSet):
 
 class StaffPdfResourceViewSet(viewsets.ModelViewSet):
     """Staff CRUD for PDF resources - owner-scoped."""
-    
-    serializer_class = PdfResourceSerializer
+
+    serializer_class = StaffPdfResourceSerializer
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["position", "title", "created_at"]
@@ -189,12 +251,16 @@ class StaffPdfResourceViewSet(viewsets.ModelViewSet):
         return PdfResource.objects.filter(folder__course__owner=user).select_related("folder", "folder__course")
     
     def perform_create(self, serializer):
-        folder_id = self.kwargs.get("folder_pk") or self.request.data.get("folder")
-        folder = get_object_or_404(CourseFolder, pk=folder_id)
-        if folder.course.owner != self.request.user:
-            profile = getattr(self.request.user, "profile", None)
-            if not (profile and profile.role == Role.MAIN_ADMIN):
-                raise PermissionDenied("You can only add PDFs to folders in your own courses.")
+        folder = serializer.validated_data.get("folder")
+        folder_id = self.kwargs.get("folder_pk")
+        if folder_id is not None:
+            folder = get_object_or_404(CourseFolder, pk=folder_id)
+        if folder is None:
+            raise ValidationError({"folder": ["This field is required."]})
+        if folder.course.owner != self.request.user and not policy.is_main_admin(
+            self.request.user
+        ):
+            raise PermissionDenied("You can only add PDFs to folders in your own courses.")
         serializer.save(folder=folder)
     
     @action(detail=True, methods=["post"])
@@ -279,87 +345,108 @@ class StaffAccessCodeViewSet(viewsets.ModelViewSet):
 
 
 @api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+@throttle_classes([RedeemThrottle])
 def redeem_access_code(request):
-    """Student endpoint to redeem an access code for a paid course."""
+    """Redeem a paid-course access code for the authenticated student.
+
+    The code is matched by keyed hash, the row is locked for update while the
+    use counter moves, and a duplicate grant (double tap, retry after timeout)
+    resolves to the existing grant instead of a 500.
+    """
     serializer = AccessCodeRedemptionSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    
+
     code_value = serializer.validated_data["code"].strip().upper()
     course_id = serializer.validated_data["course_id"]
     user = request.user
-    
-    if not user.is_authenticated:
-        return Response(
-            {"detail": "Authentication required."},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-    
+
     course = get_object_or_404(Course, pk=course_id, is_published=True)
-    
+
     if course.pricing_mode != Course.PricingMode.PAID:
         return Response(
             {"detail": "This course does not require an access code."},
-            status=status.HTTP_400_BAD_REQUEST
+            status=status.HTTP_400_BAD_REQUEST,
         )
-    
-    # Check if user already has a grant
-    if CourseAccessGrant.objects.filter(user=user, course=course, revoked_at__isnull=True).exists():
+
+    existing_grant = CourseAccessGrant.objects.filter(
+        user=user, course=course, revoked_at__isnull=True
+    ).first()
+    if existing_grant is not None:
         return Response(
             {"detail": "You already have access to this course."},
-            status=status.HTTP_400_BAD_REQUEST
+            status=status.HTTP_400_BAD_REQUEST,
         )
-    
-    # Find matching code
-    code_hash = hash_access_code(code_value)
-    
+
+    candidate_hashes = [hash_access_code(code_value)]
+    legacy_hash = legacy_hash_access_code(code_value)
+    candidate_hashes.append(legacy_hash)
+
+    invalid = Response(
+        {"detail": "Invalid or expired access code."},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
     try:
         with transaction.atomic():
-            access_code = AccessCode.objects.select_for_update().get(
-                course=course,
-                code_hash=code_hash,
-                revoked_at__isnull=True,
+            access_code = (
+                AccessCode.objects.select_for_update()
+                .filter(course=course, code_hash__in=candidate_hashes, revoked_at__isnull=True)
+                .first()
             )
-            
-            # Check expiry
+            if access_code is None:
+                return invalid
+
+            # Re-verify in constant time; the query only narrows candidates.
+            matches, needs_upgrade = verify_access_code(code_value, access_code.code_hash)
+            if not matches:
+                return invalid
+
             if access_code.is_expired:
-                return Response(
-                    {"detail": "Invalid or expired access code."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Check uses
+                return invalid
             if access_code.uses_count >= access_code.max_uses:
-                return Response(
-                    {"detail": "Invalid or expired access code."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Redeem
+                return invalid
+
             access_code.uses_count += 1
             access_code.last_redeemed_by = user
             access_code.last_redeemed_at = timezone.now()
-            access_code.save(update_fields=["uses_count", "last_redeemed_by", "last_redeemed_at", "updated_at"])
-            
-            # Create grant
-            grant = CourseAccessGrant.objects.create(
+            update_fields = [
+                "uses_count",
+                "last_redeemed_by",
+                "last_redeemed_at",
+                "updated_at",
+            ]
+            if needs_upgrade:
+                # Transparently move legacy rows onto the keyed construction.
+                access_code.code_hash = hash_access_code(code_value)
+                update_fields.append("code_hash")
+            access_code.save(update_fields=update_fields)
+
+            grant, _created = CourseAccessGrant.objects.get_or_create(
                 user=user,
                 course=course,
-                access_code=access_code,
-                granted_by=access_code.created_by,
+                defaults={
+                    "access_code": access_code,
+                    "granted_by": access_code.created_by,
+                },
             )
-            
-            return Response({
-                "message": "Access code redeemed successfully.",
-                "course": {"id": course.id, "title": course.title},
-                "grant_id": grant.id
-            }, status=status.HTTP_201_CREATED)
-            
-    except AccessCode.DoesNotExist:
-        # Generic error to prevent enumeration
-        return Response(
-            {"detail": "Invalid or expired access code."},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    except IntegrityError:
+        # Lost a race with a concurrent redemption for the same course.
+        grant = CourseAccessGrant.objects.filter(
+            user=user, course=course, revoked_at__isnull=True
+        ).first()
+        if grant is None:
+            return invalid
+
+    return Response(
+        {
+            "message": "Access code redeemed successfully.",
+            "course": {"id": course.id, "title": course.title},
+            "grant_id": grant.id,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
 
 class CourseViewSet(viewsets.ReadOnlyModelViewSet):
     """Course catalogue with search, filter, and ordering."""
@@ -369,6 +456,7 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
         folder_count=Count("folders")
     )
     serializer_class = CourseListSerializer
+    permission_classes = [permissions.AllowAny]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "description", "subject"]
     ordering_fields = ["title", "subject", "position", "created_at", "price"]
@@ -401,15 +489,26 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class LessonViewSet(viewsets.ReadOnlyModelViewSet):
+    """Lesson listing limited to courses the caller may consume.
+
+    Only free published courses (and paid courses with an active grant) are
+    listed. Media URLs are additionally gated by the serializer, so a lesson
+    that leaks into a response still cannot leak its video URL.
+    """
+
     serializer_class = LessonSerializer
+    permission_classes = [permissions.AllowAny]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["position", "title", "created_at"]
     ordering = ["position", "id"]
-    
+
     def get_queryset(self):
-        qs = Lesson.objects.filter(is_published=True).select_related("course", "folder")
-        
-        # Filter by course if provided
+        user = self.request.user
+        qs = (
+            Lesson.objects.filter(is_published=True, course__is_published=True)
+            .select_related("course", "course__owner", "folder")
+        )
+
         course_id = self.request.query_params.get("course")
         if course_id:
             try:
@@ -417,76 +516,65 @@ class LessonViewSet(viewsets.ReadOnlyModelViewSet):
             except (ValueError, TypeError):
                 return qs.none()
             qs = qs.filter(course_id=course_id)
-        
-        # If user is authenticated, filter out paid course lessons they don't have access to
-        user = self.request.user
-        if user.is_authenticated:
-            free_course_ids = Course.objects.filter(
+
+        allowed_course_ids = set(
+            Course.objects.filter(
                 is_published=True, pricing_mode=Course.PricingMode.FREE
             ).values_list("id", flat=True)
-            
-            paid_course_ids = CourseAccessGrant.objects.filter(
-                user=user, revoked_at__isnull=True
-            ).values_list("course_id", flat=True)
-            
-            allowed_course_ids = set(free_course_ids) | set(paid_course_ids)
-            qs = qs.filter(course_id__in=allowed_course_ids)
-        else:
-            free_course_ids = Course.objects.filter(
-                is_published=True, pricing_mode=Course.PricingMode.FREE
-            ).values_list("id", flat=True)
-            qs = qs.filter(course_id__in=free_course_ids)
-            
-        return qs
-
-
-class QuizViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = QuizSerializer
-    queryset = Quiz.objects.filter(is_published=True).prefetch_related("questions__choices")
-    filter_backends = [filters.OrderingFilter]
-    ordering_fields = ["title", "created_at"]
-    ordering = ["id"]
-
-
-class NoteViewSet(viewsets.ModelViewSet):
-    serializer_class = NoteSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    filter_backends = [filters.OrderingFilter]
-    ordering_fields = ["updated_at", "created_at"]
-    ordering = ["-updated_at"]
-    
-    def get_queryset(self):
-        return Note.objects.filter(user=self.request.user)
-    
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        ) | policy.granted_course_ids(user)
+        return qs.filter(course_id__in=allowed_course_ids)
 
 
 class ProgressViewSet(viewsets.ModelViewSet):
+    """Private lesson progress.
+
+    A progress record is keyed by (user, lesson): re-posting the same lesson
+    updates the existing row instead of raising a uniqueness error, and the
+    lesson may not be swapped on update (that would expose other courses'
+    lesson titles through the response).
+    """
+
     serializer_class = ProgressSerializer
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ["get", "post", "patch", "head", "options"]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["updated_at", "lesson__position"]
     ordering = ["lesson__position", "lesson_id"]
-    
+
     def get_queryset(self):
-        return Progress.objects.filter(user=self.request.user).select_related("lesson", "lesson__course")
-    
-    def perform_create(self, serializer):
-        lesson = serializer.validated_data.get("lesson")
-        if lesson and not lesson.is_published:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"lesson": "Cannot record progress on a draft lesson."})
-        
-        try:
-            serializer.save(user=self.request.user)
-        except IntegrityError:
-            existing = Progress.objects.get(user=self.request.user, lesson=lesson)
-            if "completed" in serializer.validated_data:
-                existing.completed = serializer.validated_data["completed"]
-                existing.save(update_fields=["completed", "updated_at"])
-            serializer.instance = existing
+        return Progress.objects.filter(user=self.request.user).select_related(
+            "lesson", "lesson__course"
+        )
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        lesson = serializer.validated_data["lesson"]
+        completed = serializer.validated_data.get("completed", False)
+
+        record, created = Progress.objects.get_or_create(
+            user=request.user,
+            lesson=lesson,
+            defaults={
+                "completed": completed,
+                "completed_at": timezone.now() if completed else None,
+            },
+        )
+        if not created:
+            record.completed = completed
+            record.completed_at = timezone.now() if completed else None
+            record.save(update_fields=["completed", "completed_at", "updated_at"])
+
+        output = self.get_serializer(record)
+        return Response(
+            output.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    def perform_update(self, serializer):
+        completed = serializer.validated_data.get("completed", serializer.instance.completed)
+        serializer.save(completed_at=timezone.now() if completed else None)
 
 
 class NoteViewSet(viewsets.ModelViewSet):
@@ -570,229 +658,223 @@ class StudyTaskViewSet(viewsets.ModelViewSet):
 
 
 class QuizViewSet(viewsets.ReadOnlyModelViewSet):
-    """Public quiz listing and detail - no correct answers or explanations."""
+    """Public quiz listing and detail.
+
+    Only quizzes the caller may sit are listed. Questions are withheld by the
+    serializer unless access is granted, so a paid test's paper is never part
+    of a public payload.
+    """
+
     serializer_class = QuizSerializer
+    permission_classes = [permissions.AllowAny]
     filter_backends = [filters.OrderingFilter, filters.SearchFilter]
     search_fields = ["title", "description", "instructions"]
     ordering_fields = ["title", "created_at"]
     ordering = ["id"]
-    
+
     def get_queryset(self):
-        return Quiz.objects.filter(is_published=True).select_related("series", "course").prefetch_related(
-            "questions__choices"
+        user = self.request.user
+        qs = (
+            Quiz.objects.filter(is_published=True)
+            .select_related("series", "series__owner", "course", "course__owner")
+            .annotate(question_total=Count("questions"))
         )
+        if not policy.is_staff_role(user):
+            # Free published courses, plus paid courses the student holds a
+            # grant for. Series-only quizzes are public when the series is.
+            qs = qs.filter(
+                Q(course__is_published=True, course__pricing_mode=Course.PricingMode.FREE)
+                | Q(course_id__in=policy.granted_course_ids(user))
+                | Q(course__isnull=True, series__is_published=True)
+            )
+        return qs.prefetch_related("questions__choices")
 
 
-class QuizAttemptViewSet(viewsets.ModelViewSet):
-    """Quiz attempt management - start, submit, autosave, results."""
+class QuizAttemptViewSet(viewsets.GenericViewSet, viewsets.mixins.ListModelMixin,
+                          viewsets.mixins.RetrieveModelMixin):
+    """Student attempt history plus the submit / autosave / result actions.
+
+    Attempts are server-owned: this view exposes no create, update or destroy
+    route, so a client can never set its own status, score, question order or
+    release time. Starting an attempt is a separate, quota-checked endpoint.
+    """
+
     serializer_class = QuizAttemptSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["started_at", "status"]
     ordering = ["-started_at"]
-    
+
     def get_queryset(self):
         return QuizAttempt.objects.filter(user=self.request.user).select_related("quiz")
-    
+
     def get_serializer_class(self):
         if self.action == "submit":
             return QuizSubmissionSerializer
-        if self.action in ["retrieve", "result"]:
+        if self.action in ("retrieve", "result"):
             return QuizResultSerializer
         return QuizAttemptSerializer
-    
+
+    @staticmethod
+    def _release_if_due(attempt):
+        """Honour AFTER_CLOSE releases at read time, without a cron job."""
+        if attempt.result_released_at is not None:
+            return False
+        quiz = attempt.quiz
+        if (
+            quiz.result_release_policy == Quiz.ResultReleasePolicy.AFTER_CLOSE
+            and attempt.status == QuizAttempt.Status.SUBMITTED
+            and quiz.closes_at is not None
+            and timezone.now() >= quiz.closes_at
+        ):
+            attempt.result_released_at = timezone.now()
+            attempt.save(update_fields=["result_released_at", "updated_at"])
+            return True
+        return False
+
+    def _persist_answers(self, attempt, answers_data):
+        """Write the submitted answers, then grade from the database.
+
+        Grading never trusts the payload: an autosaved answer that is absent
+        from the final submit still counts, and the denominator covers every
+        question in the attempt snapshot.
+        """
+        question_ids = set(attempt.question_order or [])
+        questions = {
+            question.id: question
+            for question in Question.objects.filter(
+                id__in=question_ids, quiz=attempt.quiz
+            ).prefetch_related("choices")
+        }
+
+        for entry in answers_data:
+            question_id = entry.get("question_id")
+            if question_id not in questions:
+                continue
+            question = questions[question_id]
+            raw_choices = entry.get("choice_ids") or []
+            if not isinstance(raw_choices, (list, tuple)):
+                raise ValidationError({"choice_ids": ["Expected a list of choice IDs."]})
+            try:
+                choice_ids = {int(choice_id) for choice_id in raw_choices}
+            except (TypeError, ValueError):
+                raise ValidationError({"choice_ids": ["Choice IDs must be integers."]})
+
+            valid_ids = {choice.id for choice in question.choices.all()}
+            invalid = sorted(choice_ids - valid_ids)
+            if invalid:
+                raise ValidationError(
+                    {"choice_ids": [f"Invalid choice IDs: {invalid}"]}
+                )
+
+            answer, _created = AttemptAnswer.objects.get_or_create(
+                attempt=attempt, question=question
+            )
+            answer.answered = bool(choice_ids)
+            answer.marked_for_review = bool(entry.get("marked_for_review", False))
+            answer.save(update_fields=["answered", "marked_for_review", "updated_at"])
+            answer.selected_choices.set(choice_ids)
+
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
-        """Submit quiz answers and calculate score."""
+        """Submit the attempt and score it server-side."""
         attempt = self.get_object()
-        
+
         if attempt.status != QuizAttempt.Status.IN_PROGRESS:
             raise ValidationError("This attempt has already been submitted or expired.")
-        
-        # Check deadline
-        if attempt.deadline and timezone.now() > attempt.deadline:
-            # Auto-expire
-            attempt.status = QuizAttempt.Status.EXPIRED
-            attempt.submitted_at = timezone.now()
-            attempt.save(update_fields=["status", "submitted_at", "updated_at"])
-            raise ValidationError("Time limit exceeded. Attempt auto-submitted.")
-        
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
-        answers_data = serializer.validated_data["answers"]
-        
+
+        now = timezone.now()
+        expired = attempt.deadline is not None and now > attempt.deadline
+
         with transaction.atomic():
-            # Calculate score
-            score, max_score = self._calculate_score(attempt, answers_data)
-            
-            # Save answers to AttemptAnswer records
-            for ans_data in answers_data:
-                question_id = ans_data.get("question_id")
-                choice_ids = ans_data.get("choice_ids", [])
-                marked_for_review = ans_data.get("marked_for_review", False)
-                
-                if not question_id:
-                    continue
-                
-                try:
-                    question = Question.objects.get(id=question_id, quiz=attempt.quiz)
-                except Question.DoesNotExist:
-                    continue
-                
-                # Validate choices belong to question
-                if choice_ids:
-                    valid_choice_ids = set(question.choices.values_list("id", flat=True))
-                    invalid = [cid for cid in choice_ids if cid not in valid_choice_ids]
-                    if invalid:
-                        raise ValidationError({"choice_ids": f"Invalid choice IDs: {invalid}"})
-                
-                # Upsert answer
-                answer, created = AttemptAnswer.objects.get_or_create(
-                    attempt=attempt,
-                    question=question,
-                    defaults={"answered": bool(choice_ids), "marked_for_review": marked_for_review}
-                )
-                
-                if not created:
-                    answer.marked_for_review = marked_for_review
-                
-                answer.answered = bool(choice_ids)
-                answer.save(update_fields=["answered", "marked_for_review", "updated_at"])
-                
-                # Update many-to-many
-                answer.selected_choices.set(choice_ids)
-            
-            # Update attempt
-            attempt.status = QuizAttempt.Status.SUBMITTED
-            attempt.submitted_at = timezone.now()
-            attempt.score = score
-            attempt.max_score = max_score
-            attempt.save(update_fields=["status", "submitted_at", "score", "max_score", "updated_at"])
-            
-            # Release result immediately if policy allows
-            quiz = attempt.quiz
-            if quiz.result_release_policy == Quiz.ResultReleasePolicy.IMMEDIATE:
-                attempt.result_released_at = timezone.now()
-                attempt.save(update_fields=["result_released_at", "updated_at"])
-        
-        return Response(QuizResultSerializer(attempt, context={"request": request}).data)
-    
+            # Lock the row so a double submit cannot score twice.
+            attempt = QuizAttempt.objects.select_for_update().get(pk=attempt.pk)
+            if attempt.status != QuizAttempt.Status.IN_PROGRESS:
+                raise ValidationError("This attempt has already been submitted or expired.")
+
+            if not expired:
+                self._persist_answers(attempt, serializer.validated_data["answers"])
+
+            result = grading.grade_attempt(attempt)
+            attempt.status = (
+                QuizAttempt.Status.EXPIRED if expired else QuizAttempt.Status.SUBMITTED
+            )
+            attempt.submitted_at = now
+            attempt.score = result["score"]
+            attempt.max_score = result["max_score"]
+            update_fields = [
+                "status", "submitted_at", "score", "max_score", "updated_at",
+            ]
+            if attempt.quiz.result_release_policy == Quiz.ResultReleasePolicy.IMMEDIATE:
+                attempt.result_released_at = now
+                update_fields.append("result_released_at")
+            attempt.save(update_fields=update_fields)
+
+        response = QuizResultSerializer(attempt, context={"request": request}).data
+        return Response(response)
+
     @action(detail=True, methods=["get"])
     def result(self, request, pk=None):
-        """Get quiz result (respects release policy)."""
+        """Result payload, subject to the quiz's release policy."""
         attempt = self.get_object()
-        
+        self._release_if_due(attempt)
+
         if not attempt.is_released:
             return Response(
                 {"detail": "Results not yet released.", "status": attempt.status},
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
-        
         return Response(QuizResultSerializer(attempt, context={"request": request}).data)
-    
+
     @action(detail=True, methods=["post"])
     def autosave(self, request, pk=None):
-        """Autosave answer for a question."""
+        """Persist a single answer without scoring it."""
         attempt = self.get_object()
-        
+
         if attempt.status != QuizAttempt.Status.IN_PROGRESS:
             raise ValidationError("Cannot autosave on a submitted or expired attempt.")
-        
+        if attempt.deadline is not None and timezone.now() > attempt.deadline:
+            raise ValidationError("Time limit exceeded; the attempt is closed.")
+
         question_id = request.data.get("question_id")
-        choice_ids = request.data.get("choice_ids", [])
-        marked_for_review = request.data.get("marked_for_review", False)
-        
         if not question_id:
-            raise ValidationError({"question_id": "Required."})
-        
-        question = get_object_or_404(Question, pk=question_id, quiz=attempt.quiz)
-        
-        # Validate choices belong to question
-        if choice_ids:
-            valid_choice_ids = set(question.choices.values_list("id", flat=True))
-            invalid = [cid for cid in choice_ids if cid not in valid_choice_ids]
-            if invalid:
-                raise ValidationError({"choice_ids": f"Invalid choice IDs: {invalid}"})
-        
-        # Upsert answer
-        answer, created = AttemptAnswer.objects.get_or_create(
-            attempt=attempt,
-            question=question,
-            defaults={"answered": True, "marked_for_review": marked_for_review}
+            raise ValidationError({"question_id": ["Required."]})
+        try:
+            question_id = int(question_id)
+        except (TypeError, ValueError):
+            raise ValidationError({"question_id": ["Must be an integer."]})
+
+        question = get_object_or_404(
+            Question, pk=question_id, quiz=attempt.quiz
         )
-        
-        if not created:
-            answer.marked_for_review = marked_for_review
-        
+        if question_id not in set(attempt.question_order or []):
+            raise ValidationError({"question_id": ["Not part of this attempt."]})
+
+        raw_choices = request.data.get("choice_ids") or []
+        if not isinstance(raw_choices, (list, tuple)):
+            raise ValidationError({"choice_ids": ["Expected a list of choice IDs."]})
+        try:
+            choice_ids = {int(choice_id) for choice_id in raw_choices}
+        except (TypeError, ValueError):
+            raise ValidationError({"choice_ids": ["Choice IDs must be integers."]})
+
+        valid_ids = set(question.choices.values_list("id", flat=True))
+        invalid = sorted(choice_ids - valid_ids)
+        if invalid:
+            raise ValidationError({"choice_ids": [f"Invalid choice IDs: {invalid}"]})
+
+        answer, _created = AttemptAnswer.objects.get_or_create(
+            attempt=attempt, question=question
+        )
         answer.answered = bool(choice_ids)
+        answer.marked_for_review = bool(request.data.get("marked_for_review", False))
         answer.save(update_fields=["answered", "marked_for_review", "updated_at"])
-        
-        # Update many-to-many
         answer.selected_choices.set(choice_ids)
-        
+
         return Response({"status": "saved", "answered": answer.answered})
-    
-    def _calculate_score(self, attempt, answers_data):
-        """Calculate score from submitted answers."""
-        quiz = attempt.quiz
-        score = 0
-        max_score = 0
-        
-        # Get questions from attempt's question_order (snapshot)
-        question_ids = attempt.question_order
-        questions = {q.id: q for q in Question.objects.filter(id__in=question_ids)}
-        
-        for ans in answers_data:
-            question_id = ans.get("question_id")
-            choice_ids = set(ans.get("choice_ids", []))
-            
-            if question_id not in questions:
-                continue
-            
-            question = questions[question_id]
-            q_marks = question.marks or quiz.marks_per_question
-            q_neg_marks = question.negative_marks if question.negative_marks is not None else quiz.negative_marks_per_wrong
-            max_score += q_marks
-            
-            # Get correct choices
-            correct_choice_ids = set(
-                question.choices.filter(is_correct=True).values_list("id", flat=True)
-            )
-            
-            # Check if answered
-            if not choice_ids:
-                # Unanswered - no marks, no penalty
-                continue
-            
-            # Check correctness based on question type
-            if question.question_type == Question.QuestionType.SINGLE_CHOICE:
-                if len(choice_ids) == 1 and choice_ids == correct_choice_ids:
-                    score += q_marks
-                elif len(choice_ids) == 1:
-                    # Wrong single choice
-                    score -= q_neg_marks
-            elif question.question_type == Question.QuestionType.MULTIPLE_CHOICE:
-                if choice_ids == correct_choice_ids:
-                    # Full correct
-                    score += q_marks
-                elif choice_ids & correct_choice_ids:
-                    # Partial credit - only if explicitly configured
-                    # For now, treat partial as incorrect
-                    score -= q_neg_marks
-                else:
-                    # Completely wrong
-                    score -= q_neg_marks
-            elif question.question_type == Question.QuestionType.TRUE_FALSE:
-                if len(choice_ids) == 1 and choice_ids == correct_choice_ids:
-                    score += q_marks
-                elif len(choice_ids) == 1:
-                    score -= q_neg_marks
-        
-        # Score cannot go below zero
-        score = max(score, 0)
-        
-        return score, max_score
 
 
 class StaffQuizViewSet(viewsets.ModelViewSet):
@@ -994,49 +1076,61 @@ class StaffTestSeriesViewSet(viewsets.ModelViewSet):
 
 
 @api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+@throttle_classes([StartAttemptThrottle])
 def start_quiz_attempt(request):
-    """Start a new quiz attempt."""
+    """Start (or resume) an attempt for an accessible, published quiz.
+
+    Resuming is the default: a learner with an open attempt gets that attempt
+    back rather than a second one, so a refresh never burns an attempt.
+    """
     quiz_id = request.data.get("quiz_id")
     if not quiz_id:
-        return Response({"quiz_id": "Required."}, status=status.HTTP_400_BAD_REQUEST)
-    
-    quiz = get_object_or_404(Quiz, pk=quiz_id, is_published=True)
-    
-    # Check attempt limit
-    if quiz.attempt_limit:
-        attempt_count = QuizAttempt.objects.filter(user=request.user, quiz=quiz).count()
-        if attempt_count >= quiz.attempt_limit:
-            return Response(
-                {"detail": f"Attempt limit ({quiz.attempt_limit}) reached."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-    
-    # Check availability window
+        return Response({"quiz_id": ["Required."]}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        quiz_id = int(quiz_id)
+    except (TypeError, ValueError):
+        return Response({"quiz_id": ["Must be an integer."]}, status=status.HTTP_400_BAD_REQUEST)
+
+    quiz = get_object_or_404(Quiz.objects.select_related("course", "series"), pk=quiz_id)
+
+    if not policy.can_access_quiz(request.user, quiz):
+        return Response(
+            {"detail": "You do not have access to this test."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     now = timezone.now()
     if quiz.opens_at and now < quiz.opens_at:
-        return Response({"detail": "Quiz not yet open."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": "Test is not open yet."}, status=status.HTTP_400_BAD_REQUEST)
     if quiz.closes_at and now > quiz.closes_at:
-        return Response({"detail": "Quiz has closed."}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Check if there's an in-progress attempt to resume
-    in_progress = QuizAttempt.objects.filter(
-        user=request.user, quiz=quiz, status=QuizAttempt.Status.IN_PROGRESS
-    ).first()
-    
-    if in_progress:
-        # Resume existing attempt
-        return Response(QuizAttemptSerializer(in_progress, context={"request": request}).data)
-    
-    # Create new attempt
+        return Response({"detail": "Test has closed."}, status=status.HTTP_400_BAD_REQUEST)
+
     with transaction.atomic():
-        # Get question order (with optional shuffling)
-        questions = list(quiz.questions.all().order_by("position"))
-        question_ids = [q.id for q in questions]
-        
+        # Serialise concurrent starts for this learner+quiz pair.
+        in_progress = (
+            QuizAttempt.objects.select_for_update()
+            .filter(user=request.user, quiz=quiz, status=QuizAttempt.Status.IN_PROGRESS)
+            .first()
+        )
+        if in_progress is not None:
+            return Response(
+                QuizAttemptSerializer(in_progress, context={"request": request}).data
+            )
+
+        if quiz.attempt_limit is not None:
+            used = QuizAttempt.objects.filter(user=request.user, quiz=quiz).count()
+            if used >= quiz.attempt_limit:
+                return Response(
+                    {"detail": f"Attempt limit ({quiz.attempt_limit}) reached."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        questions = list(quiz.questions.all().order_by("position", "id"))
+        question_ids = [question.id for question in questions]
         if quiz.shuffle_questions:
             random.shuffle(question_ids)
-        
-        # Snapshot rules
+
         rules_snapshot = {
             "timing_mode": quiz.timing_mode,
             "duration_minutes": quiz.duration_minutes,
@@ -1045,13 +1139,14 @@ def start_quiz_attempt(request):
             "shuffle_options": quiz.shuffle_options,
             "result_release_policy": quiz.result_release_policy,
         }
-        
-        # Calculate deadline
+
         deadline = None
-        if quiz.timing_mode in [Quiz.TimingMode.TIMED, Quiz.TimingMode.TOTAL_AND_SECTION]:
-            if quiz.duration_minutes:
-                deadline = now + timezone.timedelta(minutes=quiz.duration_minutes)
-        
+        if (
+            quiz.timing_mode in (Quiz.TimingMode.TIMED, Quiz.TimingMode.TOTAL_AND_SECTION)
+            and quiz.duration_minutes
+        ):
+            deadline = now + timedelta(minutes=quiz.duration_minutes)
+
         attempt = QuizAttempt.objects.create(
             user=request.user,
             quiz=quiz,
@@ -1059,15 +1154,16 @@ def start_quiz_attempt(request):
             question_order=question_ids,
             rules_snapshot=rules_snapshot,
         )
-        
-        # Pre-create answer records for all questions
-        for q in questions:
-            AttemptAnswer.objects.create(attempt=attempt, question=q)
-    
-    return Response(QuizAttemptSerializer(attempt, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        grading.ensure_answer_rows(attempt, questions)
+
+    return Response(
+        QuizAttemptSerializer(attempt, context={"request": request}).data,
+        status=status.HTTP_201_CREATED,
+    )
 
 
 @api_view(["GET"])
+@permission_classes([permissions.AllowAny])
 def api_root(request):
     return Response({
         "name": "StudySpace API", 
