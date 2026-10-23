@@ -25,7 +25,7 @@ function renderGreeting() {
   }
 
   const stats = DASHBOARD.stats;
-  $('#dash-stats').innerHTML = [
+  $('#dash-figures').innerHTML = [
     ['Courses', stats.courses],
     ['Lessons', stats.lessonsDone],
     ['Tests', stats.testsTaken],
@@ -33,7 +33,7 @@ function renderGreeting() {
   ]
     .map(
       ([label, value]) => `
-      <div class="dash-stat">
+      <div class="dash-figure">
         <strong>${value}</strong>
         <span>${label}</span>
       </div>`
@@ -179,12 +179,12 @@ async function renderNotes() {
   host.innerHTML = rows
     .map(
       (note) => `
-      <article class="card card-pad" style="display:grid;gap:6px">
+      <article class="note-preview">
         <div class="row-between">
-          <strong style="font-size:13px">${esc(note.title || 'Untitled note')}</strong>
+          <h3>${esc(note.title || 'Untitled note')}</h3>
           <span class="tiny subtle">${esc(note.at || 'Just now')}</span>
         </div>
-        <p class="small muted" style="margin:0;line-height:1.65">${esc(note.body || '')}</p>
+        <p>${esc(note.body || '')}</p>
       </article>`
     )
     .join('');
@@ -227,12 +227,12 @@ function wireNoteModal() {
 
     $('#notes-list').insertAdjacentHTML(
       'afterbegin',
-      `<article class="card card-pad" style="display:grid;gap:6px">
+      `<article class="note-preview">
          <div class="row-between">
-           <strong style="font-size:13px">${esc(title)}</strong>
+           <h3>${esc(title)}</h3>
            <span class="tiny subtle">Just now</span>
          </div>
-         <p class="small muted" style="margin:0;line-height:1.65">${esc(body)}</p>
+         <p>${esc(body)}</p>
        </article>`
     );
     e.currentTarget.reset();

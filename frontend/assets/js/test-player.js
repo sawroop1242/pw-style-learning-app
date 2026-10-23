@@ -1,330 +1,373 @@
 /**
- * Exam interface.
+ * Printed-style question paper.
  *
- * Full attempt lifecycle: question palette, per-question state machine,
- * countdown, autosave, submit confirmation, server-style scoring and a
- * solution review. Everything is computed locally from the bundled paper so
- * the static preview behaves exactly like the product, with the same status
- * vocabulary the API uses.
+ * The paper renders in full, like a textbook exercise: numbered questions,
+ * marks in the margin, options as A/B/C/D rows. State is held per question and
+ * persisted to sessionStorage so a refresh does not lose an attempt.
  */
 
-import { $, $$, esc, mmss, qsParam, clamp } from './core.js';
+import { $, $$, esc, mmss, qsParam, clamp, storage } from './core.js';
 import { mountSprite, icon, toast } from './ui.js';
-import { EXAM_QUESTIONS } from './data.js';
+import { EXAM_QUESTIONS, TESTS } from './data.js';
 
 mountSprite();
 
-const DURATION_SECONDS = Number(qsParam('duration') || 180) * 60;
-const PAPER = EXAM_QUESTIONS;
-const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
-/** not_visited → not_answered → answered, with an independent `marked` flag. */
-const answerState = new Map(
-  PAPER.map((q) => [q.id, { selected: null, visited: false, marked: false, seconds: 0 }])
+/* A card links here as ?test=<id>&duration=<minutes>; both are optional so the
+   page still works when opened directly. */
+const CHOSEN = TESTS.find((t) => String(t.id) === qsParam('test')) || null;
+const ALLOWED_MINUTES = clamp(Number(qsParam('duration')) || CHOSEN?.duration || 180, 1, 240);
+const DURATION_SECONDS = ALLOWED_MINUTES * 60;
+
+const PAPER = EXAM_QUESTIONS.map((q, i) => ({ ...q, no: i + 1 }));
+const SECTIONS = [...new Set(PAPER.map((q) => q.section))];
+
+/* Group by section and renumber, so a paper never shows questions out of
+   order when the API returns sections interleaved. */
+{
+  const ordered = SECTIONS.flatMap((section) => PAPER.filter((q) => q.section === section));
+  PAPER.length = 0;
+  PAPER.push(...ordered);
+  PAPER.forEach((q, i) => { q.no = i + 1; });
+}
+
+const MAX_MARKS = PAPER.reduce((sum, q) => sum + Number(q.marks || 0), 0);
+
+const SAVE_KEY = 'studyspace.attempt.preview';
+
+/** questionId → { selected: number|null, marked: boolean, seconds: number } */
+const state = new Map(
+  PAPER.map((q) => [q.id, { selected: null, marked: false, seconds: 0 }])
 );
 
 const app = {
-  index: 0,
   remaining: DURATION_SECONDS,
-  ticker: null,
   startedAt: Date.now(),
-  submitted: false
+  submitted: false,
+  current: 0
 };
+
+/* ------------------------------------------------------------------ */
+/* Restore a previous attempt                                         */
+/* ------------------------------------------------------------------ */
+
+function restore() {
+  const raw = storage.attempt;
+  if (!raw || raw.duration !== DURATION_SECONDS) return;
+  try {
+    const saved = JSON.parse(raw);
+    if (saved?.answers) {
+      for (const [id, value] of Object.entries(saved.answers)) {
+        const target = state.get(Number(id));
+        if (target && value?.selected !== undefined) {
+          target.selected = value.selected;
+          target.marked = Boolean(value.marked);
+        }
+      }
+      if (saved.startedAt) app.startedAt = Number(saved.startedAt);
+      toast('Restored the attempt you had in progress.', 'info');
+    }
+  } catch {
+    /* a corrupt entry is simply ignored */
+  }
+}
+
+function persist() {
+  if (app.submitted) return;
+  const answers = {};
+  for (const [id, value] of state) {
+    if (value.selected !== null || value.marked) answers[id] = value;
+  }
+  storage.attempt = JSON.stringify({ duration: DURATION_SECONDS, startedAt: app.startedAt, answers });
+}
+
+/* ------------------------------------------------------------------ */
+/* Render the paper                                                   */
+/* ------------------------------------------------------------------ */
+
+function renderPaper() {
+  const body = $('#paper-body');
+
+  body.innerHTML = SECTIONS.map((section) => {
+    const questions = PAPER.filter((q) => q.section === section);
+    const marks = questions.reduce((sum, q) => sum + Number(q.marks || 0), 0);
+
+    return `
+      <section class="paper-section">
+        <h2>
+          ${esc(section)}
+          <small>Questions ${questions[0].no}–${questions[questions.length - 1].no} · ${marks} marks</small>
+        </h2>
+        ${questions.map(questionMarkup).join('')}
+      </section>`;
+  }).join('');
+
+  $('#meta-count').textContent = PAPER.length;
+  $('#meta-marks').textContent = MAX_MARKS;
+  $('#meta-time').textContent = `${Math.round(DURATION_SECONDS / 60)} minutes`;
+  // Reflect anything restored from sessionStorage.
+  for (const q of PAPER) {
+    const value = state.get(q.id);
+    if (value.selected !== null) {
+      const input = document.querySelector(`input[name="q-${q.id}"][value="${value.selected}"]`);
+      if (input) input.checked = true;
+    }
+    if (value.marked) {
+      const button = document.querySelector(`[data-mark="${q.id}"]`);
+      if (button) {
+        button.classList.add('is-on');
+        button.querySelector('span').textContent = 'Marked for review';
+      }
+    }
+  }
+
+  $('#instruction-list').innerHTML = [
+    `The paper has ${SECTIONS.length} sections. Answer every question; each carries the marks shown in the margin.`,
+    'A wrong answer carries a negative mark. An unanswered question scores zero.',
+    'Select one option per question. You can change an answer until you submit.',
+    'The question map on the side shows what is answered, marked and still pending.'
+  ].map((line) => `<li>${esc(line)}</li>`).join('');
+}
+
+function questionMarkup(q) {
+  const mark = Number(q.marks || 0);
+  const neg = Number(q.negative || 0);
+
+  return `
+    <article class="question" id="q-${q.id}" data-question="${q.id}" tabindex="-1">
+      <div class="q-head">
+        <span class="q-number">${q.no}.</span>
+        <span class="q-marks">
+          <span class="pos">+${mark}</span>${neg ? ` <span class="neg">−${neg}</span>` : ''}
+          · ${esc(q.type === 'single' ? 'Single choice' : 'Multiple choice')}
+        </span>
+      </div>
+      <p class="q-text" id="q-${q.id}-text">${esc(q.prompt)}</p>
+      <div class="options" role="radiogroup" aria-labelledby="q-${q.id}-text">
+        ${q.options.map(
+          (text, i) => `
+          <label class="option">
+            <input type="radio" name="q-${q.id}" value="${i}" data-option="${q.id}">
+            <span class="option-key">${LETTERS[i]}</span>
+            <span class="option-text">${esc(text)}</span>
+          </label>`
+        ).join('')}
+      </div>
+      <div class="q-tools">
+        <button class="q-tool" type="button" data-mark="${q.id}">
+          ${icon('flag')} <span>Mark for review</span>
+        </button>
+        <button class="q-tool" type="button" data-clear="${q.id}">
+          ${icon('refresh')} <span>Clear answer</span>
+        </button>
+      </div>
+    </article>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Palette                                                            */
+/* ------------------------------------------------------------------ */
+
+function statusOf(id) {
+  const value = state.get(id);
+  if (value.marked) return 'is-marked';
+  if (value.selected !== null) return 'is-answered';
+  return '';
+}
+
+function renderPalette() {
+  const host = $('#palette');
+  if (!host) return;
+
+  host.innerHTML = PAPER.map(
+    (q) => `<button class="pal-btn ${statusOf(q.id)} ${q.no - 1 === app.current ? 'is-current' : ''}"
+              type="button" data-jump="${q.no - 1}"
+              aria-label="Go to question ${q.no}">${q.no}</button>`
+  ).join('');
+
+  const answered = [...state.values()].filter((s) => s.selected !== null).length;
+  const marked = [...state.values()].filter((s) => s.marked).length;
+
+  const set = (sel, value) => {
+    const node = $(sel);
+    if (node) node.textContent = value;
+  };
+  set('#sum-answered', answered);
+  set('#sum-unanswered', PAPER.length - answered);
+  set('#sum-marked', marked);
+  set('#modal-answered', answered);
+  set('#modal-unanswered', PAPER.length - answered);
+  set('#modal-marked', marked);
+}
+
+/* ------------------------------------------------------------------ */
+/* Answering                                                          */
+/* ------------------------------------------------------------------ */
+
+$('#paper-body').addEventListener('change', (e) => {
+  if (app.submitted) return;
+  const input = e.target.closest('[data-option]');
+  if (!input) return;
+
+  const id = Number(input.dataset.option);
+  const value = state.get(id);
+  if (!value) return;
+
+  value.selected = Number(input.value);
+  persist();
+  renderPalette();
+  flashSaved();
+});
+
+$('#paper-body').addEventListener('click', (e) => {
+  if (app.submitted) return;
+
+  const mark = e.target.closest('[data-mark]');
+  if (mark) {
+    const id = Number(mark.dataset.mark);
+    const value = state.get(id);
+    value.marked = !value.marked;
+    mark.classList.toggle('is-on', value.marked);
+    mark.querySelector('span').textContent = value.marked ? 'Marked for review' : 'Mark for review';
+    persist();
+    renderPalette();
+    flashSaved();
+    return;
+  }
+
+  const clear = e.target.closest('[data-clear]');
+  if (clear) {
+    const id = Number(clear.dataset.clear);
+    const value = state.get(id);
+    value.selected = null;
+    const input = document.querySelector(`input[name="q-${id}"]:checked`);
+    if (input) input.checked = false;
+    persist();
+    renderPalette();
+    flashSaved();
+  }
+});
+
+/* Jump from the map */
+$('#palette').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-jump]');
+  if (!btn) return;
+  const index = Number(btn.dataset.jump);
+  const q = PAPER[index];
+  document.getElementById(`q-${q.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  app.current = index;
+  renderPalette();
+  closeMap();
+});
+
+let savedTimer;
+function flashSaved() {
+  const node = $('#autosave-state');
+  if (!node) return;
+  node.textContent = 'Saved';
+  node.style.color = 'var(--success-600)';
+  clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => {
+    node.textContent = 'Answers save as you go';
+    node.style.color = '';
+  }, 1600);
+}
 
 /* ------------------------------------------------------------------ */
 /* Timer                                                              */
 /* ------------------------------------------------------------------ */
 
 function startTimer() {
-  const timerEl = $('#exam-timer');
-  const valueEl = $('#timer-value');
+  const timer = $('#exam-timer');
+  const value = $('#timer-value');
 
   const tick = () => {
     if (app.submitted) return;
     app.remaining = Math.max(0, DURATION_SECONDS - Math.floor((Date.now() - app.startedAt) / 1000));
-    valueEl.textContent = mmss(app.remaining);
-    timerEl.classList.toggle('is-critical', app.remaining <= 300);
+    value.textContent = mmss(app.remaining);
+    timer.classList.toggle('is-critical', app.remaining <= 300);
 
     if (app.remaining <= 0) {
       clearInterval(app.ticker);
-      toast('Time is up. Your attempt was submitted automatically.', 'error', 6000);
+      toast('Time is up. The paper was submitted automatically.', 'error', 6000);
       submitAttempt(true);
     }
   };
 
-  timerEl.setAttribute('aria-live', 'off');
+  timer.setAttribute('role', 'timer');
+  timer.setAttribute('aria-live', 'off');
   app.ticker = setInterval(tick, 1000);
   tick();
-
-  // Attribute time spent to the question currently on screen.
-  app.secondsTicker = setInterval(() => {
-    if (!app.submitted) {
-      const state = answerState.get(PAPER[app.index].id);
-      state.seconds += 1;
-    }
-  }, 1000);
 }
 
 /* ------------------------------------------------------------------ */
-/* Rendering                                                          */
+/* Submit                                                             */
 /* ------------------------------------------------------------------ */
 
-function statusOf(q) {
-  const state = answerState.get(q.id);
-  if (state.marked) return 'is-marked';
-  if (state.selected !== null) return 'is-answered';
-  if (state.visited) return 'is-not-answered';
-  return '';
-}
-
-function renderQuestion() {
-  const q = PAPER[app.index];
-  const state = answerState.get(q.id);
-  state.visited = true;
-
-  $('#q-index').textContent = app.index + 1;
-  $('#q-of').textContent = app.index + 1;
-  $('#q-total').textContent = PAPER.length;
-  $('#q-type').textContent = q.type === 'single' ? 'Single choice' : 'Multiple choice';
-  $('#q-marks').textContent = q.marks;
-  $('#q-neg').textContent = q.negative;
-  $('#q-section').textContent = q.section;
-  $('#question-text').textContent = q.prompt;
-
-  $('#options').innerHTML = q.options
-    .map(
-      (text, i) => `
-      <label class="option">
-        <input type="radio" name="option" value="${i}" ${state.selected === i ? 'checked' : ''}>
-        <span class="option-key">${LETTERS[i]}</span>
-        <span class="option-text">${esc(text)}</span>
-      </label>`
-    )
-    .join('');
-
-
-  $('#mark-btn').classList.toggle('btn-soft', state.marked);
-  $('#mark-btn').innerHTML = `<svg><use href="#i-flag"/></svg> ${state.marked ? 'Marked for review' : 'Mark for review'}`;
-
-  $('#prev-btn').disabled = app.index === 0;
-  $('#next-btn').innerHTML =
-    app.index === PAPER.length - 1
-      ? 'Review <svg><use href="#i-check"/></svg>'
-      : 'Save &amp; next <svg><use href="#i-arrow-right"/></svg>';
-
+function openSubmit() {
   renderPalette();
-  updateSummary();
-  $('#question-text').scrollIntoView({ block: 'nearest' });
-}
-
-function renderPalette() {
-  const host = $('#palette');
-  host.innerHTML = PAPER.map((q, i) => {
-    const cls = statusOf(q);
-    const current = i === app.index ? 'is-current' : '';
-    return `<button class="pal-btn ${cls} ${current}" data-jump="${i}"
-              aria-label="Question ${i + 1}" ${current ? 'aria-current="true"' : ''}>${i + 1}</button>`;
-  }).join('');
-}
-
-function updateSummary() {
-  const values = [...answerState.values()];
-  const answered = values.filter((s) => s.selected !== null).length;
-  const marked = values.filter((s) => s.marked).length;
-  const unvisited = values.filter((s) => !s.visited).length;
-  const unanswered = PAPER.length - answered;
-
-  const set = (id, value) => {
-    const node = $(id);
-    if (node) node.textContent = value;
-  };
-  set('#sum-answered', answered);
-  set('#sum-unanswered', unanswered);
-  set('#sum-marked', marked);
-  set('#sum-unvisited', unvisited);
-
-  // Submit modal mirrors
-  set('#m-answered', answered);
-  set('#m-unanswered', unanswered);
-  set('#m-marked', marked);
-  set('#m-unvisited', unvisited);
-
-  const warn = $('#m-warning');
-  if (warn) {
-    warn.textContent =
-      unanswered > 0
-        ? `You still have ${unanswered} unanswered question${unanswered === 1 ? '' : 's'}.`
-        : 'All questions answered. You are ready to submit.';
-  }
-}
-
-function flashSaved() {
-  const el = $('#autosave-state');
-  if (!el) return;
-  el.textContent = 'Saved just now';
-  el.style.color = 'var(--success-600)';
-  clearTimeout(flashSaved._t);
-  flashSaved._t = setTimeout(() => {
-    el.textContent = 'Answers save automatically';
-    el.style.color = '';
-  }, 1800);
-}
-
-/* ------------------------------------------------------------------ */
-/* Navigation                                                         */
-/* ------------------------------------------------------------------ */
-
-function goTo(index) {
-  app.index = clamp(index, 0, PAPER.length - 1);
-  renderQuestion();
-}
-
-$('#palette').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-jump]');
-  if (!btn) return;
-  goTo(Number(btn.dataset.jump));
-});
-
-$('#next-btn').addEventListener('click', () => {
-  const state = answerState.get(PAPER[app.index].id);
-  if (state.selected !== null) flashSaved();
-  if (app.index === PAPER.length - 1) {
-    openModal('#submit-modal');
-    updateSummary();
-    return;
-  }
-  goTo(app.index + 1);
-});
-
-$('#prev-btn').addEventListener('click', () => goTo(app.index - 1));
-
-$('#mark-btn').addEventListener('click', () => {
-  const state = answerState.get(PAPER[app.index].id);
-  state.marked = !state.marked;
-  renderQuestion();
-});
-
-$('#clear-btn').addEventListener('click', () => {
-  const state = answerState.get(PAPER[app.index].id);
-  state.selected = null;
-  renderQuestion();
-  flashSaved();
-});
-
-document.addEventListener('keydown', (e) => {
-  if (app.submitted || /input|textarea|select/i.test(document.activeElement.tagName)) return;
-  if (e.key === 'ArrowRight') goTo(app.index + 1);
-  if (e.key === 'ArrowLeft') goTo(app.index - 1);
-  if (['1', '2', '3', '4'].includes(e.key)) {
-    const idx = Number(e.key) - 1;
-    const q = PAPER[app.index];
-    if (idx < q.options.length) {
-      answerState.get(q.id).selected = idx;
-      renderQuestion();
-      flashSaved();
-    }
-  }
-});
-
-/* ------------------------------------------------------------------ */
-/* Modals                                                             */
-/* ------------------------------------------------------------------ */
-
-function openModal(selector) {
-  const modal = $(selector);
-  modal.classList.add('is-open');
+  $('#submit-modal').classList.add('is-open');
   document.body.classList.add('is-locked');
-  modal.querySelector('button, [tabindex]')?.focus();
+  $('#confirm-submit').focus();
 }
 
-function closeModal(modal) {
-  modal.classList.remove('is-open');
+function closeSubmit() {
+  $('#submit-modal').classList.remove('is-open');
   document.body.classList.remove('is-locked');
 }
 
+$('#submit-btn').addEventListener('click', openSubmit);
+$('#submit-btn-foot').addEventListener('click', openSubmit);
+$('#confirm-submit').addEventListener('click', () => submitAttempt(false));
+
 document.addEventListener('click', (e) => {
-  const modal = e.target.closest('.modal');
-  if (e.target.closest('[data-close-modal]')) {
-    closeModal(modal);
-  } else if (e.target === modal) {
-    closeModal(modal);
-  }
+  if (e.target.closest('[data-close-modal]')) closeSubmit();
+  if (e.target.id === 'submit-modal') closeSubmit();
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') $$('.modal.is-open').forEach(closeModal);
+  if (e.key === 'Escape' && $('#submit-modal').classList.contains('is-open')) closeSubmit();
 });
-
-$('#pause-btn').addEventListener('click', () => openModal('#info-modal'));
-$('#submit-btn').addEventListener('click', () => {
-  updateSummary();
-  openModal('#submit-modal');
-});
-$('#confirm-submit').addEventListener('click', () => submitAttempt(false));
-
-/* A single delegated listener — re-binding inside renderQuestion() would
-   leave stale handlers bound to earlier questions' state objects. */
-$('#options').addEventListener('change', (e) => {
-  const input = e.target.closest('input[name="option"]');
-  if (!input || app.submitted) return;
-  const state = answerState.get(PAPER[app.index].id);
-  state.selected = Number(input.value);
-  state.visited = true;
-  renderPalette();
-  updateSummary();
-  flashSaved();
-});
-
-/* ------------------------------------------------------------------ */
-/* Scoring                                                            */
-/* ------------------------------------------------------------------ */
 
 function scoreAttempt() {
   let score = 0;
-  let max = 0;
   let correct = 0;
   let wrong = 0;
   let skipped = 0;
-  const sections = new Map();
+  const bySection = new Map(SECTIONS.map((s) => [s, { scored: 0, max: 0, correct: 0, total: 0 }]));
 
   for (const q of PAPER) {
-    const state = answerState.get(q.id);
-    max += q.marks;
+    const value = state.get(q.id);
+    const bucket = bySection.get(q.section);
+    const marks = Number(q.marks || 0);
 
-    if (!sections.has(q.section)) {
-      sections.set(q.section, { name: q.section, correct: 0, wrong: 0, skipped: 0, score: 0, max: 0 });
-    }
-    const bucket = sections.get(q.section);
-    bucket.max += q.marks;
+    bucket.max += marks;
+    bucket.total += 1;
 
-    if (state.selected === null) {
+    if (value.selected === null) {
       skipped += 1;
-      bucket.skipped += 1;
-      continue;
-    }
-    if (state.selected === q.answer) {
-      score += q.marks;
+    } else if (value.selected === q.answer) {
+      score += marks;
       correct += 1;
+      bucket.scored += marks;
       bucket.correct += 1;
-      bucket.score += q.marks;
     } else {
-      score -= q.negative;
+      score -= Number(q.negative || 0);
       wrong += 1;
-      bucket.wrong += 1;
-      bucket.score -= q.negative;
+      bucket.scored -= Number(q.negative || 0);
     }
   }
 
   const attempted = correct + wrong;
   return {
-    score: Math.max(0, score),
-    max,
+    score: Math.max(0, Math.round(score * 100) / 100),
     correct,
     wrong,
     skipped,
     attempted,
     accuracy: attempted ? Math.round((correct / attempted) * 100) : 0,
-    sections: [...sections.values()]
+    bySection
   };
 }
 
@@ -332,168 +375,196 @@ function submitAttempt(auto) {
   if (app.submitted) return;
   app.submitted = true;
   clearInterval(app.ticker);
-  clearInterval(app.secondsTicker);
-  $$('.modal.is-open').forEach(closeModal);
 
   const result = scoreAttempt();
-  const timeSpent = DURATION_SECONDS - app.remaining;
+  const secondsUsed = Math.min(DURATION_SECONDS, Math.floor((Date.now() - app.startedAt) / 1000));
 
-  $('#exam-mode').hidden = true;
-  $('#result-mode').hidden = false;
-  window.scrollTo({ top: 0, behavior: 'instant' });
-
-  renderResult(result, timeSpent);
-  if (auto) toast('Attempt submitted automatically at the deadline.', 'info', 5000);
+  closeSubmit();
+  persist();
+  renderResult(result, secondsUsed, auto);
 }
 
 /* ------------------------------------------------------------------ */
 /* Result                                                             */
 /* ------------------------------------------------------------------ */
 
-function renderResult(result, timeSpent) {
-  const pct = result.max ? result.score / result.max : 0;
-  const circumference = 2 * Math.PI * 70;
+let lastResult = null;
 
-  $('#score-circle').style.strokeDasharray = String(circumference);
-  $('#score-circle').style.strokeDashoffset = String(circumference);
-  $('#score-value').textContent = result.score;
-  $('#score-max').textContent = result.max;
+function renderResult(result, secondsUsed, auto) {
+  lastResult = result;
 
-  requestAnimationFrame(() => {
-    $('#score-circle').style.strokeDashoffset = String(circumference * (1 - pct));
-  });
+  $('#paper-view').hidden = true;
+  $('#qmap').hidden = true;
+  $('#qmap-toggle').hidden = true;
+  $('#submit-btn').hidden = true;
+  $('#result-view').hidden = false;
 
-  $('#result-summary').textContent =
-    `You answered ${result.attempted} of ${PAPER.length} questions in ${mmss(timeSpent)}.`;
-  $('#stat-correct').textContent = result.correct;
-  $('#stat-wrong').textContent = result.wrong;
-  $('#stat-skipped').textContent = result.skipped;
-  $('#stat-accuracy').textContent = `${result.accuracy}%`;
+  $('#result-sub').textContent = auto
+    ? 'Time ran out, so the paper was submitted automatically. Every question is reviewed below.'
+    : 'Every question is reviewed below. Use the filter to see only the ones you got wrong.';
 
-  // Rank is derived for the demo; the product computes it from all attempts.
-  const percentile = clamp(35 + pct * 62, 12, 99.4);
-  const rank = Math.max(1, Math.round((100 - percentile) * 32));
-  $('#stat-percentile').textContent = `${percentile.toFixed(1)}`;
-  $('#stat-rank').textContent = `#${rank}`;
-  $('#stat-time').textContent = mmss(timeSpent);
+  const percent = MAX_MARKS ? Math.round((result.score / MAX_MARKS) * 1000) / 10 : 0;
 
-  renderSections(result);
-  renderTimeBreakdown();
+  $('#score-rows').innerHTML = `
+    <tr><th scope="row">Marks obtained</th><td>${result.score} <span class="muted" style="font-weight:400">out of ${MAX_MARKS}</span></td></tr>
+    <tr><th scope="row">Percentage</th><td>${percent}%</td></tr>
+    <tr><th scope="row">Correct · Incorrect · Unattempted</th><td>${result.correct} · ${result.wrong} · ${result.skipped}</td></tr>
+    <tr><th scope="row">Time used</th><td>${mmss(secondsUsed)}</td></tr>`;
+
+  $('#result-stats').innerHTML = [
+    ['Accuracy', `${result.accuracy}%`],
+    ['Attempted', `${result.attempted}/${PAPER.length}`],
+    ['Section best', bestSection(result.bySection)],
+    ['Marks lost', `${result.wrong} question${result.wrong === 1 ? '' : 's'}`]
+  ].map(([label, value]) => `<div class="result-stat"><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join('');
+
+  $('#section-breakdown').innerHTML = [...result.bySection.entries()]
+    .map(([section, data]) => {
+      const pct = data.max ? clamp((data.scored / data.max) * 100, 0, 100) : 0;
+      return `
+        <div class="section-bar-row">
+          <span>${esc(section)}</span>
+          <div class="section-track"><i style="width:${pct}%"></i></div>
+          <b>${round1(data.scored)} / ${data.max}</b>
+        </div>`;
+    })
+    .join('');
+
   renderSolutions();
+
+  $('#result-view').scrollIntoView({ block: 'start' });
+  document.title = `${result.score}/${MAX_MARKS} — answer sheet · StudySpace`;
 }
 
-function renderSections(result) {
-  $('#section-breakdown').innerHTML = result.sections
-    .map((s) => {
-      const pct = s.max ? Math.round((Math.max(0, s.score) / s.max) * 100) : 0;
-      return `
-        <div class="section-row">
-          <div>
-            <div class="sr-name">${esc(s.name)}</div>
-            <div class="progress" style="margin-top:6px;height:5px"><span style="width:${pct}%"></span></div>
-          </div>
-          <div class="sr-score">${Math.max(0, s.score)} / ${s.max}</div>
-          <div class="sr-pct" style="color:${pct >= 60 ? 'var(--success-600)' : pct >= 35 ? 'var(--amber-600)' : 'var(--danger-600)'}">${pct}%</div>
-        </div>`;
-    })
-    .join('');
+function bestSection(bySection) {
+  let best = null;
+  for (const [section, data] of bySection) {
+    const pct = data.max ? data.scored / data.max : 0;
+    if (!best || pct > best.pct) best = { section, pct };
+  }
+  return best ? best.section : '—';
 }
 
-function renderTimeBreakdown() {
-  const rows = PAPER.map((q) => ({ q, seconds: answerState.get(q.id).seconds }))
-    .sort((a, b) => b.seconds - a.seconds)
-    .slice(0, 5);
-
-  const worst = rows[0]?.seconds || 1;
-
-  $('#time-breakdown').innerHTML = rows
-    .map(({ q, seconds }) => {
-      const width = Math.max(6, Math.round((seconds / worst) * 100));
-      const slow = seconds > 90;
-      return `
-        <div>
-          <div class="row-between tiny" style="margin-bottom:4px">
-            <span class="truncate" style="max-width:70%">Q${PAPER.indexOf(q) + 1} · ${esc(q.section)}</span>
-            <strong style="color:${slow ? 'var(--danger-600)' : 'var(--text-muted)'}">${mmss(seconds)}</strong>
-          </div>
-          <div class="progress" style="height:5px">
-            <span style="width:${width}%;background:${slow ? 'var(--danger-500)' : 'var(--grad-brand)'}"></span>
-          </div>
-        </div>`;
-    })
-    .join('');
-}
+const round1 = (value) => (Math.round(value * 10) / 10).toString();
 
 function renderSolutions() {
   const onlyWrong = $('#only-wrong')?.checked;
-  const items = PAPER.filter((q) => {
+  const host = $('#solutions');
+
+  const rows = PAPER.filter((q) => {
     if (!onlyWrong) return true;
-    const state = answerState.get(q.id);
-    return state.selected === null || state.selected !== q.answer;
+    const value = state.get(q.id);
+    return value.selected !== q.answer;
   });
 
-  $('#solutions').innerHTML = items
-    .map((q) => {
-      const state = answerState.get(q.id);
-      const correct = state.selected === q.answer;
-      const skipped = state.selected === null;
-      const statusClass = correct ? 'ok' : skipped ? 'skip' : 'no';
-      const statusIcon = correct ? 'check' : skipped ? 'minus' : 'x';
-
-      return `
-        <article class="solution-item">
-          <div class="solution-head">
-            <span class="solution-mark ${statusClass}">${icon(statusIcon)}</span>
-            <strong style="font-size:13px;flex:1">Q${PAPER.indexOf(q) + 1} · ${esc(q.section)}</strong>
-            <span class="tiny ${correct ? '' : skipped ? 'subtle' : ''}" style="color:${correct ? 'var(--success-600)' : skipped ? 'var(--text-subtle)' : 'var(--danger-600)'};font-weight:700">
-              ${correct ? `+${q.marks}` : skipped ? '0' : `−${q.negative}`}
-            </span>
-          </div>
-          <div class="solution-body">
-            <p style="font-size:13px;line-height:1.65;color:var(--text);margin:0">${esc(q.prompt)}</p>
-            ${q.options
-              .map((text, i) => {
-                const isCorrect = i === q.answer;
-                const isChosen = i === state.selected;
-                const cls = isCorrect ? 'is-correct' : isChosen ? 'is-wrong' : '';
-                return `<div class="solution-opt ${cls}">${LETTERS[i]}. ${esc(text)}</div>`;
-              })
-              .join('')}
-            <div class="solution-exp"><strong>Why:</strong> ${esc(q.explanation)}</div>
-          </div>
-        </article>`;
-    })
-    .join('');
-
-  if (!items.length) {
-    $('#solutions').innerHTML = `
-      <div class="empty-state">
+  if (!rows.length) {
+    host.innerHTML = `
+      <div class="empty-state" style="padding:24px">
         ${icon('check-circle')}
         <h3>Nothing to review</h3>
-        <p>Every question was answered correctly. Try a harder paper next.</p>
+        <p>Every question was answered correctly.</p>
       </div>`;
+    return;
   }
+
+  host.innerHTML = rows.map((q) => {
+    const value = state.get(q.id);
+    const skipped = value.selected === null;
+    const correct = !skipped && value.selected === q.answer;
+    const status = correct ? 'Correct' : skipped ? 'Not attempted' : 'Incorrect';
+    const markClass = correct ? 'ok' : skipped ? 'skip' : 'no';
+
+    return `
+      <article class="solution">
+        <div class="solution-head">
+          <strong>Q${q.no}. ${esc(q.section)}</strong>
+          <span class="solution-mark ${markClass}">
+            ${icon(correct ? 'check-circle' : skipped ? 'minus' : 'x-circle')} ${status}
+          </span>
+        </div>
+        <p class="q-text" style="margin:0;font-size:var(--text-base)">${esc(q.prompt)}</p>
+        <div class="options" style="gap:6px">
+          ${q.options.map((text, i) => {
+            const isCorrect = i === q.answer;
+            const isChosen = !skipped && value.selected === i;
+            const cls = isCorrect ? 'is-correct' : isChosen ? 'is-wrong' : '';
+            return `<div class="solution-opt ${cls}">
+              ${LETTERS[i]}. ${esc(text)}
+              ${isChosen && !isCorrect ? ' · your answer' : isCorrect ? ' · correct answer' : ''}
+            </div>`;
+          }).join('')}
+        </div>
+        ${q.explanation ? `<p class="solution-explanation">${esc(q.explanation)}</p>` : ''}
+      </article>`;
+  }).join('');
 }
 
 $('#only-wrong')?.addEventListener('change', renderSolutions);
 
-/* ------------------------------------------------------------------ */
-/* Retake                                                             */
-/* ------------------------------------------------------------------ */
-
 $('#retake-btn')?.addEventListener('click', () => {
+  storage.attempt = null;
   location.reload();
 });
+
+/* ------------------------------------------------------------------ */
+/* Question map (mobile)                                              */
+/* ------------------------------------------------------------------ */
+
+function openMap() {
+  $('#qmap').classList.add('is-open');
+  $('#qmap-toggle').setAttribute('aria-expanded', 'true');
+}
+
+function closeMap() {
+  $('#qmap').classList.remove('is-open');
+  $('#qmap-toggle').setAttribute('aria-expanded', 'false');
+}
+
+$('#qmap-toggle')?.addEventListener('click', () => {
+  const open = $('#qmap').classList.contains('is-open');
+  open ? closeMap() : openMap();
+});
+
+$('#qmap-close')?.addEventListener('click', closeMap);
+
+/* Track which question is on screen */
+function watchScroll() {
+  if (!('IntersectionObserver' in window)) return;
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      app.current = Number(visible.target.dataset.questionIndex);
+      renderPalette();
+    },
+    { rootMargin: '-15% 0px -60% 0px', threshold: [0.1, 0.5, 1] }
+  );
+
+  $$('.question').forEach((node, index) => {
+    node.dataset.questionIndex = index;
+    observer.observe(node);
+  });
+}
 
 /* ------------------------------------------------------------------ */
 /* Boot                                                               */
 /* ------------------------------------------------------------------ */
 
-const testName = qsParam('test');
-if (testName) {
-  $('#exam-name').textContent = `JEE Main Full Mock #${testName}`;
-}
-$('#exam-sub').textContent = `Section A · ${PAPER.length} questions · ${mmss(DURATION_SECONDS)}`;
+const paperTitle = CHOSEN?.title || 'Practice question paper';
+$('#exam-name').textContent = paperTitle;
+$('#paper-title').textContent = paperTitle;
+$('#exam-sub').textContent = CHOSEN
+  ? `${CHOSEN.exam} · ${CHOSEN.kind}`
+  : `${PAPER.length} questions · ${ALLOWED_MINUTES} minutes`;
+if (CHOSEN) document.title = `${CHOSEN.title} — StudySpace`;
+$('#paper-sub').textContent = SECTIONS.join(' · ');
 
-renderQuestion();
+restore();
+renderPaper();
+renderPalette();
 startTimer();
+watchScroll();
+persist();

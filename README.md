@@ -55,6 +55,10 @@ the bundled fixtures in `assets/js/data.js` when it does not. When fixtures are 
 `Preview · sample data` flag, so sample content is never mistaken for live data. Point the site at a
 different API by editing that meta tag (or templating it at deploy time).
 
+**Design.** Editorial rather than app-like: warm paper (`#faf8f2`), ink text, one muted indigo accent,
+serif headings, hairline rules instead of shadows, and generous vertical rhythm. The exam is a printed
+question paper — sections, marks in the margin, options A–D and a question map — not a dashboard.
+
 **Assets.** `assets/css/` holds `tokens → base → components → pages → app`, in that order; `assets/js/`
 holds the API client (`core.js`), fixtures (`data.js`), shared chrome and components (`ui.js`), and one
 module per page. Icons are a single inline SVG sprite — there are no external fonts, CDNs or trackers.

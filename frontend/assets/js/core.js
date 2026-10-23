@@ -13,7 +13,8 @@ const K = {
   access: 'studyspace.access',
   refresh: 'studyspace.refresh',
   user: 'studyspace.user',
-  preview: 'studyspace.preview'
+  preview: 'studyspace.preview',
+  attempt: 'studyspace.attempt'
 };
 
 /* ------------------------------------------------------------------ */
@@ -33,10 +34,17 @@ export const storage = {
     if (refresh) localStorage.setItem(K.refresh, refresh);
     if (user) localStorage.setItem(K.user, JSON.stringify(user));
   },
+  /** In-progress test attempt (this tab only). */
+  get attempt() { return sessionStorage.getItem(K.attempt); },
+  set attempt(value) {
+    if (value) sessionStorage.setItem(K.attempt, value);
+    else sessionStorage.removeItem(K.attempt);
+  },
   clear() {
     localStorage.removeItem(K.access);
     localStorage.removeItem(K.refresh);
     localStorage.removeItem(K.user);
+    sessionStorage.removeItem(K.attempt);
   }
 };
 
@@ -297,6 +305,43 @@ export function debounce(fn, wait = 220) {
     timer = setTimeout(() => fn(...args), wait);
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Row adapters: API payloads → card view models                      */
+/* ------------------------------------------------------------------ */
+
+export const adaptCourse = (row = {}) => ({
+  id: row.id,
+  slug: row.slug || `course-${row.id}`,
+  title: row.title || 'Untitled batch',
+  subject: row.subject || 'General',
+  exam: row.exam || row.subject || '',
+  durationMonths: row.duration_months ?? row.durationMonths ?? null,
+  faculty: row.faculty || [],
+  lessons: row.lessons ?? row.lesson_count ?? 0,
+  tests: row.tests ?? row.quiz_count ?? 0,
+  learners: row.learners ?? row.student_count ?? 0,
+  rating: Number(row.rating ?? 4.7),
+  ratingCount: row.ratingCount ?? row.rating_count ?? 0,
+  language: row.language || 'English',
+  price: Number(row.price ?? 0),
+  mrp: Number(row.mrp ?? 0),
+  pricing_mode: row.pricing_mode || (Number(row.price) > 0 ? 'paid' : 'free'),
+  badge: row.badge || null
+});
+
+export const adaptTest = (row = {}) => ({
+  id: row.id,
+  title: row.title || 'Untitled test',
+  exam: row.exam || 'General',
+  kind: row.kind || 'Mock',
+  questions: row.questions ?? row.question_count ?? 0,
+  duration: row.duration ?? row.duration_minutes ?? 0,
+  attempts: row.attempts ?? row.attempt_count ?? 0,
+  startsAt: row.startsAt ?? row.starts_at ?? null,
+  price: Number(row.price ?? 0),
+  badge: row.badge || null
+});
 
 export const qsParam = (key) => new URLSearchParams(location.search).get(key);
 

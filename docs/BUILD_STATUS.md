@@ -902,3 +902,77 @@ manual follow-ups before public launch.
 - Fixtures are illustrative; batch names, faculty and ratings are sample data.
 - The redeem flow calls `/access-codes/redeem/` and degrades to an inline error when the API is unreachable;
   end-to-end redemption needs the Django backend running.
+
+---
+
+## Run 4 — design pass and printed question paper (2026-10-23)
+
+Feedback on run 3: the interface felt crowded and app-like, and the test flow did not read like a textbook.
+Both were addressed at the token level first, then in the page markup.
+
+### Design system
+
+| Before | After |
+|---|---|
+| Cool violet/navy palette, gradient hero, coloured thumbnails | Warm paper (`#faf8f2`) + ink (`#1b1a17`) + one muted indigo accent; ochre used sparingly |
+| Sans headings at weight 800 | Serif display face (Iowan/Palatino/Georgia stack) at weight 600 |
+| Drop shadows, hover lift, pill badges, gradient buttons | Hairline borders, flat buttons, 4px badge radius, no lift |
+| 1200px container, 15px body | 1080px container, 16px body, 1.7 line height, larger section spacing |
+| Dark hero, trust strip, feature grid, stats band, app banner, testimonial cards | Light masthead, section rules, one pull quote, one CTA strip |
+
+Every colour was checked for contrast: body 12.4:1, muted 6.9:1, subtle 5.5:1, accent button 5.3:1,
+violet link 6.8:1 — all above WCAG AA for their size.
+
+### Home page
+
+Reduced from eight stacked sections to seven: masthead (headline, search, popular links, featured batch card),
+exam index (8 tiles in a 4×2 rule grid), three featured batches, three free mocks, one pull quote, FAQ, and a
+single CTA strip. The batch and test cards lost their badge soup: one meta line replaces the lesson/test/learner
+row, the language badge and the separate rating block.
+
+### Test and quiz system — printed question paper
+
+`test-player.html` was rebuilt as a paper rather than an app screen:
+
+- A four-line masthead: paper title, subject line, time allowed, maximum marks, question count.
+- Instructions block in a ruled callout, then **sections** with continuous question numbering (`1.` … `10.`).
+- Marks in the margin (`+4 −1`), options as A/B/C/D rows with circular keys, and per-question
+  "mark for review" / "clear answer" text controls.
+- A question map in the right rail (drawer on mobile) that shows answered, marked, not-answered and current.
+- On submit, an **answer sheet** replaces the paper: score table, accuracy, section-wise marks, and every
+  question with the correct option, the attempted option and a worked explanation. "Only incorrect answers"
+  filters the list.
+- Attempt state persists to `sessionStorage`, so a refresh mid-paper does not lose answers.
+
+Player internals were also cleaned up: a single delegated `change` listener on the answer container (the old
+code re-bound a listener on every question render, which could overwrite earlier answers), the per-question
+stopwatch interval is cleared on submit, and restore applies checked radios and mark states.
+
+Test cards now link to `test-player.html?test=<id>&duration=<minutes>`, and the paper reads that test's title,
+exam and duration, so a NEET sectional no longer opens titled "JEE Main Full Mock". Paper rows are grouped and
+renumbered by section on load, so numbering stays continuous even if the API returns sections interleaved.
+
+### Also in this run
+
+- Login was the last page still using the dark marketing aside. It is now a quiet title page: identity, one
+  sentence, and three footer links; the three feature bullets and testimonial were removed.
+- `course.html` skeleton placeholders were white-on-white after the hero moved to paper; they now use
+  `--slate-100`.
+- Orphan CSS from earlier runs was pruned with a brace-matching script (`/tmp/prune.py`): trust strip, feature
+  grid, app banner, phone mock, hero orbits, rail navigation, tab badges, switch control and the old stats band.
+  Only runtime-composed modifiers (`avatar-*`, `toast-*`) remain unwritten in markup.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `node --check` on `sw.js` + 11 modules | 12/12 exit 0 |
+| Headless render of 9 pages (jsdom, API disabled) | 9/9, 0 console errors |
+| Interaction suite | 46/46 assertions (was 33) |
+| CSS classes used vs defined | 277 used, 0 missing; 0 orphan selectors (5 are runtime-composed avatar/toast states) |
+| Undefined custom properties / unresolved imports / broken links | 0 / 0 / 0 |
+| Contrast (body, muted, subtle, buttons, links) | all ≥ 4.5:1 |
+| HTTP 200 for every page and asset | 31/31 |
+| Orphan CSS pruned | base 5.9→5.2 kB, components 24.6→22.5 kB, pages 31.5→30.7 kB |
+
+Still not run: real-browser visual pass, Lighthouse, axe-core — no browser in this environment.

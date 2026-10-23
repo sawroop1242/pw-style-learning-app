@@ -1,192 +1,172 @@
-/** Home page: categories, trending batches, tests, testimonials, FAQ. */
+/**
+ * Home page — featured batch, exam index, trending batches, free mocks, FAQ.
+ * Reads go through `live()` so the page works against the API or the fixtures.
+ */
 
-import { $, esc, initials, live } from './core.js';
-import {
-  mountChrome, batchCard, testCard, icon, emptyState, skeletonBatchGrid, renderFooter, toast
-} from './ui.js';
-import { CATEGORIES, COURSES, TESTS, TESTIMONIALS, FAQS } from './data.js';
+import { $, $$, esc, live, money, compact, discountPercent, adaptCourse, adaptTest } from './core.js';
+import { mountChrome, batchCard, testCard, icon, toast } from './ui.js';
+import { CATEGORIES, COURSES, TESTS, FAQS } from './data.js';
 
 mountChrome('home');
 
 /* ------------------------------------------------------------------ */
-/* Categories                                                         */
+/* Featured batch                                                     */
+/* ------------------------------------------------------------------ */
+
+async function renderFeatured() {
+  const host = $('#featured-batch');
+  if (!host) return;
+
+  const { data } = await live('/courses/?page_size=1&sort=-learners', COURSES[0]);
+  const course = Array.isArray(data) ? data[0] : data.results?.[0] || data;
+  if (!course?.title) return;
+
+  const off = discountPercent(course.price, course.mrp);
+
+  host.innerHTML = `
+    <div class="mc-head">
+      <span>Featured batch</span>
+      ${course.pricing_mode === 'free'
+        ? '<span class="badge badge-free">Free</span>'
+        : '<span class="badge badge-live">Enrolling</span>'}
+    </div>
+    <div class="mc-body">
+      <p class="tiny subtle" style="letter-spacing:.08em;text-transform:uppercase">${esc(course.exam || '')}</p>
+      <h2>${esc(course.title)}</h2>
+      <div class="mc-meta">
+        <div>${icon('play')} ${esc(course.lessons || 0)} lessons</div>
+        <div>${icon('file-text')} ${esc(course.tests || 0)} tests</div>
+        <div>${icon('users')} ${compact(course.learners)} enrolled</div>
+      </div>
+      <div class="mc-meta">
+        <div>${icon('star')} ${(course.rating || 4.7).toFixed(1)} · ${compact(course.ratingCount)} ratings</div>
+        <div>${icon('globe')} ${esc(course.language || 'English')}</div>
+      </div>
+    </div>
+    <div class="mc-foot">
+      <span class="mc-price">
+        ${money(course.price)}
+        ${course.mrp > course.price ? `<s>${money(course.mrp)}</s>` : ''}
+        ${off ? `<span class="badge badge-hot" style="margin-left:8px">${off}% off</span>` : ''}
+      </span>
+      <a class="btn btn-primary btn-sm" href="course.html?slug=${encodeURIComponent(course.slug)}">
+        View batch
+      </a>
+    </div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Exam index                                                         */
 /* ------------------------------------------------------------------ */
 
 function renderCategories() {
   const host = $('#category-rail');
   if (!host) return;
+
   host.innerHTML = CATEGORIES.map(
     (cat) => `
     <a class="category-tile" href="courses.html?exam=${encodeURIComponent(cat.label)}">
       <span class="cat-icon">${icon(cat.icon)}</span>
-      <strong>${esc(cat.label)}</strong>
-      <small>${esc(cat.sub)}</small>
+      <span>
+        <strong>${esc(cat.label)}</strong>
+        <small>${esc(cat.sub)}</small>
+      </span>
     </a>`
   ).join('');
 }
 
 /* ------------------------------------------------------------------ */
-/* Batches                                                            */
+/* Trending batches & free mocks                                      */
 /* ------------------------------------------------------------------ */
-
-function normaliseCourse(raw, index = 0) {
-  const fixture = COURSES.find((c) => c.id === raw.id) || {};
-  return {
-    ...fixture,
-    ...raw,
-    slug: raw.slug || fixture.slug || `course-${raw.id}`,
-    faculty: fixture.faculty || [],
-    rating: fixture.rating || 4.7,
-    ratingCount: fixture.ratingCount || 0,
-    learners: fixture.learners || 0,
-    lessons: raw.lesson_count ?? fixture.lessons ?? 0,
-    tests: fixture.tests ?? 0,
-    language: fixture.language || 'Hinglish',
-    mrp: fixture.mrp || (raw.price ? Math.round(Number(raw.price) * 2.4) : 0),
-    exam: fixture.exam || raw.subject || 'General',
-    badge: fixture.badge || null,
-    durationMonths: fixture.durationMonths || null,
-    rank: index
-  };
-}
 
 async function renderTrending() {
-  const host = $('#trending-rail');
+  const host = $('#trending-grid');
   if (!host) return;
-  host.innerHTML = `<div class="skeleton" style="height:420px;border-radius:20px"></div>`.repeat(3);
 
-  const { data } = await live('/courses/?page_size=6', COURSES);
-  const list = (Array.isArray(data) ? data : data.results || []).map(normaliseCourse);
-
-  if (!list.length) {
-    host.innerHTML = emptyState({
-      title: 'No batches published yet',
-      body: 'Once a batch is published it will appear here.',
-      iconName: 'layers'
-    });
-    return;
-  }
-
-  host.innerHTML = list.slice(0, 6).map(batchCard).join('');
-
-  // Rail arrows
-  const rail = host;
-  document.querySelector('[data-rail-prev]')?.addEventListener('click', () =>
-    rail.scrollBy({ left: -320, behavior: 'smooth' })
-  );
-  document.querySelector('[data-rail-next]')?.addEventListener('click', () =>
-    rail.scrollBy({ left: 320, behavior: 'smooth' })
-  );
+  const { data } = await live('/courses/?page_size=3&sort=-learners', COURSES);
+  const rows = (Array.isArray(data) ? data : data.results || []).slice(0, 3);
+  host.innerHTML = rows.map((course) => batchCard(adaptCourse(course))).join('');
 }
-
-/* ------------------------------------------------------------------ */
-/* Tests                                                              */
-/* ------------------------------------------------------------------ */
 
 async function renderTests() {
   const host = $('#home-tests');
   if (!host) return;
-  host.innerHTML = `<div class="skeleton" style="height:250px;border-radius:20px"></div>`.repeat(3);
 
-  const { data } = await live('/quizzes/?page_size=6', TESTS);
-  const rows = Array.isArray(data) ? data : data.results || [];
-
-  const list = rows.map((quiz, i) => {
-    const fixture = TESTS.find((t) => t.id === quiz.id) || TESTS[i] || TESTS[0];
-    return {
-      ...fixture,
-      id: quiz.id ?? fixture.id,
-      title: quiz.title || fixture.title,
-      duration: quiz.duration_minutes || fixture.duration,
-      questions: quiz.question_count ?? fixture.questions,
-      startsAt: quiz.opens_at || fixture.startsAt,
-      price: quiz.price ?? fixture.price
-    };
-  });
-
-  host.innerHTML = list.slice(0, 3).map(testCard).join('');
+  const { data } = await live('/quizzes/?page_size=3&sort=-attempts', TESTS);
+  const rows = (Array.isArray(data) ? data : data.results || []).slice(0, 3);
+  host.innerHTML = rows.map((test) => testCard(adaptTest(test))).join('');
 }
 
 /* ------------------------------------------------------------------ */
-/* Testimonials & FAQ                                                 */
+/* FAQ                                                                */
 /* ------------------------------------------------------------------ */
-
-function renderTestimonials() {
-  const host = $('#testimonials');
-  if (!host) return;
-  host.innerHTML = TESTIMONIALS.map(
-    (t) => `
-    <figure class="card card-pad" style="display:grid;gap:14px;margin:0">
-      <div class="rating">${icon('star')}${icon('star')}${icon('star')}${icon('star')}${icon('star')}</div>
-      <blockquote style="margin:0;font-size:14px;line-height:1.75;color:var(--text)">“${esc(t.quote)}”</blockquote>
-      <figcaption class="row" style="gap:10px">
-        <span class="avatar avatar-${t.tone === 'violet' ? '' : t.tone}">${esc(t.initials)}</span>
-        <span>
-          <strong style="display:block;font-size:13px;color:var(--text-strong)">${esc(t.name)}</strong>
-          <small class="tiny subtle">${esc(t.meta)}</small>
-        </span>
-      </figcaption>
-    </figure>`
-  ).join('');
-}
 
 function renderFaq() {
   const host = $('#faq-list');
   if (!host) return;
+
   host.innerHTML = FAQS.map(
     (item, i) => `
     <div class="acc-item">
-      <button class="acc-head" aria-expanded="${i === 0}" aria-controls="faq-panel-${i}" id="faq-btn-${i}">
+      <button class="acc-head" type="button" aria-expanded="${i === 0}" aria-controls="faq-panel-${i}">
         <span class="acc-title">${esc(item.q)}</span>
         <svg class="acc-chevron"><use href="#i-chevron-down"/></svg>
       </button>
-      <div class="acc-panel" id="faq-panel-${i}" role="region" aria-labelledby="faq-btn-${i}" ${i === 0 ? '' : 'hidden'}>
-        <p style="padding:4px 16px 16px;font-size:14px;line-height:1.75;color:var(--text-muted);margin:0">${esc(item.a)}</p>
+      <div class="acc-panel" id="faq-panel-${i}" ${i === 0 ? '' : 'hidden'}>
+        <p class="acc-text">${esc(item.a)}</p>
       </div>
     </div>`
   ).join('');
 
   host.addEventListener('click', (e) => {
-    const btn = e.target.closest('.acc-head');
-    if (!btn) return;
-    const open = btn.getAttribute('aria-expanded') === 'true';
-    host.querySelectorAll('.acc-head').forEach((b) => {
-      b.setAttribute('aria-expanded', 'false');
-      b.nextElementSibling.hidden = true;
+    const head = e.target.closest('.acc-head');
+    if (!head) return;
+    const isOpen = head.getAttribute('aria-expanded') === 'true';
+    // Single-open accordion keeps the page calm.
+    $$('.acc-head', host).forEach((other) => {
+      const panel = document.getElementById(other.getAttribute('aria-controls'));
+      other.setAttribute('aria-expanded', 'false');
+      if (panel) panel.hidden = true;
     });
-    if (!open) {
-      btn.setAttribute('aria-expanded', 'true');
-      btn.nextElementSibling.hidden = false;
+    if (!isOpen) {
+      head.setAttribute('aria-expanded', 'true');
+      const panel = document.getElementById(head.getAttribute('aria-controls'));
+      if (panel) panel.hidden = false;
     }
   });
 }
 
 /* ------------------------------------------------------------------ */
-/* Hero search & PWA install                                          */
+/* Install prompt                                                     */
 /* ------------------------------------------------------------------ */
 
-$('#hero-search')?.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const q = new FormData(e.currentTarget).get('q')?.toString().trim();
-  location.href = q ? `courses.html?q=${encodeURIComponent(q)}` : 'courses.html';
-});
-
-let installPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  installPrompt = e;
+let installEvent = null;
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  installEvent = event;
 });
 
 document.addEventListener('click', async (e) => {
   if (!e.target.closest('[data-install-pwa]')) return;
-  if (!installPrompt) {
-    toast('Use your browser menu → “Install app” to add StudySpace.', 'info');
-    return;
+  if (installEvent) {
+    installEvent.prompt();
+    const { outcome } = await installEvent.userChoice;
+    toast(outcome === 'accepted' ? 'Installing StudySpace…' : 'You can install any time from the menu.', 'info');
+    installEvent = null;
+  } else {
+    toast('Use your browser menu → “Install app” or “Add to Home screen”.', 'info', 6000);
   }
-  installPrompt.prompt();
-  const { outcome } = await installPrompt.userChoice;
-  if (outcome === 'accepted') toast('StudySpace installed.', 'success');
-  installPrompt = null;
+});
+
+/* ------------------------------------------------------------------ */
+/* Search                                                             */
+/* ------------------------------------------------------------------ */
+
+const searchForm = $('#hero-search');
+searchForm?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const q = new FormData(searchForm).get('q')?.toString().trim();
+  location.href = q ? `courses.html?q=${encodeURIComponent(q)}` : 'courses.html';
 });
 
 /* ------------------------------------------------------------------ */
@@ -194,8 +174,7 @@ document.addEventListener('click', async (e) => {
 /* ------------------------------------------------------------------ */
 
 renderCategories();
-renderTestimonials();
-renderFaq();
+renderFeatured();
 renderTrending();
 renderTests();
-
+renderFaq();

@@ -201,7 +201,7 @@ export function renderHeader(active = '') {
   const user = storage.user;
 
   host.innerHTML = `
-    <header class="site-header on-dark">
+    <header class="site-header">
       <div class="container-wide header-inner">
         <a class="brand" href="index.html" aria-label="StudySpace home">
           <span class="brand-mark">${icon('zap')}</span>
@@ -294,7 +294,7 @@ export function renderFooter() {
   if (!host) return;
   const year = new Date().getFullYear();
   host.innerHTML = `
-    <footer class="site-footer on-dark">
+    <footer class="site-footer">
       <div class="container">
         <div class="footer-grid">
           <div class="footer-brand">
@@ -388,49 +388,35 @@ export function batchCard(course) {
     ? '<span class="badge badge-free">Free</span>'
     : course.badge === 'live'
       ? '<span class="badge badge-live">Live</span>'
-      : course.badge === 'new'
-        ? '<span class="badge badge-new">New</span>'
-        : course.badge === 'bestseller'
-          ? '<span class="badge badge-hot">Bestseller</span>'
-          : '';
+      : course.badge === 'bestseller'
+        ? '<span class="badge badge-hot">Bestseller</span>'
+        : '';
 
   const faculty = (course.faculty || [])[0];
+  const rating = Number(course.rating || 4.7).toFixed(1);
 
   return `
-    <article class="batch-card card-hover">
+    <article class="batch-card">
       <a class="batch-thumb ${thumbTone(course.subject)}" href="course.html?slug=${encodeURIComponent(course.slug)}" aria-label="${esc(course.title)}">
         ${badge}
-        <span class="glyph">${esc(course.exam || course.subject || 'SS')}</span>
+        <span class="glyph">${esc(course.exam || course.subject || 'Batch')}</span>
         <span class="thumb-subject">${esc(course.subject || 'General')}</span>
-        <span class="thumb-time">${icon('clock')}${esc(course.durationMonths ? `${course.durationMonths} months` : 'Self-paced')}</span>
       </a>
       <div class="batch-body">
-        <a href="course.html?slug=${encodeURIComponent(course.slug)}">
-          <h3 class="batch-title">${esc(course.title)}</h3>
-        </a>
-        ${faculty ? `<div class="batch-faculty">
-          <span class="avatar avatar-sm">${esc(faculty.initials || initials(faculty.name))}</span>
-          <span class="truncate">${esc(faculty.name)}${(course.faculty || []).length > 1 ? ` +${course.faculty.length - 1} more` : ''}</span>
-        </div>` : ''}
-        <div class="meta-row">
-          <span class="meta-item">${icon('play')}${esc(course.lessons || 0)} lessons</span>
-          <span class="meta-item">${icon('file-text')}${esc(course.tests || 0)} tests</span>
-          <span class="meta-item">${icon('users')}${compact(course.learners)}</span>
-        </div>
-        <div class="row-between" style="gap:10px">
-          <span class="rating">${icon('star')}${(course.rating || 4.7).toFixed(1)} <small>(${compact(course.ratingCount)})</small></span>
-          <span class="badge badge-outline">${esc(course.language || 'Hinglish')}</span>
-        </div>
+        <h3 class="batch-title">
+          <a href="course.html?slug=${encodeURIComponent(course.slug)}">${esc(course.title)}</a>
+        </h3>
+        <p class="batch-meta">
+          ${faculty ? `${esc(faculty.name)} · ` : ''}${rating} ★ · ${compact(course.learners)} learners
+        </p>
         <div class="batch-foot">
           <div class="price-block">
-            <div>
-              <span class="price-now">${money(course.price)}</span>
-              ${course.mrp > course.price ? `<span class="price-was">${money(course.mrp)}</span>` : ''}
-            </div>
+            <span class="price-now">${money(course.price)}</span>
+            ${course.mrp > course.price ? `<span class="price-was">${money(course.mrp)}</span>` : ''}
             ${off > 0 ? `<span class="price-off">${off}% off</span>` : ''}
           </div>
-          <a class="btn btn-primary batch-cta" href="course.html?slug=${encodeURIComponent(course.slug)}">
-            ${course.pricing_mode === 'free' ? 'Start free' : 'Explore'}
+          <a class="btn btn-ghost btn-sm batch-cta" href="course.html?slug=${encodeURIComponent(course.slug)}">
+            View
           </a>
         </div>
       </div>
@@ -440,27 +426,18 @@ export function batchCard(course) {
 export function testCard(test) {
   const free = !test.price;
   return `
-    <article class="test-card card-hover">
+    <article class="test-card">
       <div class="test-card-top">
-        <span class="test-icon">${icon(test.kind === 'Full mock' ? 'target' : 'file-text')}</span>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-          ${test.badge === 'live' ? '<span class="badge badge-live">Live</span>' : ''}
-          ${test.badge === 'new' ? '<span class="badge badge-new">New</span>' : ''}
-          <span class="badge ${free ? 'badge-free' : 'badge-paid'}">${free ? 'Free' : money(test.price)}</span>
-        </div>
+        <span class="test-eyebrow">${esc(test.exam)} · ${esc(test.kind)}</span>
+        <span class="badge ${free ? 'badge-free' : 'badge-paid'}">${free ? 'Free' : money(test.price)}</span>
       </div>
-      <div>
-        <span class="tiny subtle strong" style="letter-spacing:.06em;text-transform:uppercase">${esc(test.exam)} · ${esc(test.kind)}</span>
-        <h3 style="margin-top:6px">${esc(test.title)}</h3>
-      </div>
-      <div class="test-facts">
-        <div><strong>${test.questions}</strong><span>Questions</span></div>
-        <div><strong>${test.duration}</strong><span>Minutes</span></div>
-        <div><strong>${compact(test.attempts)}</strong><span>Attempts</span></div>
-      </div>
+      <h3 class="test-title">${esc(test.title)}</h3>
+      <p class="test-meta">
+        ${test.questions} questions · ${test.duration} minutes · ${compact(test.attempts)} attempts
+      </p>
       <div class="test-card-foot">
-        <span class="tiny muted">${icon('clock', 'meta-item')} ${countdown(test.startsAt) || shortDate(test.startsAt)}</span>
-        <a class="btn btn-dark btn-sm" href="test-player.html?test=${test.id}">Start test</a>
+        <span class="tiny subtle">${countdown(test.startsAt) || shortDate(test.startsAt) || 'Always open'}</span>
+        <a class="btn btn-ghost btn-sm" href="test-player.html?test=${test.id}&amp;duration=${test.duration}">Start test</a>
       </div>
     </article>`;
 }

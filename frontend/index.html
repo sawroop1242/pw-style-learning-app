@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b1020">
+  <meta name="theme-color" content="#1b1a17">
   <meta name="api-base" content="/api">
-  <title>StudySpace — Live batches, test series and revision for Indian exams</title>
-  <meta name="description" content="Structured live batches, exam-pattern mock tests with All-India rank, and a revision space that keeps your notes and bookmarks together.">
+  <title>StudySpace — live batches, printed notes and exam-pattern tests</title>
+  <meta name="description" content="Structured live batches, chapter notes and exam-pattern mock tests with All-India rank feedback. JEE, NEET, UPSC, SSC and school boards.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -27,238 +27,128 @@
   <div id="site-header"></div>
 
   <main id="main">
-    <!-- ============================ HERO ============================ -->
-    <section class="hero on-dark">
-      <div class="container hero-grid">
+    <!-- ============================ MASTHEAD ============================ -->
+    <section class="masthead">
+      <div class="container masthead-grid">
         <div>
-          <span class="hero-eyebrow">
-            <span class="pill">NEW</span>
-            Daily practice with All-India rank is live
-          </span>
-          <h1>Prepare smarter.<br><span class="grad">Rank higher.</span></h1>
-          <p class="hero-lead">
-            Live batches, exam-pattern tests and a revision space that remembers what you learnt —
-            built for JEE, NEET, UPSC, SSC and school boards.
+          <p class="masthead-kicker">JEE · NEET · UPSC · SSC · Class 10 &amp; 12</p>
+          <h1>Study from a <em>properly organised</em> syllabus.</h1>
+          <p class="masthead-lead">
+            Live classes, printed-style notes and exam-pattern tests in one account.
+            Every chapter closes with a test; every test comes back with a rank,
+            a percentile and a worked solution for each question.
           </p>
 
-          <form class="hero-search" role="search" id="hero-search">
+          <form class="masthead-search" role="search" id="hero-search">
             <svg aria-hidden="true"><use href="#i-search"/></svg>
-            <input type="search" name="q" placeholder="What do you want to learn today?" aria-label="Search for a course or test">
-            <button class="btn btn-accent" type="submit">Search</button>
+            <input type="search" name="q" placeholder="Search a batch, subject or exam" aria-label="Search batches">
+            <button class="btn btn-primary" type="submit">Search</button>
           </form>
 
-          <div class="hero-tags">
-            <span>Popular:</span>
+          <p class="masthead-links">
+            <span>Popular</span>
             <a href="courses.html?exam=JEE">JEE Main</a>
             <a href="courses.html?exam=NEET">NEET</a>
             <a href="courses.html?exam=SSC">SSC CGL</a>
             <a href="courses.html?exam=Class%2010">Class 10</a>
             <a href="tests.html">Free mocks</a>
-          </div>
-
-          <div class="hero-trust">
-            <div class="hero-stat"><strong>2,400+</strong><span>Lessons</span></div>
-            <div class="hero-stat"><strong>18,000+</strong><span>Practice questions</span></div>
-            <div class="hero-stat"><strong>120+</strong><span>Scheduled tests</span></div>
-            <div class="hero-stat"><strong>AIR</strong><span>Rank after every mock</span></div>
-          </div>
+          </p>
         </div>
 
-        <div class="hero-visual" aria-hidden="true">
-          <div class="hero-orbit"></div>
-          <div class="live-card">
-            <div class="live-card-thumb">
-              <span class="badge badge-live">Live now</span>
-              <span class="glyph">JEE</span>
-            </div>
-            <h3>Rotational motion — torque &amp; angular momentum</h3>
-            <div class="meta-row">
-              <span class="meta-item"><svg><use href="#i-users"/></svg> 4,218 watching</span>
-              <span class="meta-item"><svg><use href="#i-clock"/></svg> 62 min</span>
-            </div>
-            <div class="row-between">
-              <span class="price">₹0 <s>₹499</s></span>
-              <span class="badge badge-free">Free class</span>
-            </div>
-          </div>
-
-          <div class="float-chip fc-1">
-            <span class="fc-icon green"><svg><use href="#i-trophy"/></svg></span>
-            All-India rank #128
-          </div>
-          <div class="float-chip fc-2">
-            <span class="fc-icon amber"><svg><use href="#i-flame"/></svg></span>
-            12-day streak
-          </div>
-          <div class="float-chip fc-3">
-            <span class="fc-icon"><svg><use href="#i-shield-check"/></svg></span>
-            Server-scored results
-          </div>
-        </div>
+        <aside class="masthead-card" id="featured-batch" aria-label="Featured batch"></aside>
       </div>
     </section>
 
-    <!-- ========================= TRUST STRIP ========================= -->
-    <section class="trust-strip on-dark" aria-label="Platform guarantees">
-      <div class="container">
-        <ul>
-          <li><svg><use href="#i-shield-check"/></svg> No card payments — access codes only</li>
-          <li><svg><use href="#i-clock"/></svg> Timed mocks with real exam interface</li>
-          <li><svg><use href="#i-chart"/></svg> Rank, percentile and time per question</li>
-          <li><svg><use href="#i-smartphone"/></svg> Installs as an app, works offline</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- ========================= CATEGORIES ========================= -->
+    <!-- ============================ CATEGORIES ========================== -->
     <section class="section-tight">
       <div class="container">
-        <div class="row-between" style="margin-bottom:20px">
+        <div class="section-head">
           <div>
             <p class="eyebrow">Browse by goal</p>
-            <h2 class="section-title">Pick your exam</h2>
+            <h2 class="section-title">Choose your exam</h2>
           </div>
-          <a class="link" href="courses.html">All categories <svg><use href="#i-arrow-right"/></svg></a>
+          <a class="link" href="courses.html">All batches <svg><use href="#i-arrow-right"/></svg></a>
         </div>
         <div class="category-rail" id="category-rail"></div>
       </div>
     </section>
 
-    <!-- ========================= TRENDING =========================== -->
-    <section class="section-tight">
+    <!-- ============================= BATCHES ============================ -->
+    <section class="section">
       <div class="container">
-        <div class="row-between" style="margin-bottom:22px">
+        <div class="section-head">
           <div>
             <p class="eyebrow">Most enrolled this week</p>
-            <h2 class="section-title">Trending batches</h2>
-            <p class="section-lead">Live classes, recorded lectures and printed-style notes — one subscription per batch.</p>
+            <h2 class="section-title">Batches students are joining</h2>
           </div>
-          <div class="rail-nav">
-            <button class="rail-btn" data-rail-prev aria-label="Scroll left"><svg><use href="#i-chevron-left"/></svg></button>
-            <button class="rail-btn" data-rail-next aria-label="Scroll right"><svg><use href="#i-chevron-right"/></svg></button>
-          </div>
+          <a class="link" href="courses.html?sort=popular">See all <svg><use href="#i-arrow-right"/></svg></a>
         </div>
-        <div class="rail" id="trending-rail"></div>
+        <div class="batch-grid" id="trending-grid"></div>
       </div>
     </section>
 
-    <!-- ========================== TESTS ============================= -->
+    <!-- ============================== TESTS ============================= -->
     <section class="section-tight">
       <div class="container">
-        <div class="row-between" style="margin-bottom:22px">
+        <div class="section-head">
           <div>
-            <p class="eyebrow">Exam pattern · server scored</p>
-            <h2 class="section-title">Test series &amp; free mocks</h2>
-            <p class="section-lead">Every attempt returns an All-India rank, a percentile band and a time-per-question breakdown.</p>
+            <p class="eyebrow">Exam pattern · scored on submit</p>
+            <h2 class="section-title">Free mock tests</h2>
           </div>
-          <a class="btn btn-ghost btn-sm" href="tests.html">Browse all tests</a>
+          <a class="link" href="tests.html">All tests <svg><use href="#i-arrow-right"/></svg></a>
         </div>
         <div class="test-grid" id="home-tests"></div>
       </div>
     </section>
 
-    <!-- ========================= FEATURES =========================== -->
+    <!-- ============================== QUOTE ============================= -->
     <section class="section">
-      <div class="container">
-        <div style="max-width:640px;margin-bottom:32px">
-          <p class="eyebrow">Why students stay</p>
-          <h2 class="section-title">Everything in one place, nothing you have to fight with</h2>
-          <p class="section-lead">No five-app juggling. Lessons, tests, doubts and revision live in a single account that works on a slow connection.</p>
-        </div>
-        <div class="feature-grid">
-          <article class="feature-card">
-            <span class="feature-icon"><svg><use href="#i-target"/></svg></span>
-            <h3>Daily practice</h3>
-            <p>A short question set every day, drawn from what you got wrong last week. Five minutes is enough to keep a streak alive.</p>
-          </article>
-          <article class="feature-card">
-            <span class="feature-icon"><svg><use href="#i-trophy"/></svg></span>
-            <h3>All-India rank</h3>
-            <p>Your mock is scored on the server and ranked against every other attempt in the same window, with a percentile band.</p>
-          </article>
-          <article class="feature-card">
-            <span class="feature-icon"><svg><use href="#i-message"/></svg></span>
-            <h3>Doubts, answered</h3>
-            <p>Ask on any question and get a worked explanation. Answers are checked against the marking scheme before they reach you.</p>
-          </article>
-          <article class="feature-card">
-            <span class="feature-icon"><svg><use href="#i-download"/></svg></span>
-            <h3>Works offline</h3>
-            <p>Lessons you have opened stay readable on the bus. Notes you write are queued and synced when the connection returns.</p>
-          </article>
-        </div>
+      <div class="container container-narrow">
+        <blockquote class="pull-quote">
+          <p>
+            “The daily practice problems are what changed things for me. Two months in,
+            my mock percentile moved from 61 to 88 — mostly because I finally knew which
+            chapters were costing me marks.”
+          </p>
+          <footer>
+            <span class="avatar avatar-amber">IV</span>
+            Ishita Verma · JEE Main aspirant, Jaipur
+          </footer>
+        </blockquote>
       </div>
     </section>
 
-    <!-- ========================== STATS ============================= -->
+    <!-- =============================== FAQ ============================== -->
     <section class="section-tight">
-      <div class="container">
-        <div class="stats-band on-dark">
-          <div class="stat-item"><strong>4.8<em>/5</em></strong><span>Average batch rating</span></div>
-          <div class="stat-item"><strong>92<em>%</em></strong><span>Finish their first mock</span></div>
-          <div class="stat-item"><strong>3.4<em>×</em></strong><span>More practice with a streak</span></div>
-          <div class="stat-item"><strong>18<em>min</em></strong><span>Median doubt response</span></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ======================= TESTIMONIALS ========================= -->
-    <section class="section-tight">
-      <div class="container">
-        <p class="eyebrow">From the classroom</p>
-        <h2 class="section-title" style="margin-bottom:24px">What students say</h2>
-        <div class="grid grid-3" id="testimonials"></div>
-      </div>
-    </section>
-
-    <!-- ========================= APP BANNER ========================= -->
-    <section class="section-tight">
-      <div class="container">
-        <div class="app-banner on-dark">
+      <div class="container container-narrow">
+        <div class="section-head">
           <div>
-            <p class="eyebrow" style="color:var(--amber-400)">Study on the go</p>
-            <h2>Your batch in your pocket</h2>
-            <p>Install the web app in one tap — no store account needed. Downloadable lessons, offline notes and test reminders that actually reach you.</p>
-            <div class="store-btns">
-              <a class="store-btn" href="#" aria-label="Get it on Google Play">
-                <svg><use href="#i-playstore"/></svg>
-                <span><small>Get it on</small><strong>Google Play</strong></span>
-              </a>
-              <a class="store-btn" href="#" aria-label="Download on the App Store">
-                <svg><use href="#i-apple"/></svg>
-                <span><small>Download on the</small><strong>App Store</strong></span>
-              </a>
-              <button class="store-btn" data-install-pwa>
-                <svg><use href="#i-download"/></svg>
-                <span><small>Install</small><strong>Web app</strong></span>
-              </button>
-            </div>
-          </div>
-          <div class="phone-mock" aria-hidden="true">
-            <div class="phone-screen">
-              <div class="ps-hero"></div>
-              <div class="ps-row">
-                <div class="ps-block accent" style="flex:1"></div>
-                <div class="ps-block" style="flex:1"></div>
-              </div>
-              <div class="ps-tall"></div>
-              <div class="ps-tall"></div>
-              <div class="ps-row">
-                <div class="ps-block amber" style="flex:1"></div>
-                <div class="ps-block" style="flex:2"></div>
-              </div>
-            </div>
+            <p class="eyebrow">Before you start</p>
+            <h2 class="section-title">Questions, answered</h2>
           </div>
         </div>
+        <div class="accordion" id="faq-list"></div>
       </div>
     </section>
 
-    <!-- =========================== FAQ ============================== -->
-    <section class="section">
-      <div class="container" style="max-width:840px">
-        <p class="eyebrow">Before you start</p>
-        <h2 class="section-title" style="margin-bottom:22px">Questions, answered</h2>
-        <div class="accordion" id="faq-list"></div>
+    <!-- ============================ CTA STRIP =========================== -->
+    <section class="section-tight">
+      <div class="container">
+        <div class="cta-strip">
+          <div>
+            <h2>Keep your batch in your pocket</h2>
+            <p>
+              Install the web app in one tap — no store account needed. Opened lessons stay
+              readable offline, and test reminders arrive even on a slow connection.
+            </p>
+          </div>
+          <div class="row wrap" style="gap:10px">
+            <button class="btn btn-primary" data-install-pwa>
+              <svg><use href="#i-download"/></svg> Install app
+            </button>
+            <a class="btn btn-ghost" href="tests.html">Try a free mock</a>
+          </div>
+        </div>
       </div>
     </section>
   </main>
