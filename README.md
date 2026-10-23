@@ -134,7 +134,8 @@ Frontend checks (no build step, no dependencies):
 ```bash
 node --check frontend/sw.js
 for f in frontend/assets/js/*.js; do node --check "$f"; done
-# then serve frontend/ and walk the eight pages with the browser console open
+# then serve frontend/ and walk these pages with the browser console open:
+#   index, courses, course, tests, test-player, dashboard, login, legal, offline
 ```
 
 ## API Endpoints

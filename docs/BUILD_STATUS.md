@@ -23,7 +23,7 @@ Commands run from `backend/` with the venv interpreter:
 | Migration consistency | `python manage.py makemigrations --check --dry-run` | Exit 0 - "No changes detected" |
 | Django tests | `python manage.py test` | Exit 0 - "Ran 3 tests ... OK" |
 | Python compilation | `python -m compileall -q config courses` | Exit 0 |
-| Frontend syntax (separate check) | `node --check frontend/app.js` (repo root) | Exit 0 |
+| Frontend syntax (separate check) | `node --check` on `frontend/sw.js` and `frontend/assets/js/*.js` | Exit 0 (historical M1 check on the pre-rebuild shell) |
 
 Environment-guard verification in separate clean subprocesses (`import config.settings`):
 
