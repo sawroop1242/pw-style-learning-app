@@ -1279,6 +1279,20 @@ body.is-paused .exam-layout { visibility: hidden; }
   .review-head { align-items: flex-start; }
 }
 
+@media (max-width: 480px) {
+  /* Keep the status bar to one compact row pair on small phones. */
+  .exam-brand { display: none; }
+  .exam-titles span { display: none; }
+  .exam-identity { width: auto; flex: 1 1 auto; }
+  .exam-status { width: auto; gap: 6px; }
+  .exam-clock { padding: 5px 9px; }
+  .exam-clock-label { display: none; }
+  .exam-tool { font-size: var(--text-2xs); padding-inline: 10px; }
+  .qpanel-number { font-size: var(--text-xs); }
+  .q-meta-label { display: none; }
+  .palette-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
 /* ================================ PRINT ================================ */
 
 @media print {
