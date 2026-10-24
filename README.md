@@ -4,7 +4,8 @@ A mobile-first learning platform with a dark, app-style PWA frontend (desktop si
 
 ## Features
 
-- Responsive, installable PWA frontend with offline support
+- Responsive, installable PWA frontend with offline support — desktop sidebar shell, phone bottom
+  tabs, and app-style screens (Khazana, class player, downloads, community, profile)
 - Django REST API for courses, lessons, quizzes, notes, bookmarks, revision items, study tasks, and progress
 - Test series with timed/untimed modes, CSV import, attempt autosave/resume
 - JWT authentication with email OTP password reset

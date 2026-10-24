@@ -69,6 +69,7 @@ export const COURSES = [
     price: 3999,
     mrp: 10999,
     badge: 'bestseller',
+    withBooks: true,
     rank: 2
   },
   {
@@ -725,3 +726,180 @@ export const FAQS = [
     a: 'Notes, bookmarks and progress are visible only to you. We do not run behavioural advertising or sell learner data.'
   }
 ];
+
+/* ------------------------------------------------------------------ */
+/* Today's classes                                                     */
+/* ------------------------------------------------------------------ */
+
+/* Times are shown in IST. `status` is 'live' during the class window and a
+   clock label before/after it — the page never invents a LIVE badge. */
+export const TODAY_CLASSES = [
+  {
+    id: 't1',
+    title: 'Number System — Class 01',
+    faculty: 'Rehan Sir',
+    subject: 'Quantitative Aptitude',
+    time: '2:00 PM – 4:00 PM',
+    status: 'live',
+    slug: 'number-system-1',
+    courseSlug: 'ssc-cgl-2026-foundation'
+  },
+  {
+    id: 't2',
+    title: 'Percentage & Ratio — Class 02',
+    faculty: 'Meenakshi Ma\u2019am',
+    subject: 'Quantitative Aptitude',
+    time: '4:00 PM – 5:00 PM',
+    status: 'Upcoming',
+    slug: 'percentage-ratio-2',
+    courseSlug: 'ssc-cgl-2026-foundation'
+  },
+  {
+    id: 't3',
+    title: 'Indian Polity — Fundamental Rights',
+    faculty: 'Akshay Sir',
+    subject: 'General Studies',
+    time: '6:00 PM – 8:00 PM',
+    status: 'Upcoming',
+    slug: 'polity-rights',
+    courseSlug: 'upsc-prelims-2027'
+  },
+  {
+    id: 't4',
+    title: 'Grammar Rules — Spotting Errors',
+    faculty: 'Nandini Ma\u2019am',
+    subject: 'English',
+    time: '10:00 AM – 10:40 AM',
+    status: 'Completed',
+    slug: 'english-grammar-1',
+    courseSlug: 'ssc-cgl-2026-foundation'
+  }
+];
+
+/* ------------------------------------------------------------------ */
+/* Khazana — the free subject library                                  */
+/* ------------------------------------------------------------------ */
+
+export const SUBJECTS = [
+  { name: 'Physics',   icon: 'atom',       chapters: 5,  lectures: 21,  tone: 'physics' },
+  { name: 'Science',   icon: 'flask',      chapters: 1,  lectures: 0,   tone: 'chemistry' },
+  { name: 'Reasoning', icon: 'lightbulb',  chapters: 27, lectures: 71,  tone: 'maths' },
+  { name: 'Current Affairs', icon: 'globe', chapters: 1, lectures: 12,  tone: 'biology' },
+  { name: 'Polity',    icon: 'shield',     chapters: 1,  lectures: 0,   tone: 'reasoning' },
+  { name: 'Geography', icon: 'globe',      chapters: 9,  lectures: 21,  tone: 'english' },
+  { name: 'Economics', icon: 'chart',      chapters: 21, lectures: 49,  tone: 'computer' },
+  { name: 'Mathematics', icon: 'target',   chapters: 1,  lectures: 32,  tone: 'default' },
+  { name: 'Starter Kit', icon: 'cap',      chapters: 3,  lectures: 6,   tone: 'physics' },
+  { name: 'Computer',  icon: 'cpu',        chapters: 12, lectures: 13,  tone: 'maths' },
+  { name: 'Static GK', icon: 'building',   chapters: 0,  lectures: 0,   tone: 'chemistry' },
+  { name: 'History',   icon: 'book-open',  chapters: 0,  lectures: 0,   tone: 'biology' }
+];
+
+/* ------------------------------------------------------------------ */
+/* Downloads, player, community, profile                               */
+/* ------------------------------------------------------------------ */
+
+export const DOWNLOADS = {
+  lectures: [
+    { title: 'Number System — Class 01', meta: '480 MB · Video', kind: 'video' },
+    { title: 'Percentage — Class 02', meta: '315 MB · Video', kind: 'video' },
+    { title: 'Polity — Fundamental Rights', meta: '360 MB · Video', kind: 'video' }
+  ],
+  notes: [
+    { title: 'Number System — Handwritten Notes', meta: '2.4 MB · PDF', kind: 'pdf' },
+    { title: 'Percentage — Practice Sheet', meta: '1.1 MB · PDF', kind: 'pdf' },
+    { title: 'Polity — Revision Map', meta: '3.8 MB · PDF', kind: 'pdf' }
+  ],
+  tests: [
+    { title: 'SSC CGL Full Test 01', meta: '100 questions · 200 marks', kind: 'test' },
+    { title: 'SSC CGL Full Test 02', meta: '100 questions · 200 marks', kind: 'test' },
+    { title: 'SSC CHSL Mock Test', meta: '100 questions · 200 marks', kind: 'test' }
+  ]
+};
+
+export const PLAYER = {
+  title: 'Number System — Class 01',
+  subject: 'Quantitative Aptitude',
+  faculty: 'Rehan Sir',
+  duration: '1:00:15',
+  chapters: [
+    { title: '1. Introduction', duration: '12:34', state: 'done' },
+    { title: '2. Types of Numbers', duration: '45:20', state: 'current' },
+    { title: '3. Practice Questions', duration: '28:10', state: 'open' },
+    { title: '4. Previous Year Questions', duration: '36:12', state: 'locked' }
+  ],
+  notes: [
+    { title: 'Class notes — Number System', meta: 'PDF · 2.4 MB' },
+    { title: 'Practice sheet — 40 questions', meta: 'PDF · 1.1 MB' }
+  ],
+  doubts: [
+    { title: 'Why is 1 neither prime nor composite?', meta: 'Answered · Rehan Sir', by: 'Aarav G.' },
+    { title: 'Doubt in Q14 — divisibility by 7', meta: 'Answered · 2h ago', by: 'Ishita V.' }
+  ]
+};
+
+export const COMMUNITY = {
+  announcements: [
+    {
+      title: 'Weekly planner is live',
+      body: 'Your plan for this week is up. Two lectures a day plus one sectional test keeps you ahead of the batch schedule.',
+      author: 'StudySpace Team',
+      initials: 'SS',
+      time: '2 hours ago',
+      likes: 124,
+      comments: 12
+    },
+    {
+      title: 'Doubt-solving window moved to 9 PM',
+      body: 'From this week the doubt window starts at 9 PM instead of 8:30 PM, so evening classes are not cut short.',
+      author: 'Rehan Sir',
+      initials: 'RS',
+      time: '5 hours ago',
+      likes: 58,
+      comments: 7
+    },
+    {
+      title: 'New PYQ set — SSC CGL 2025',
+      body: 'The 2025 paper with worked solutions is now inside the Khazana library, free for every account.',
+      author: 'StudySpace Team',
+      initials: 'SS',
+      time: 'yesterday',
+      likes: 92,
+      comments: 4
+    }
+  ],
+  discussion: [
+    {
+      title: 'How do you revise Arithmetic in one week?',
+      body: 'I have one week before the mock. Does anyone have a chapter order that actually works, or should I just do full papers?',
+      author: 'Aarav_2007',
+      initials: 'A2',
+      time: '3 hours ago',
+      likes: 18,
+      comments: 6
+    },
+    {
+      title: 'Today\u2019s class was amazing',
+      body: 'The divisibility rules trick in the last ten minutes saved me at least three questions in the sectional.',
+      author: 'Ishita V.',
+      initials: 'IV',
+      time: '6 hours ago',
+      likes: 34,
+      comments: 9
+    }
+  ]
+};
+
+export const PROFILE = {
+  name: 'Aarav Gupta',
+  email: 'student@studyspace.example',
+  enrolled: 3,
+  streak: 12,
+  menu: [
+    { label: 'My Enrolments', href: 'courses.html?tab=mine', icon: 'book' },
+    { label: 'Downloads', href: 'downloads.html', icon: 'download' },
+    { label: 'Bookmarks', href: 'dashboard.html#bookmarks', icon: 'bookmark' },
+    { label: 'Settings', href: 'legal.html#contact', icon: 'settings' },
+    { label: 'Help & Support', href: 'legal.html#codes', icon: 'info' }
+  ]
+};

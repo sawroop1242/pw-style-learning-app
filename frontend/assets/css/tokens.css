@@ -106,18 +106,46 @@
   --grad-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
   /* Hero wash used behind the welcome banner. */
   --grad-hero: linear-gradient(115deg, #241f5c 0%, #191937 45%, #101020 100%);
-  /* Coloured header bands for batch cards, one per subject. */
-  --grad-physics: linear-gradient(135deg, #4a3bd8 0%, #2b2170 100%);
-  --grad-chemistry: linear-gradient(135deg, #0f8f73 0%, #103c33 100%);
-  --grad-maths: linear-gradient(135deg, #1f6fe0 0%, #16305e 100%);
-  --grad-biology: linear-gradient(135deg, #c2447e 0%, #4d1c34 100%);
-  --grad-reasoning: linear-gradient(135deg, #c98218 0%, #4a2f0d 100%);
-  --grad-english: linear-gradient(135deg, #8b5cf6 0%, #3a2170 100%);
-  --grad-computer: linear-gradient(135deg, #0e7490 0%, #123240 100%);
-  --grad-default: linear-gradient(135deg, #3f3f52 0%, #1c1c26 100%);
+  /* Pastel header bands for batch cards, one per subject — the signature
+     surface of the reference: light panel, dark ink, abstract mentor chips. */
+  --band-physics: linear-gradient(135deg, #b8b2fb 0%, #9a93f2 100%);
+  --band-chemistry: linear-gradient(135deg, #a6e3c4 0%, #86d3ae 100%);
+  --band-maths: linear-gradient(135deg, #a9d8f5 0%, #88c4ea 100%);
+  --band-biology: linear-gradient(135deg, #f3b3c6 0%, #e894ac 100%);
+  --band-reasoning: linear-gradient(135deg, #f4dd9c 0%, #e9c974 100%);
+  --band-english: linear-gradient(135deg, #d3bdf7 0%, #b79ef0 100%);
+  --band-computer: linear-gradient(135deg, #a3ddd6 0%, #82c9c1 100%);
+  --band-default: linear-gradient(135deg, #c3c3d4 0%, #a8a8bd 100%);
+  /* Text and mentor chips printed on a pastel band. */
+  --band-ink: #14141f;
+  --band-ink-muted: rgba(20, 20, 31, 0.66);
+  --band-chip: rgba(255, 255, 255, 0.55);
+
   --grad-page-head: linear-gradient(180deg, #14142a 0%, #0b0b16 100%);
   --grad-course: linear-gradient(160deg, #1a1740 0%, #0e0e1c 62%, #0b0b16 100%);
   --grad-auth: linear-gradient(155deg, #241f5c 0%, #12102a 55%, #0b0b16 100%);
+  /* Stage, splash and avatar surfaces used by the app screens. */
+  --grad-splash: radial-gradient(90% 70% at 50% 0%, #26205e 0%, #12102a 45%, #0a0a14 100%);
+  --grad-stage: linear-gradient(150deg, #241f52 0%, #16132c 100%);
+  --grad-stage-live: linear-gradient(150deg, #2c1a2a 0%, #17131f 100%);
+  --grad-player: linear-gradient(160deg, #1d1a3d 0%, #0e0d1c 100%);
+  --grad-avatar: linear-gradient(135deg, #d5ceff 0%, #a9a2f4 100%);
+  --grad-avatar-soft: linear-gradient(135deg, #ded8ff 0%, #a9a2f4 100%);
+  --poster-ink: #0d0b1d;
+
+  /* Subject icon tints, matched to the pastel bands. */
+  --tone-violet: #a9a2f4;
+  --tone-mint: #7fd4b4;
+  --tone-rose: #f3a8bd;
+  --tone-amber: #f0cf88;
+  --tone-lilac: #c3aef7;
+
+  /* Toast glyph colours, kept bright for a 3:1 icon contrast on --ink. */
+  --toast-success: #4ade80;
+  --toast-error: #f87171;
+  /* Hero panel: navy card with the violet bloom behind the artwork. */
+  --grad-hero-panel: radial-gradient(120% 140% at 82% 30%, rgba(120, 96, 255, 0.55) 0%, rgba(64, 44, 160, 0.34) 38%, rgba(16, 16, 32, 0) 72%),
+    linear-gradient(120deg, #1b1642 0%, #15102f 52%, #0f0d22 100%);
 
   /* ---- Type ----------------------------------------------------------- */
   --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -159,13 +187,13 @@
   --sp-11: 5.5rem;
 
   /* ---- Radius: soft, app-like ---------------------------------------- */
-  --r-xs: 6px;
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 20px;
-  --r-2xl: 24px;
-  --r-3xl: 28px;
+  --r-xs: 7px;
+  --r-sm: 9px;
+  --r-md: 13px;
+  --r-lg: 17px;
+  --r-xl: 21px;
+  --r-2xl: 26px;
+  --r-3xl: 30px;
   --r-pill: 999px;
 
   /* ---- Elevation: soft black drop shadows ----------------------------- */
@@ -189,7 +217,7 @@
   --container-wide: 1240px;
   --header-h: 64px;
   --tabbar-h: 62px;
-  --sidebar-w: 248px;
+  --sidebar-w: 232px;
   --topbar-h: 68px;
 
   --z-sticky: 40;

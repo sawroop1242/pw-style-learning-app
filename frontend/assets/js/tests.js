@@ -1,10 +1,13 @@
 /** Test series listing with exam filters. */
 
-import { $, esc, live, compact, countdown, shortDate } from './core.js';
+import { $, $$, esc, live, initials, storage } from './core.js';
 import { mountChrome, testCard, emptyState, icon } from './ui.js';
 import { TESTS } from './data.js';
 
 mountChrome('tests');
+
+const avatar = document.querySelector('[data-welcome-avatar]');
+if (avatar) avatar.textContent = initials(storage.user?.username || 'Student');
 
 const state = { exam: 'all', all: [] };
 
@@ -96,6 +99,56 @@ $('#test-filters').addEventListener('click', (e) => {
   state.exam = chip.dataset.exam;
   renderFilters();
   renderGrid();
+});
+
+/* All / Attempted / Bookmarked ------------------------------------- */
+
+function emptyFor(host, { title, body, iconName }) {
+  if (!host) return;
+  host.innerHTML = emptyState({
+    title,
+    body,
+    actionLabel: 'Browse all tests',
+    actionHref: 'tests.html',
+    iconName
+  });
+}
+
+const TAB_PANELS = ['panel-alltests', 'panel-attempted', 'panel-bookmarked'];
+function selectTab(index) {
+  const tabs = $$('.tabs .tab');
+  tabs.forEach((tab, i) => {
+    const selected = i === index;
+    tab.setAttribute('aria-selected', String(selected));
+    const panel = document.getElementById(TAB_PANELS[i]);
+    if (panel) panel.hidden = !selected;
+  });
+  if (index === 1) {
+    emptyFor($('#attempted-empty'), {
+      title: 'No attempts yet',
+      body: 'Finish any test and it appears here with its score, rank and a link to the full solution review.',
+      iconName: 'file-text'
+    });
+  }
+  if (index === 2) {
+    emptyFor($('#bookmarked-empty'), {
+      title: 'No bookmarked tests',
+      body: 'Bookmark a test from its card to keep it at the top of this list when the next window opens.',
+      iconName: 'bookmark'
+    });
+  }
+}
+
+$$('.tabs .tab').forEach((tab, i) => {
+  tab.addEventListener('click', () => selectTab(i));
+  tab.addEventListener('keydown', (e) => {
+    const tabs = $$('.tabs .tab');
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[next].focus();
+    selectTab(next);
+  });
 });
 
 renderSteps();

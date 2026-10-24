@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <meta name="api-base" content="/api">
+  <title>Number System — Class 01 | StudySpace</title>
+  <meta name="description" content="Recorded class with chapters, notes and doubts in one place.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/screens.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <div class="container">
+      <div class="player-shell">
+        <div class="player-top">
+          <a class="icon-btn" href="courses.html" aria-label="Back to batches"><svg><use href="#i-arrow-left"/></svg></a>
+          <h1>Class Player</h1>
+          <a class="icon-btn" href="downloads.html" aria-label="Downloads"><svg><use href="#i-download"/></svg></a>
+        </div>
+
+        <div class="player-stage" role="img" aria-label="Recorded class video, paused at 12 minutes 34 seconds">
+          <span class="stage-face" aria-hidden="true">RS</span>
+          <button class="player-play" type="button" aria-label="Play class" data-play>
+            <svg><use href="#i-play"/></svg>
+          </button>
+          <div class="player-progress">
+            <div class="player-track" aria-hidden="true"><i data-track></i></div>
+            <div class="player-controls">
+              <span><span data-position>12:34</span> / 1:00:15</span>
+              <span class="pc-right">
+                <span class="player-rate">1x</span>
+                <svg aria-hidden="true"><use href="#i-download"/></svg>
+                <svg aria-hidden="true"><use href="#i-settings"/></svg>
+                <svg aria-hidden="true"><use href="#i-external-link"/></svg>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="player-meta">
+          <div>
+            <h2 id="player-title">Number System — Class 01</h2>
+            <p id="player-sub">Quantitative Aptitude · Rehan Sir</p>
+          </div>
+          <button class="icon-btn" type="button" aria-label="Bookmark this class" data-bookmark><svg><use href="#i-bookmark"/></svg></button>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Class sections">
+          <button class="tab" role="tab" aria-selected="true" aria-controls="panel-chapters" id="tab-chapters">Chapters</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-notes" id="tab-notes">Notes</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-doubts" id="tab-doubts">Doubts</button>
+        </div>
+
+        <section class="tab-panel" id="panel-chapters" role="tabpanel" aria-labelledby="tab-chapters">
+          <div class="lesson-list" id="chapter-list"></div>
+        </section>
+        <section class="tab-panel" id="panel-notes" role="tabpanel" aria-labelledby="tab-notes" hidden>
+          <div id="note-list"></div>
+        </section>
+        <section class="tab-panel" id="panel-doubts" role="tabpanel" aria-labelledby="tab-doubts" hidden>
+          <div id="doubt-list"></div>
+          <a class="btn btn-primary btn-block" href="community.html" style="margin-top:16px">
+            <svg><use href="#i-message"/></svg> Ask a doubt
+          </a>
+        </section>
+
+        <div class="player-nav">
+          <button class="btn btn-ghost" type="button" data-prev><svg><use href="#i-chevron-left"/></svg> Prev</button>
+          <button class="btn btn-primary" type="button" data-next>Next <svg><use href="#i-chevron-right"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+  <div id="site-tabbar"></div>
+  <script type="module" src="assets/js/player.js"></script>
+</body>
+</html>

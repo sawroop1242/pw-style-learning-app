@@ -1223,3 +1223,58 @@ uses a solid red (`#c8263a`) that keeps white text at 5.5:1.
 
 The theme is a view-layer change only: API contracts, permissions, throttles and grading are untouched,
 and the earlier runs' test evidence still holds.
+
+## Run 8 — app screens to match the reference board (2026-10-24, branch `arena/f7cbb940-pw-style-learning-app`)
+
+The remaining screens of the app-style reference board are built, so every screen on the board now has
+a StudySpace equivalent. Layout, spacing and colour language are copied; the branding, copy, artwork
+and faculty identities are our own — no third-party logo, photography or wording is reproduced.
+
+### New screens
+
+| Screen | File | What it does |
+|---|---|---|
+| App splash | `splash.html` | Brand mark, tagline, three value lines, *Get started* / *I already have an account* / continue as guest. No forced timer — a redirect nobody asked for is an accessibility problem. |
+| Khazana | `khazana.html` + `khazana.js` | Twelve subject tiles with real chapter and lecture counts, a running total, and the free batches pulled from the catalogue. |
+| Class player | `player.html` + `player.js` | Stage with transport, Chapters / Notes / Doubts tabs (arrow-key navigable), per-chapter lock and done states, Prev / Next. |
+| Downloads | `downloads.html` + `downloads.js` | Lectures / Notes / Tests tabs with per-item actions. |
+| Community | `community.html` + `community.js` | Discussion and Announcement tab strips, posts with like / reply / share, compose FAB. `#announcements` deep-links to the announcements tab. |
+| Profile | `profile.html` + `profile.js` | Avatar, identity from the session, three stats, five-row menu, sign-out that calls the real `auth.logout()`. |
+| Batch details | `course.html` + `course.js` | Pastel cover band with abstract mentor chips, "with Hindi Books" pill, *Enroll Now* / *Share*, five tabs (Overview · Class Schedule · Subjects · Teachers · FAQs), "About this batch" resource checklist, sticky facts rail and a phone-only sticky purchase bar. |
+| Batches | `courses.html` | All / My Batches / Favorite Batches tab strip over the existing filters. |
+| Test Series | `tests.html` | All / Attempted / Bookmarked tab strip; cards now read *200 Questions · 200 Marks* with a *Start Test* button. |
+
+### Restored from the board's visual language
+
+- **Pastel header bands** on every batch card (`--band-*`), dark ink on pastel measured at 6.8–13.6:1.
+- **Coloured subject tiles** for the Khazana grid, one tint per subject.
+- **Solid violet active state** in the sidebar, matching the board's selected row.
+- **Top bar** now carries search, Khazana, notifications and the avatar.
+- Home was reordered to the board's rhythm: greeting → hero → quick tiles → Today's Classes → Recommended Batches → Khazana → Tests → announcements / community → poster → FAQ.
+
+### Deliberate omissions
+
+- **No teacher photos.** The board uses faculty photography; we render abstract initial chips instead.
+  Inventing faces for people who do not exist, or reusing someone else's, is not acceptable.
+- **No "LIVE NOW" that is not live.** The class strip reads its state from `TODAY_CLASSES`, where a
+  class is only marked live while it is in its window.
+- **Community, downloads and player have no API yet.** They render bundled sample content and say so
+  when you act on a control, rather than pretending a post was saved.
+- **My Batches** reuses the catalogue: there is no enrolment endpoint to read from.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Django suite (`accounts` + `courses`) | **146 tests, OK** (no backend change; re-run for the record) |
+| Pages rendered headlessly (jsdom) | **11/11** with content, sidebar, tab bar and no console errors |
+| Structural a11y (h1, labels, `aria-controls`, duplicate ids, alt text) | **15/15 pages clean** |
+| Interaction suite (new) | **64/64** — tabs, drawer, Escape, likes, transport, deep links |
+| CSS classes · custom properties | **408 used / 0 missing** · 159 defined / 135 referenced / **0 undefined** |
+| Literal hex outside `tokens.css` | **16** (15 are the print stylesheet, 1 is a clipped mask fill) |
+| CSS parse (css-tree) | 6 stylesheets, no errors |
+| `node --check` | 16/16 modules |
+| HTTP through `tools/serve.py` | **15/15 pages + 8/8 new assets 200** |
+
+The preview runs on the bundled fixtures: the sandbox API answers with an empty catalogue, and an empty
+catalogue would render empty grids. The page flag "Preview · sample data" stays visible.

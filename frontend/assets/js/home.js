@@ -1,128 +1,80 @@
 /**
- * Home page — featured batch, exam index, trending batches, free mocks, FAQ.
- * Reads go through `live()` so the page works against the API or the fixtures.
+ * Home page — welcome, hero, today's classes, Khazana, recommended batches,
+ * free mocks, announcements and FAQ. Catalogue reads go through `live()` so
+ * the page works against the API or the bundled fixtures.
  */
 
-import { $, $$, esc, live, money, compact, discountPercent, adaptCourse, adaptTest } from './core.js';
-import { mountChrome, batchCard, testCard, icon, toast } from './ui.js';
-import { CATEGORIES, COURSES, TESTS, FAQS } from './data.js';
+import { $, $$, esc, live, initials, storage, adaptCourse, adaptTest } from './core.js';
+import { mountChrome, batchCard, testCard, todayClassCard, icon, toast } from './ui.js';
+import { COURSES, TESTS, FAQS, TODAY_CLASSES, SUBJECTS, COMMUNITY } from './data.js';
 
 mountChrome('home');
 
 /* ------------------------------------------------------------------ */
-/* Featured batch                                                     */
+/* Welcome line                                                       */
 /* ------------------------------------------------------------------ */
 
-async function renderFeatured() {
-  const host = $('#featured-batch');
-  if (!host) return;
-
-  const { data } = await live('/courses/?page_size=1&sort=-learners', COURSES[0]);
-  const course = Array.isArray(data) ? data[0] : data.results?.[0] || data;
-  if (!course?.title) return;
-
-  const off = discountPercent(course.price, course.mrp);
-
-  host.innerHTML = `
-    <div class="mc-head">
-      <span>Featured batch</span>
-      ${course.pricing_mode === 'free'
-        ? '<span class="badge badge-free">Free</span>'
-        : '<span class="badge badge-live">Enrolling</span>'}
-    </div>
-    <div class="mc-body">
-      <p class="tiny subtle" style="letter-spacing:.08em;text-transform:uppercase">${esc(course.exam || '')}</p>
-      <h2>${esc(course.title)}</h2>
-      <div class="mc-meta">
-        <div>${icon('play')} ${esc(course.lessons || 0)} lessons</div>
-        <div>${icon('file-text')} ${esc(course.tests || 0)} tests</div>
-        <div>${icon('users')} ${compact(course.learners)} enrolled</div>
-      </div>
-      <div class="mc-meta">
-        <div>${icon('star')} ${(course.rating || 4.7).toFixed(1)} · ${compact(course.ratingCount)} ratings</div>
-        <div>${icon('globe')} ${esc(course.language || 'English')}</div>
-      </div>
-    </div>
-    <div class="mc-foot">
-      <span class="mc-price">
-        ${money(course.price)}
-        ${course.mrp > course.price ? `<s>${money(course.mrp)}</s>` : ''}
-        ${off ? `<span class="badge badge-hot" style="margin-left:8px">${off}% off</span>` : ''}
-      </span>
-      <a class="btn btn-primary btn-sm" href="course.html?slug=${encodeURIComponent(course.slug)}">
-        View batch
-      </a>
-    </div>`;
+function renderWelcome() {
+  const user = storage.user;
+  const name = user?.username || 'Student';
+  const avatar = document.querySelector('[data-welcome-avatar]');
+  if (avatar) avatar.textContent = initials(name);
+  const title = $('#welcome-title');
+  if (title) {
+    const first = name.split(/[\s._-]/)[0];
+    title.innerHTML = `Hello, ${esc(first.charAt(0).toUpperCase() + first.slice(1))}! <span aria-hidden="true">👋</span>`;
+  }
 }
 
 /* ------------------------------------------------------------------ */
-/* Exam index                                                         */
+/* Today's classes                                                    */
 /* ------------------------------------------------------------------ */
 
-function renderCategories() {
-  const host = $('#category-rail');
+function renderToday() {
+  const host = $('#today-grid');
   if (!host) return;
-
-  host.innerHTML = CATEGORIES.map(
-    (cat) => `
-    <a class="category-tile" href="courses.html?exam=${encodeURIComponent(cat.label)}">
-      <span class="cat-icon">${icon(cat.icon)}</span>
-      <span>
-        <strong>${esc(cat.label)}</strong>
-        <small>${esc(cat.sub)}</small>
-      </span>
-    </a>`
-  ).join('');
+  host.innerHTML = TODAY_CLASSES.map(todayClassCard).join('');
 }
 
 /* ------------------------------------------------------------------ */
-/* Khazana — the free library, grouped from the live catalogue       */
+/* Khazana — subject tiles with chapter and lecture counts            */
 /* ------------------------------------------------------------------ */
 
-const SUBJECT_ICON = {
-  Physics: 'atom',
-  Chemistry: 'flask',
-  Mathematics: 'target',
-  Maths: 'target',
-  Biology: 'heart',
-  Reasoning: 'lightbulb',
-  English: 'book-open',
-  'Computer Science': 'cpu',
-  'General Studies': 'globe',
-  Science: 'sparkles'
-};
-
-async function renderKhazana() {
+function renderKhazana() {
   const host = $('#khazana-grid');
   if (!host) return;
-
-  const { data } = await live('/courses/?page_size=60', COURSES);
-  const rows = (Array.isArray(data) ? data : data.results || []).map(adaptCourse);
-
-  const bySubject = new Map();
-  for (const course of rows) {
-    const subject = course.subject || 'General';
-    const entry = bySubject.get(subject) || { subject, batches: 0, lessons: 0, free: 0 };
-    entry.batches += 1;
-    entry.lessons += Number(course.lessons || 0);
-    if (course.pricing_mode === 'free') entry.free += 1;
-    bySubject.set(subject, entry);
-  }
-
-  const tiles = [...bySubject.values()].sort((a, b) => b.lessons - a.lessons).slice(0, 12);
-  if (!tiles.length) return;
-
-  host.innerHTML = tiles
+  host.innerHTML = SUBJECTS.slice(0, 8)
     .map(
-      (tile) => `
-      <a class="khazana-tile" href="courses.html?q=${encodeURIComponent(tile.subject)}">
-        <span class="khazana-icon">${icon(SUBJECT_ICON[tile.subject] || 'book-open')}</span>
-        <span class="khazana-body">
-          <strong>${esc(tile.subject)}</strong>
-          <small>${tile.batches} ${tile.batches === 1 ? 'batch' : 'batches'} · ${tile.lessons} lessons</small>
+      (subject) => `
+      <a class="subject-tile" href="khazana.html?subject=${encodeURIComponent(subject.name)}">
+        <span class="subject-icon tone-${subject.tone}">${icon(subject.icon)}</span>
+        <span class="subject-body">
+          <strong>${esc(subject.name)}</strong>
+          <small>${subject.chapters} ${subject.chapters === 1 ? 'chapter' : 'chapters'} · ${subject.lectures} ${subject.lectures === 1 ? 'lecture' : 'lectures'}</small>
         </span>
-        ${tile.free ? `<span class="badge badge-free">${tile.free} free</span>` : ''}
       </a>`
+    )
+    .join('');
+}
+
+/* ------------------------------------------------------------------ */
+/* Announcements                                                      */
+/* ------------------------------------------------------------------ */
+
+function renderNotices() {
+  const host = $('#home-notices');
+  if (!host) return;
+  const ICON = ['megaphone', 'calendar', 'sparkles'];
+  host.innerHTML = COMMUNITY.announcements
+    .map(
+      (item, i) => `
+      <li class="notice-item">
+        <span class="notice-icon">${icon(ICON[i % ICON.length])}</span>
+        <div>
+          <strong>${esc(item.title)}</strong>
+          <p>${esc(item.body)}</p>
+        </div>
+      </li>`
     )
     .join('');
 }
@@ -225,9 +177,10 @@ searchForm?.addEventListener('submit', (e) => {
 /* Boot                                                               */
 /* ------------------------------------------------------------------ */
 
-renderCategories();
+renderWelcome();
+renderToday();
 renderKhazana();
-renderFeatured();
+renderNotices();
 renderTrending();
 renderTests();
 renderFaq();

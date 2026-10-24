@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="assets/css/components.css">
   <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/screens.css">
 </head>
 <body>
   <noscript>
@@ -27,166 +28,143 @@
   <div id="site-header"></div>
 
   <main id="main">
-    <!-- ============================ MASTHEAD ============================ -->
-    <section class="masthead">
-      <div class="container masthead-grid">
+    <div class="container">
+
+      <!-- ============================ WELCOME ========================== -->
+      <section class="welcome" aria-labelledby="welcome-title">
         <div>
-          <p class="masthead-kicker">JEE · NEET · UPSC · SSC · Class 10 &amp; 12</p>
-          <h1>Study from a <em>properly organised</em> syllabus.</h1>
-          <p class="masthead-lead">
-            Live classes, printed-style notes and exam-pattern tests in one account.
-            Every chapter closes with a test; every test comes back with a rank,
-            a percentile and a worked solution for each question.
-          </p>
-
-          <form class="masthead-search" role="search" id="hero-search">
-            <svg aria-hidden="true"><use href="#i-search"/></svg>
-            <input type="search" name="q" placeholder="Search a batch, subject or exam" aria-label="Search batches">
-            <button class="btn btn-primary" type="submit">Search</button>
-          </form>
-
-          <p class="masthead-links">
-            <span>Popular</span>
-            <a href="courses.html?exam=JEE">JEE Main</a>
-            <a href="courses.html?exam=NEET">NEET</a>
-            <a href="courses.html?exam=SSC">SSC CGL</a>
-            <a href="courses.html?exam=Class%2010">Class 10</a>
-            <a href="tests.html">Free mocks</a>
-          </p>
+          <h1 id="welcome-title">Hello, Student! <span aria-hidden="true">👋</span></h1>
+          <p>Let’s learn something new today. Your batch is two classes ahead of schedule.</p>
         </div>
+        <a class="welcome-avatar" href="profile.html" aria-label="Open your profile" data-welcome-avatar>ST</a>
+      </section>
 
-        <aside class="masthead-card" id="featured-batch" aria-label="Featured batch"></aside>
-      </div>
-    </section>
+      <!-- ============================== HERO =========================== -->
+      <section class="masthead">
+        <div class="masthead-panel">
+          <div class="masthead-copy">
+            <h2>Your Preparation<br>Our Commitment</h2>
+            <p>Learn. Practise. Excel.<br>With the best teachers and structured batches.</p>
+            <a class="btn btn-primary" href="courses.html">
+              Explore Batches <svg><use href="#i-arrow-right"/></svg>
+            </a>
+          </div>
+          <div class="masthead-art" aria-hidden="true">
+            <img src="assets/img/hero-art.jpg" alt="" width="1400" height="787" loading="eager" decoding="async">
+          </div>
+        </div>
+      </section>
 
-    <!-- ============================ CATEGORIES ========================== -->
-    <section class="section-tight">
-      <div class="container">
+      <!-- ============================= QUICK =========================== -->
+      <section class="section-tight" aria-labelledby="quick-title">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Browse by goal</p>
-            <h2 class="section-title">Choose your exam</h2>
+            <p class="eyebrow">One tap away</p>
+            <h2 class="section-title" id="quick-title">Jump back in</h2>
           </div>
-          <a class="link" href="courses.html">All batches <svg><use href="#i-arrow-right"/></svg></a>
         </div>
-        <div class="category-rail" id="category-rail"></div>
-      </div>
-    </section>
+        <div class="quick-row">
+          <a class="quick-tile" href="courses.html"><span class="quick-icon"><svg><use href="#i-book"/></svg></span><strong>Batches</strong></a>
+          <a class="quick-tile" href="tests.html"><span class="quick-icon"><svg><use href="#i-file-text"/></svg></span><strong>Test Series</strong></a>
+          <a class="quick-tile" href="khazana.html"><span class="quick-icon"><svg><use href="#i-grid"/></svg></span><strong>Khazana</strong></a>
+          <a class="quick-tile" href="community.html"><span class="quick-icon"><svg><use href="#i-users"/></svg></span><strong>Community</strong></a>
+        </div>
+      </section>
 
-    <!-- ============================= KHAZANA ============================ -->
-    <section class="section-tight" id="khazana">
-      <div class="container">
+      <!-- ========================= TODAY'S CLASSES ===================== -->
+      <section class="section-tight" aria-labelledby="today-title">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Free library</p>
-            <h2 class="section-title">Khazana — notes, DPPs and practice</h2>
+            <p class="eyebrow">Live schedule · IST</p>
+            <h2 class="section-title" id="today-title">Today’s Classes</h2>
           </div>
-          <a class="link" href="tests.html">Open test series <svg><use href="#i-arrow-right"/></svg></a>
+          <a class="link" href="courses.html">View All <svg><use href="#i-arrow-right"/></svg></a>
         </div>
-        <div class="khazana-grid" id="khazana-grid"></div>
-      </div>
-    </section>
+        <div class="today-grid" id="today-grid" aria-live="polite"></div>
+      </section>
 
-    <!-- ============================= BATCHES ============================ -->
-    <section class="section">
-      <div class="container">
+      <!-- ======================== RECOMMENDED ========================== -->
+      <section class="section-tight" aria-labelledby="rec-title">
         <div class="section-head">
           <div>
             <p class="eyebrow">Most enrolled this week</p>
-            <h2 class="section-title">Batches students are joining</h2>
+            <h2 class="section-title" id="rec-title">Recommended Batches</h2>
           </div>
           <a class="link" href="courses.html?sort=popular">See all <svg><use href="#i-arrow-right"/></svg></a>
         </div>
-        <div class="batch-grid" id="trending-grid"></div>
-      </div>
-    </section>
+        <div class="batch-grid" id="trending-grid" aria-live="polite"></div>
+      </section>
 
-    <!-- ============================== TESTS ============================= -->
-    <section class="section-tight">
-      <div class="container">
+      <!-- ============================ KHAZANA ========================== -->
+      <section class="section-tight" id="khazana" aria-labelledby="khazana-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Free library</p>
+            <h2 class="section-title" id="khazana-title">Khazana — chapters and lectures</h2>
+          </div>
+          <a class="link" href="khazana.html">Open Khazana <svg><use href="#i-arrow-right"/></svg></a>
+        </div>
+        <div class="khazana-grid" id="khazana-grid"></div>
+      </section>
+
+      <!-- ============================ TESTS ============================ -->
+      <section class="section-tight" aria-labelledby="tests-title">
         <div class="section-head">
           <div>
             <p class="eyebrow">Exam pattern · scored on submit</p>
-            <h2 class="section-title">Free mock tests</h2>
+            <h2 class="section-title" id="tests-title">Free mock tests</h2>
           </div>
           <a class="link" href="tests.html">All tests <svg><use href="#i-arrow-right"/></svg></a>
         </div>
-        <div class="test-grid" id="home-tests"></div>
-      </div>
-    </section>
+        <div class="test-grid" id="home-tests" aria-live="polite"></div>
+      </section>
 
-    <!-- ======================= ANNOUNCEMENTS · COMMUNITY ================ -->
-    <section class="section-tight">
-      <div class="container split-grid">
-        <div class="panel" id="announcements">
-          <div class="panel-head">
-            <h2 class="panel-title">Announcements</h2>
-            <span class="badge badge-new">3 new</span>
+      <!-- ===================== ANNOUNCEMENTS + COMMUNITY =============== -->
+      <section class="section-tight">
+        <div class="split-grid">
+          <div class="panel" id="announcements">
+            <div class="panel-head">
+              <h2 class="panel-title">Announcements</h2>
+              <a class="link" href="community.html#announcements">All <svg><use href="#i-arrow-right"/></svg></a>
+            </div>
+            <ul class="notice-list" id="home-notices"></ul>
           </div>
-          <ul class="notice-list">
-            <li class="notice-item">
-              <span class="notice-icon"><svg><use href="#i-file-text"/></svg></span>
-              <div>
-                <strong>Free mock tests are open to everyone</strong>
-                <p>Attempt any public test without an account; sign in to keep your attempt history.</p>
-              </div>
-            </li>
-            <li class="notice-item">
-              <span class="notice-icon"><svg><use href="#i-calendar"/></svg></span>
-              <div>
-                <strong>New 2027 batches are listed with start dates</strong>
-                <p>Every batch page shows the schedule, subjects and what is included before you enrol.</p>
-              </div>
-            </li>
-            <li class="notice-item">
-              <span class="notice-icon"><svg><use href="#i-download"/></svg></span>
-              <div>
-                <strong>Notes stay readable offline</strong>
-                <p>Install the web app once and opened lessons, notes and tests remain available without a network.</p>
-              </div>
-            </li>
-          </ul>
-        </div>
 
-        <div class="panel" id="community">
-          <div class="panel-head">
-            <h2 class="panel-title">Community</h2>
-            <span class="badge badge-paid">Inside every batch</span>
+          <div class="panel" id="community">
+            <div class="panel-head">
+              <h2 class="panel-title">Community</h2>
+              <span class="badge badge-paid">Inside every batch</span>
+            </div>
+            <p class="panel-lead">
+              Ask a doubt under the exact lesson that raised it. Faculty replies land in the same
+              thread, so the answer stays next to the chapter for everyone who follows.
+            </p>
+            <ul class="feature-list">
+              <li><svg><use href="#i-message"/></svg><span>Threaded doubts on any lesson or question</span></li>
+              <li><svg><use href="#i-users"/></svg><span>Batch announcements from your faculty</span></li>
+              <li><svg><use href="#i-trophy"/></svg><span>Rank, percentile and accuracy after every test</span></li>
+            </ul>
+            <a class="btn btn-primary" href="community.html">Open community <svg><use href="#i-arrow-right"/></svg></a>
           </div>
-          <p class="panel-lead">
-            Ask a doubt under the exact lesson that raised it. Faculty replies land in the same
-            thread, so the answer stays next to the chapter for everyone who follows.
-          </p>
-          <ul class="feature-list">
-            <li><svg><use href="#i-message"/></svg><span>Threaded doubts on any lesson or question</span></li>
-            <li><svg><use href="#i-users"/></svg><span>Batch announcements from your faculty</span></li>
-            <li><svg><use href="#i-trophy"/></svg><span>Rank, percentile and accuracy after every test</span></li>
-          </ul>
-          <a class="btn btn-primary" href="login.html#register">Join a batch</a>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ============================== QUOTE ============================= -->
-    <section class="section">
-      <div class="container container-narrow">
-        <blockquote class="pull-quote">
-          <p>
-            “The daily practice problems are what changed things for me. Two months in,
-            my mock percentile moved from 61 to 88 — mostly because I finally knew which
-            chapters were costing me marks.”
-          </p>
-          <footer>
-            <span class="avatar avatar-amber">IV</span>
-            Ishita Verma · JEE Main aspirant, Jaipur
-          </footer>
-        </blockquote>
-      </div>
-    </section>
+      <!-- ============================= POSTER ========================== -->
+      <section class="section-tight">
+        <div class="poster-card">
+          <img src="assets/img/poster-summit.jpg" alt="" width="1024" height="1280" loading="lazy" decoding="async">
+          <div class="poster-body">
+            <h2>Big dreams need discipline</h2>
+            <p>Show up for the class, attempt the test, review what you got wrong. Repeat until it is easy.</p>
+            <button class="btn btn-primary" type="button" data-install-pwa>
+              <svg><use href="#i-download"/></svg> Let’s crack it together
+            </button>
+          </div>
+        </div>
+      </section>
 
-    <!-- =============================== FAQ ============================== -->
-    <section class="section-tight">
-      <div class="container container-narrow">
+      <!-- =============================== FAQ =========================== -->
+      <section class="section-tight">
         <div class="section-head">
           <div>
             <p class="eyebrow">Before you start</p>
@@ -194,29 +172,8 @@
           </div>
         </div>
         <div class="accordion" id="faq-list"></div>
-      </div>
-    </section>
-
-    <!-- ============================ CTA STRIP =========================== -->
-    <section class="section-tight">
-      <div class="container">
-        <div class="cta-strip">
-          <div>
-            <h2>Keep your batch in your pocket</h2>
-            <p>
-              Install the web app in one tap — no store account needed. Opened lessons stay
-              readable offline, and test reminders arrive even on a slow connection.
-            </p>
-          </div>
-          <div class="row wrap" style="gap:10px">
-            <button class="btn btn-primary" data-install-pwa>
-              <svg><use href="#i-download"/></svg> Install app
-            </button>
-            <a class="btn btn-ghost" href="tests.html">Try a free mock</a>
-          </div>
-        </div>
-      </div>
-    </section>
+      </section>
+    </div>
   </main>
 
   <div id="site-footer"></div>
