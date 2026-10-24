@@ -77,26 +77,35 @@ function matchFixture(raw) {
   );
 }
 
+/**
+ * Merge an API row with the matching fixture.
+ *
+ * Fields the API owns (title, price, counts, description) always come from the
+ * server. Fields it does not store yet (learners, rating, start date, language,
+ * validity) come from the fixture for sample rows, and stay empty for live rows
+ * rather than inventing social proof for a real batch.
+ */
 function normalise(raw) {
   const fixture = matchFixture(raw || {});
   const subject = raw?.subject || fixture.subject;
+  const live = Boolean(raw?.id);
   return {
     ...fixture,
     ...raw,
     subject,
     exam: fixture.exam || subject,
-    faculty: fixture.faculty || [],
-    rating: fixture.rating || 4.7,
-    ratingCount: fixture.ratingCount || 0,
-    learners: fixture.learners || 0,
+    faculty: live ? [] : fixture.faculty || [],
+    rating: live ? Number(raw.rating ?? 0) : fixture.rating || 4.7,
+    ratingCount: live ? Number(raw.rating_count ?? 0) : fixture.ratingCount || 0,
+    learners: live ? Number(raw.learners ?? 0) : fixture.learners || 0,
     lessons: raw?.lesson_count ?? fixture.lessons ?? 0,
-    tests: fixture.tests ?? 0,
-    language: fixture.language || 'Hinglish',
-    mrp: fixture.mrp || (raw?.price ? Math.round(Number(raw.price) * 2.4) : 0),
-    durationMonths: fixture.durationMonths || 12,
-    startsOn: fixture.startsOn || null,
+    tests: raw?.quiz_count ?? (live ? 0 : fixture.tests ?? 0),
+    language: live ? raw.language || null : fixture.language || 'Hinglish',
+    mrp: live ? Number(raw.mrp ?? 0) : fixture.mrp || (raw?.price ? Math.round(Number(raw.price) * 2.4) : 0),
+    durationMonths: live ? raw.duration_months ?? null : fixture.durationMonths || 12,
+    startsOn: live ? raw.starts_on ?? null : fixture.startsOn || null,
     badge: fixture.badge || null,
-    withBooks: fixture.withBooks || Boolean(raw?.with_books),
+    withBooks: Boolean(raw?.with_books),
     description: raw?.description || fixture.description,
     title: raw?.title || fixture.title,
     slug: raw?.slug || fixture.slug,
@@ -107,9 +116,16 @@ function normalise(raw) {
 async function loadCourse() {
   let course;
   try {
-    const { data } = await live(`/courses/?slug=${encodeURIComponent(slug || '')}`, null, { timeout: 2200 });
-    const rows = data ? (Array.isArray(data) ? data : data.results || []) : [];
-    course = normalise(rows[0] || {});
+    // Two hops: the list endpoint resolves the slug to an id, then the detail
+    // endpoint returns the folders, lessons and lock state the page renders.
+    const { data: list } = await live(`/courses/?slug=${encodeURIComponent(slug || '')}`, null, { timeout: 2200 });
+    const rows = list ? (Array.isArray(list) ? list : list.results || []) : [];
+    const match = rows[0];
+    let detail = match;
+    if (match?.id) {
+      detail = await request(`/courses/${match.id}/`, { timeout: 2200 }).catch(() => match);
+    }
+    course = normalise(detail || {});
   } catch {
     course = normalise({});
   }
@@ -160,10 +176,10 @@ function renderHeadline(course) {
     <p class="course-hero-lead">${esc(course.description || '')}</p>
     <div class="batch-facts-inline">
       <span>${icon('calendar')} Starts ${course.startsOn ? shortDate(course.startsOn) : 'soon'}</span>
-      <span>${icon('play')} ${course.lessons} lessons</span>
-      <span>${icon('file-text')} ${course.tests} tests</span>
-      <span>${icon('users')} ${course.learners.toLocaleString('en-IN')} enrolled</span>
-      <span>${icon('star')} ${course.rating.toFixed(1)}${course.ratingCount ? ` · ${course.ratingCount.toLocaleString('en-IN')} ratings` : ''}</span>
+      <span>${icon('play')} ${course.lessons} ${course.lessons === 1 ? 'lesson' : 'lessons'}</span>
+      <span>${icon('file-text')} ${course.tests} ${course.tests === 1 ? 'test' : 'tests'}</span>
+      ${course.learners ? `<span>${icon('users')} ${course.learners.toLocaleString('en-IN')} enrolled</span>` : ''}
+      ${course.rating ? `<span>${icon('star')} ${course.rating.toFixed(1)}${course.ratingCount ? ` · ${course.ratingCount.toLocaleString('en-IN')} ratings` : ''}</span>` : ''}
     </div>`;
 
   const cover = $('#course-cover');
@@ -342,52 +358,109 @@ function renderCurriculum(course) {
     </div>`;
 }
 
-function renderTests(course) {
+/**
+ * The Tests tab lists the quizzes the API actually publishes for this batch.
+ * Nothing is invented: a batch with no tests says so.
+ */
+async function renderTests(course) {
   const host = $('#panel-tests');
-  const rows = [
-    { name: 'Chapter test — after every unit', count: Math.max(1, Math.round(course.tests * 0.6)), marks: 40 },
-    { name: 'Sectional tests — every two weeks', count: Math.max(1, Math.round(course.tests * 0.28)), marks: 100 },
-    { name: 'Full-length mock — monthly', count: Math.max(1, Math.round(course.tests * 0.12)), marks: 300 }
-  ];
+  if (!host) return;
+
+  const note = `
+      <div class="alert alert-info" style="margin-top:6px">
+        <svg><use href="#i-info"/></svg>
+        <span>Answers are scored on the server. Rank is published only after the test window closes.</span>
+      </div>`;
+
+  let rows = [];
+  if (course.id) {
+    try {
+      const { data } = await live(`/quizzes/?course=${encodeURIComponent(course.id)}&page_size=20`, null, { timeout: 2200 });
+      rows = (data ? (Array.isArray(data) ? data : data.results || []) : []).map((quiz) => ({
+        id: quiz.id,
+        name: quiz.title,
+        questions: quiz.question_count ?? 0,
+        minutes: quiz.duration_minutes ?? 0,
+        marks: quiz.marks_per_question
+          ? Math.round(Number(quiz.marks_per_question) * (quiz.question_count ?? 0))
+          : null,
+        locked: quiz.has_access === false
+      }));
+    } catch {
+      rows = [];
+    }
+  }
+
+  if (!rows.length) {
+    host.innerHTML = `
+      <div class="stack">
+        ${emptyState({
+          title: 'No tests published for this batch yet',
+          body: 'Chapter tests and full-length mocks appear here as soon as they are released.',
+          actionLabel: 'Browse all test series',
+          actionHref: 'tests.html',
+          iconName: 'file-text'
+        })}
+        ${note}
+      </div>`;
+    return;
+  }
+
   host.innerHTML = `
     <div class="stack">
       ${rows
         .map(
-          (r) => `
+          (test) => `
         <div class="card card-pad row-between" style="gap:14px;flex-wrap:wrap">
           <div style="display:flex;gap:12px;align-items:center">
             <span class="test-icon">${icon('target')}</span>
             <div>
-              <strong style="display:block;font-size:14px">${esc(r.name)}</strong>
-              <small class="tiny muted">${r.count} tests · up to ${r.marks} marks · All-India rank</small>
+              <strong style="display:block;font-size:14px">${esc(test.name)}</strong>
+              <small class="tiny muted">
+                ${test.questions} questions${test.marks ? ` · ${test.marks} marks` : ''}${test.minutes ? ` · ${test.minutes} minutes` : ''}
+              </small>
             </div>
           </div>
-          <a class="btn btn-ghost btn-sm" href="tests.html">Preview</a>
+          ${
+            test.locked
+              ? '<span class="badge badge-outline">Enrol to unlock</span>'
+              : `<a class="btn btn-ghost btn-sm" href="test-player.html?test=${test.id}">Start test</a>`
+          }
         </div>`
         )
         .join('')}
-      <div class="alert alert-info" style="margin-top:6px">
-        <svg><use href="#i-info"/></svg>
-        <span>Results are calculated on the server. Rank is published only after the test window closes, so early finishers cannot leak the paper.</span>
-      </div>
+      ${note}
     </div>`;
 }
 
 function renderFaculty(course) {
   const host = $('#panel-faculty');
-  const rows = course.faculty?.length ? course.faculty : [{ name: 'StudySpace Faculty', role: course.subject, initials: 'SF', tone: 'violet' }];
+  const rows = course.faculty || [];
+
+  // The API does not store faculty yet, so a live batch says so instead of
+  // showing a name, a tenure or a rating nobody supplied.
+  if (!rows.length) {
+    host.innerHTML = emptyState({
+      title: 'Faculty profiles are being added',
+      body: `This batch is taught by the ${course.subject} team. Names and profiles appear here once they are published.`,
+      actionLabel: 'Ask a doubt in the community',
+      actionHref: 'community.html',
+      iconName: 'user'
+    });
+    return;
+  }
+
   host.innerHTML = `
     <div class="faculty-list">
       ${rows
         .map(
           (f) => `
         <div class="faculty-row">
-          <span class="avatar avatar-lg avatar-${f.tone === 'violet' ? '' : f.tone}">${esc(f.initials || initials(f.name))}</span>
+          <span class="avatar avatar-lg">${esc(f.initials || initials(f.name))}</span>
           <div style="flex:1">
             <h4>${esc(f.name)}</h4>
-            <p>${esc(f.role)} · 8+ years teaching ${esc(course.exam)}</p>
+            <p>${esc(f.role || course.subject)}</p>
           </div>
-          <span class="badge badge-neutral">${icon('star')} 4.8</span>
         </div>`
         )
         .join('')}

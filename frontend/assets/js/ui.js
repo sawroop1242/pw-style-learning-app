@@ -525,7 +525,11 @@ export function testCard(test) {
       </p>
       <div class="test-card-foot">
         <span class="tiny subtle">${countdown(test.startsAt) || shortDate(test.startsAt) || 'Always open'}</span>
-        <a class="btn btn-primary btn-sm" href="test-player.html?test=${test.id}">Start Test</a>
+        ${
+          test.locked
+            ? '<span class="badge badge-outline">Enrol to unlock</span>'
+            : `<a class="btn btn-primary btn-sm" href="test-player.html?test=${test.id}">Start Test</a>`
+        }
       </div>
     </article>`;
 }

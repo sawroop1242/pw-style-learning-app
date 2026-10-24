@@ -1408,3 +1408,76 @@ colour were both under 4.5:1 and were darkened to pass.
 | CSS parse (css-tree) | 6 stylesheets, no errors |
 | HTTP through `tools/serve.py` | 14/14 pages, all shell assets 200 |
 | Scope check | only `test-player.html` carries `exam-shell`; the other 13 pages are untouched |
+
+## Run 11 — a real catalogue to test against (2026-10-24, branch `arena/f7cbb940-pw-style-learning-app`)
+
+Until now the preview ran on bundled fixtures, because the database was empty and the front end only
+falls back to fixtures when the API is *unreachable*. With the API up, every grid rendered empty. This
+run adds seeded data, the API fields needed to render it, and a committed check suite so the two modes
+stay distinguishable.
+
+### Seeding
+
+`backend/courses/management/commands/seed_demo.py` creates **6 published batches** (3 free, 3 paid, with
+folders, 20 lessons and 7 chapter PDFs), **4 test series** and **5 published timed tests** holding **18
+questions / 72 choices**. Every question has exactly one correct choice, section topics are set so the
+exam window gets real sections, and a data test asserts both.
+
+Two decisions keep it honest:
+
+- **No dead links.** Seeded lessons carry titles and durations but no `video_url`, and every PDF is
+  published *and* protected. The public payload therefore contains no media URL that would 404, while
+  the lock path still gets exercised.
+- **The paywall still holds.** A test is readable when it hangs off a published series or a *free*
+  course. The demo attaches the SSC CGL mock to its free course and keeps the rest on their series, so
+  no paid paper is published while all five tests remain sittable by an anonymous visitor.
+
+The command is idempotent (`update_or_create` on stable keys) and `--clear` deletes only rows carrying the
+`demo-` slug prefix.
+
+### API changes this needed
+
+| Change | Why |
+|---|---|
+| `QuizSerializer`: `series_title`, `series_subject`, `course_title`, `course_slug`, `course_subject`, `attempt_count` | A test card can be labelled without a request per row. Counts are annotated (`Count(..., distinct=True)`) so two annotations do not multiply each other. |
+| `CourseListSerializer` / `CourseDetailSerializer`: `quiz_count` | Batch cards and the batch headline can show the real number of tests. |
+| `CourseViewSet`: `?slug=` filter | The batch page addresses a course by slug before it has an id. Without this, `/courses/?slug=…` returned the whole catalogue and the page rendered whichever batch came first. |
+| `QuizViewSet`: `?course=` / `?series=` filters | A batch's Tests tab lists the tests that belong to it. |
+
+### Front-end honesty fixes found while wiring the data
+
+- `tests.js` used to stamp fixture `exam`/`kind`/`attempts` onto live rows. It now reads the payload and
+  only falls back when the server has nothing to say. Marks are computed as
+  `marks_per_question × question_count` instead of the old "questions × 2".
+- `course.js` invented its Tests tab (`Math.max(1, Math.round(tests * 0.6))` and friends). It now lists
+  the real quizzes, with an empty state when a batch has none.
+- The batch headline no longer claims "12,400 enrolled · ★ 4.8" for a live row it has no figures for;
+  those facts only render when the payload carries them.
+- The Faculty tab no longer shows a fabricated mentor with "8+ years teaching" and a 4.8 badge. A live
+  batch says profiles are still being added.
+- `testCard` renders *Enrol to unlock* instead of *Start Test* when the API reports `has_access: false`.
+
+### Committed check suite
+
+`tools/checks/` now holds the verification scripts that previously lived in `/tmp` and were lost between
+sessions:
+
+| Script | Covers |
+|---|---|
+| `check.js` | 10 app pages render content, shell, and no console errors (offline) |
+| `a11y.js` | 14 pages: h1, labels, accessible names, `aria-controls`, duplicate ids, alt text |
+| `interact.js` | **77** checks: drawer, filters, the exam window end to end, likes |
+| `css.js` | every stylesheet parses; every class used exists (417 used / 473 defined) |
+| `live.js` | **31** checks against the running API and seeded data |
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Django suite (`accounts` + `courses`) | **155 tests OK** (146 before + 9 for the seed command) |
+| Pages rendered headlessly (offline) | **10/10** |
+| Structural a11y | **14/14 pages clean** |
+| Interaction suite | **77/77** |
+| Live API suite (seeded data) | **31/31** |
+| CSS classes · stylesheets | **417 used / 0 missing** · 6 parse clean |
+| HTTP through `tools/serve.py` | 14/14 pages, API proxy answering |

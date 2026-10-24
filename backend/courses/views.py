@@ -452,8 +452,9 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
     """Course catalogue with search, filter, and ordering."""
     
     queryset = Course.objects.filter(is_published=True).select_related("owner").annotate(
-        lesson_count=Count("lessons", filter=Q(lessons__is_published=True)),
-        folder_count=Count("folders")
+        lesson_count=Count("lessons", filter=Q(lessons__is_published=True), distinct=True),
+        folder_count=Count("folders", distinct=True),
+        quiz_total=Count("quizzes", filter=Q(quizzes__is_published=True), distinct=True),
     )
     serializer_class = CourseListSerializer
     permission_classes = [permissions.AllowAny]
@@ -469,6 +470,11 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         qs = super().get_queryset()
+        # A batch page addresses its course by slug, so the list endpoint has to
+        # be able to resolve one.
+        slug = self.request.query_params.get("slug")
+        if slug:
+            qs = qs.filter(slug=slug)
         # Filter by subject
         subject = self.request.query_params.get("subject")
         if subject:
@@ -677,7 +683,10 @@ class QuizViewSet(viewsets.ReadOnlyModelViewSet):
         qs = (
             Quiz.objects.filter(is_published=True)
             .select_related("series", "series__owner", "course", "course__owner")
-            .annotate(question_total=Count("questions"))
+            .annotate(
+                question_total=Count("questions", distinct=True),
+                attempt_total=Count("attempts", distinct=True),
+            )
         )
         if not policy.is_staff_role(user):
             # Free published courses, plus paid courses the student holds a
@@ -687,6 +696,13 @@ class QuizViewSet(viewsets.ReadOnlyModelViewSet):
                 | Q(course_id__in=policy.granted_course_ids(user))
                 | Q(course__isnull=True, series__is_published=True)
             )
+        # Nested listings: a batch page shows the tests that belong to it.
+        course = self.request.query_params.get("course")
+        if course:
+            qs = qs.filter(course_id=course) if str(course).isdigit() else qs.filter(course__slug=course)
+        series = self.request.query_params.get("series")
+        if series:
+            qs = qs.filter(series_id=series) if str(series).isdigit() else qs.filter(series__slug=series)
         return qs.prefetch_related("questions__choices")
 
 

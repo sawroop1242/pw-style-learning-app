@@ -66,7 +66,7 @@ async function renderTrending() {
   const host = $('#trending-grid');
   if (!host) return;
 
-  const { data } = await live('/courses/?page_size=3&sort=-learners', COURSES);
+  const { data } = await live('/courses/?page_size=3&sort=position', COURSES);
   const rows = (Array.isArray(data) ? data : data.results || []).slice(0, 3);
   host.innerHTML = rows.map((course) => batchCard(adaptCourse(course))).join('');
 }
@@ -75,7 +75,7 @@ async function renderTests() {
   const host = $('#home-tests');
   if (!host) return;
 
-  const { data } = await live('/quizzes/?page_size=3&sort=-attempts', TESTS);
+  const { data } = await live('/quizzes/?page_size=3&sort=-created_at', TESTS);
   const rows = (Array.isArray(data) ? data : data.results || []).slice(0, 3);
   host.innerHTML = rows.map((test) => testCard(adaptTest(test))).join('');
 }

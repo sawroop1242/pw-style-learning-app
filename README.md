@@ -13,7 +13,8 @@ A mobile-first learning platform with a dark, app-style PWA frontend (desktop si
 - Course access codes for paid content (Telegram provider contact)
 - Django admin for managing course content
 - SQLite locally; PostgreSQL-ready using `DATABASE_URL`
-- Comprehensive test suite (146 tests passing)
+- Comprehensive test suite (155 tests passing, including the seed command)
+- Seeded demo catalogue (`manage.py seed_demo`) and a committed front-end check suite (`tools/checks/`)
 
 ## Quick Start (Development)
 
@@ -148,10 +149,19 @@ See [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) for detailed milestone tracking
 ```bash
 cd backend
 ENVIRONMENT=test python manage.py test
-# Runs 146 tests: models, serializers, permissions, API security regression
+# Runs 155 tests: models, serializers, permissions, API security regression, seed data
 ```
 
-Frontend checks (no build step, no dependencies):
+### Seeded catalogue for local work
+
+```bash
+cd backend
+python manage.py migrate
+python manage.py seed_demo          # 6 batches, 4 series, 5 timed tests — safe to re-run
+python manage.py seed_demo --clear  # remove exactly the rows it made
+```
+
+Frontend checks (no build step; `tools/checks/` installs jsdom + css-tree on demand):
 
 ```bash
 node --check frontend/sw.js

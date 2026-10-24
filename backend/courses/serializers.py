@@ -145,15 +145,22 @@ class CourseListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for course listings."""
     lesson_count = serializers.IntegerField(source="lessons.count", read_only=True)
     folder_count = serializers.IntegerField(source="folders.count", read_only=True)
+    quiz_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
         fields = [
             "id", "title", "slug", "description", "subject", "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
-            "is_published", "lesson_count", "folder_count", "position",
+            "is_published", "lesson_count", "folder_count", "quiz_count", "position",
             "created_at", "updated_at"
         ]
+
+    def get_quiz_count(self, course):
+        annotated = getattr(course, "quiz_total", None)
+        if annotated is not None:
+            return annotated
+        return course.quizzes.filter(is_published=True).count()
 
 
 class CourseDetailSerializer(serializers.ModelSerializer):
@@ -164,6 +171,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     """
     lesson_count = serializers.IntegerField(source="lessons.count", read_only=True)
     folder_count = serializers.IntegerField(source="folders.count", read_only=True)
+    quiz_count = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
     folders = serializers.SerializerMethodField()
 
@@ -172,9 +180,15 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "slug", "description", "subject", "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
-            "is_published", "lesson_count", "folder_count", "position",
+            "is_published", "lesson_count", "folder_count", "quiz_count", "position",
             "has_access", "folders", "created_at", "updated_at"
         ]
+
+    def get_quiz_count(self, course):
+        annotated = getattr(course, "quiz_total", None)
+        if annotated is not None:
+            return annotated
+        return course.quizzes.filter(is_published=True).count()
 
     def get_has_access(self, course):
         return policy.can_access_course(_request_user(self), course)
@@ -204,11 +218,22 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 class QuizSerializer(serializers.ModelSerializer):
     """Quiz metadata. Questions and choices are only included when the caller
-    may sit the test; a paid test must not be readable from a public list."""
+    may sit the test; a paid test must not be readable from a public list.
+
+    ``series_title``/``series_subject``/``course_title``/``course_slug`` and
+    ``attempt_count`` are read-only conveniences so a listing can label a test
+    without a second request per row.
+    """
 
     questions = serializers.SerializerMethodField()
     question_count = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
+    series_title = serializers.CharField(source="series.title", read_only=True, default=None)
+    series_subject = serializers.CharField(source="series.subject", read_only=True, default=None)
+    course_title = serializers.CharField(source="course.title", read_only=True, default=None)
+    course_slug = serializers.CharField(source="course.slug", read_only=True, default=None)
+    course_subject = serializers.CharField(source="course.subject", read_only=True, default=None)
+    attempt_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Quiz
@@ -219,6 +244,8 @@ class QuizSerializer(serializers.ModelSerializer):
             "marks_per_question", "negative_marks_per_wrong",
             "pass_threshold_percent", "opens_at", "closes_at",
             "is_published", "has_access", "question_count", "questions",
+            "series_title", "series_subject", "course_title", "course_slug",
+            "course_subject", "attempt_count",
             "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
@@ -234,6 +261,12 @@ class QuizSerializer(serializers.ModelSerializer):
 
     def get_has_access(self, quiz):
         return policy.can_access_quiz(_request_user(self), quiz)
+
+    def get_attempt_count(self, quiz):
+        annotated = getattr(quiz, "attempt_total", None)
+        if annotated is not None:
+            return annotated
+        return quiz.attempts.count()
 
     def get_questions(self, quiz):
         if not self.get_has_access(quiz):

@@ -11,20 +11,32 @@ if (avatar) avatar.textContent = initials(storage.user?.username || 'Student');
 
 const state = { exam: 'all', all: [] };
 
-const FALLBACK_FIELDS = (quiz, index) => {
+/**
+ * Turn an API quiz row into a card view model.
+ *
+ * Every field is read from the payload; the fixture row is only consulted when
+ * the API genuinely has nothing to say (an older server without the label
+ * fields), and the card is never given a number the server did not send.
+ */
+const shapeTest = (quiz, index) => {
   const fixture = TESTS.find((t) => t.id === quiz.id) || TESTS[index] || TESTS[0];
+  const exam = quiz.series_subject || quiz.course_subject || quiz.exam || null;
+  const timed = quiz.timing_mode && quiz.timing_mode !== 'untimed';
   return {
-    ...fixture,
     id: quiz.id ?? fixture.id,
     title: quiz.title || fixture.title,
-    exam: fixture.exam,
-    kind: fixture.kind,
-    duration: quiz.duration_minutes || fixture.duration,
+    exam: exam || fixture.exam,
+    kind: quiz.series_title ? (timed ? 'Timed mock' : 'Practice') : fixture.kind,
+    duration: quiz.duration_minutes ?? fixture.duration,
     questions: quiz.question_count ?? fixture.questions,
-    attempts: fixture.attempts,
-    startsAt: quiz.opens_at || fixture.startsAt,
+    marks: quiz.marks_per_question
+      ? Math.round(Number(quiz.marks_per_question) * (quiz.question_count ?? 0))
+      : null,
+    attempts: quiz.attempt_count ?? fixture.attempts,
+    startsAt: quiz.opens_at || null,
     price: quiz.price ?? fixture.price,
-    badge: fixture.badge
+    badge: timed ? null : 'Practice',
+    locked: quiz.has_access === false
   };
 };
 
@@ -88,7 +100,7 @@ async function load() {
   $('#test-grid').innerHTML = `<div class="skeleton" style="height:250px;border-radius:20px"></div>`.repeat(6);
   const { data } = await live('/quizzes/?page_size=40', TESTS);
   const rows = Array.isArray(data) ? data : data.results || [];
-  state.all = rows.map(FALLBACK_FIELDS);
+  state.all = rows.map(shapeTest);
   renderFilters();
   renderGrid();
 }

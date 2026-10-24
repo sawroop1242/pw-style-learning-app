@@ -234,11 +234,15 @@ async function loadPaper() {
     const quiz = await request(`/quizzes/${state.apiId}/`, { timeout: 2500 });
     if (!quiz || !Array.isArray(quiz.questions) || !quiz.questions.length) return;
 
+    // Labels come from the payload; the fixture paper is only the shape.
+    const examLabel = quiz.series_subject || quiz.course_subject || fallback.test.exam;
+    const seriesLabel = quiz.series_title || (quiz.timing_mode === 'untimed' ? 'Practice' : 'Timed mock');
+
     if (quiz.has_access === false) {
       state.test = {
         ...fallback.test,
         title: quiz.title || fallback.test.title,
-        exam: fallback.test.exam,
+        exam: examLabel,
         kind: 'Locked',
         duration: minDuration(quiz.duration_minutes || fallback.test.duration)
       };
@@ -251,8 +255,8 @@ async function loadPaper() {
     state.test = {
       id: quiz.id,
       title: quiz.title || fallback.test.title,
-      exam: fallback.test.exam,
-      kind: fallback.test.kind,
+      exam: examLabel,
+      kind: seriesLabel,
       duration: minDuration(quiz.duration_minutes || fallback.test.duration),
       instructions: quiz.instructions || ''
     };
