@@ -9,7 +9,7 @@
  * Bump CACHE_VERSION whenever a shell asset changes so old clients refresh.
  */
 
-const CACHE_VERSION = 'studyspace-v8';
+const CACHE_VERSION = 'studyspace-v11';
 const SHELL = [
   './',
   './index.html',
@@ -17,6 +17,11 @@ const SHELL = [
   './course.html',
   './tests.html',
   './test-player.html',
+  './player.html',
+  './downloads.html',
+  './community.html',
+  './profile.html',
+  './splash.html',
   './dashboard.html',
   './login.html',
   './legal.html',
@@ -31,6 +36,7 @@ const SHELL = [
   './assets/css/components.css',
   './assets/css/pages.css',
   './assets/css/app.css',
+  './assets/css/screens.css',
   './assets/js/core.js',
   './assets/js/data.js',
   './assets/js/ui.js',
@@ -41,7 +47,13 @@ const SHELL = [
   './assets/js/test-player.js',
   './assets/js/dashboard.js',
   './assets/js/auth.js',
-  './assets/js/legal.js'
+  './assets/js/legal.js',
+  './assets/js/player.js',
+  './assets/js/downloads.js',
+  './assets/js/community.js',
+  './assets/js/profile.js',
+  './assets/img/hero-art.jpg',
+  './assets/img/poster-summit.jpg'
 ];
 
 const API_PREFIXES = ['/api/', '/token/', '/auth/', '/admin/'];

@@ -69,6 +69,7 @@ export const COURSES = [
     price: 3999,
     mrp: 10999,
     badge: 'bestseller',
+    withBooks: true,
     rank: 2
   },
   {
@@ -646,7 +647,82 @@ export const EXAM_QUESTIONS = [
     options: ['(3, 4, 0)', '(4, 3, 0)', '(0, 3, 4)', '(5, 0, 0)'],
     answer: 0,
     explanation: 'Each component is the magnitude times the corresponding direction cosine: (5×0.6, 5×0.8, 0) = (3, 4, 0).'
-  }
+  },
+  {
+    id: 100,
+    type: 'single',
+    section: 'Reasoning',
+    marks: 2,
+    negative: 0.5,
+    comprehension: {
+      title: 'Comprehension',
+      range: 'Questions 100–102',
+      text:
+        'The chart shows the number of candidates (in thousands) who appeared for a scholarship test from five districts in 2025. Read it and answer the questions that follow.',
+      chart: {
+        alt: 'Bar chart of candidates in thousands by district: North 42, South 55, East 38, West 61, Central 49.',
+        unit: 'k',
+        max: 70,
+        labels: ['North', 'South', 'East', 'West', 'Central'],
+        values: [42, 55, 38, 61, 49],
+        caption: 'Candidates per district, 2025 (thousands).'
+      }
+    },
+    prompt: 'Which district had the fewest candidates?',
+    options: ['North', 'South', 'East', 'West'],
+    answer: 2,
+    explanation: 'East is the shortest bar at 38 thousand, below North (42) and Central (49).'
+  },
+  {
+    id: 101,
+    type: 'single',
+    section: 'Reasoning',
+    marks: 2,
+    negative: 0.5,
+    comprehension: {
+      title: 'Comprehension',
+      range: 'Questions 100–102',
+      text:
+        'The chart shows the number of candidates (in thousands) who appeared for a scholarship test from five districts in 2025. Read it and answer the questions that follow.',
+      chart: {
+        alt: 'Bar chart of candidates in thousands by district: North 42, South 55, East 38, West 61, Central 49.',
+        unit: 'k',
+        max: 70,
+        labels: ['North', 'South', 'East', 'West', 'Central'],
+        values: [42, 55, 38, 61, 49],
+        caption: 'Candidates per district, 2025 (thousands).'
+      }
+    },
+    prompt: 'How many more candidates appeared from West than from East?',
+    options: ['13 thousand', '19 thousand', '23 thousand', '27 thousand'],
+    answer: 2,
+    explanation: 'West is 61 thousand and East is 38 thousand, so the difference is 23 thousand.'
+  },
+  {
+    id: 102,
+    type: 'single',
+    section: 'Reasoning',
+    marks: 2,
+    negative: 0.5,
+    comprehension: {
+      title: 'Comprehension',
+      range: 'Questions 100–102',
+      text:
+        'The chart shows the number of candidates (in thousands) who appeared for a scholarship test from five districts in 2025. Read it and answer the questions that follow.',
+      chart: {
+        alt: 'Bar chart of candidates in thousands by district: North 42, South 55, East 38, West 61, Central 49.',
+        unit: 'k',
+        max: 70,
+        labels: ['North', 'South', 'East', 'West', 'Central'],
+        values: [42, 55, 38, 61, 49],
+        caption: 'Candidates per district, 2025 (thousands).'
+      }
+    },
+    prompt: 'Candidates from North and Central together are closest to:',
+    options: ['85 thousand', '91 thousand', '97 thousand', '103 thousand'],
+    answer: 1,
+    explanation: 'North 42 + Central 49 = 91 thousand.'
+  },
 ];
 
 export const DASHBOARD = {
@@ -725,3 +801,161 @@ export const FAQS = [
     a: 'Notes, bookmarks and progress are visible only to you. We do not run behavioural advertising or sell learner data.'
   }
 ];
+
+/* ------------------------------------------------------------------ */
+/* Today's classes                                                     */
+/* ------------------------------------------------------------------ */
+
+/* Times are shown in IST. `status` is 'live' during the class window and a
+   clock label before/after it — the page never invents a LIVE badge. */
+export const TODAY_CLASSES = [
+  {
+    id: 't1',
+    title: 'Number System — Class 01',
+    faculty: 'Rehan Sir',
+    subject: 'Quantitative Aptitude',
+    time: '2:00 PM – 4:00 PM',
+    status: 'live',
+    slug: 'number-system-1',
+    courseSlug: 'ssc-cgl-2026-foundation'
+  },
+  {
+    id: 't2',
+    title: 'Percentage & Ratio — Class 02',
+    faculty: 'Meenakshi Ma\u2019am',
+    subject: 'Quantitative Aptitude',
+    time: '4:00 PM – 5:00 PM',
+    status: 'Upcoming',
+    slug: 'percentage-ratio-2',
+    courseSlug: 'ssc-cgl-2026-foundation'
+  },
+  {
+    id: 't3',
+    title: 'Indian Polity — Fundamental Rights',
+    faculty: 'Akshay Sir',
+    subject: 'General Studies',
+    time: '6:00 PM – 8:00 PM',
+    status: 'Upcoming',
+    slug: 'polity-rights',
+    courseSlug: 'upsc-prelims-2027'
+  },
+  {
+    id: 't4',
+    title: 'Grammar Rules — Spotting Errors',
+    faculty: 'Nandini Ma\u2019am',
+    subject: 'English',
+    time: '10:00 AM – 10:40 AM',
+    status: 'Completed',
+    slug: 'english-grammar-1',
+    courseSlug: 'ssc-cgl-2026-foundation'
+  }
+];
+
+/* ------------------------------------------------------------------ */
+/* Downloads, player, community, profile                               */
+/* ------------------------------------------------------------------ */
+
+export const DOWNLOADS = {
+  lectures: [
+    { title: 'Number System — Class 01', meta: '480 MB · Video', kind: 'video' },
+    { title: 'Percentage — Class 02', meta: '315 MB · Video', kind: 'video' },
+    { title: 'Polity — Fundamental Rights', meta: '360 MB · Video', kind: 'video' }
+  ],
+  notes: [
+    { title: 'Number System — Handwritten Notes', meta: '2.4 MB · PDF', kind: 'pdf' },
+    { title: 'Percentage — Practice Sheet', meta: '1.1 MB · PDF', kind: 'pdf' },
+    { title: 'Polity — Revision Map', meta: '3.8 MB · PDF', kind: 'pdf' }
+  ],
+  tests: [
+    { title: 'SSC CGL Full Test 01', meta: '100 questions · 200 marks', kind: 'test' },
+    { title: 'SSC CGL Full Test 02', meta: '100 questions · 200 marks', kind: 'test' },
+    { title: 'SSC CHSL Mock Test', meta: '100 questions · 200 marks', kind: 'test' }
+  ]
+};
+
+export const PLAYER = {
+  title: 'Number System — Class 01',
+  subject: 'Quantitative Aptitude',
+  faculty: 'Rehan Sir',
+  duration: '1:00:15',
+  chapters: [
+    { title: '1. Introduction', duration: '12:34', state: 'done' },
+    { title: '2. Types of Numbers', duration: '45:20', state: 'current' },
+    { title: '3. Practice Questions', duration: '28:10', state: 'open' },
+    { title: '4. Previous Year Questions', duration: '36:12', state: 'locked' }
+  ],
+  notes: [
+    { title: 'Class notes — Number System', meta: 'PDF · 2.4 MB' },
+    { title: 'Practice sheet — 40 questions', meta: 'PDF · 1.1 MB' }
+  ],
+  doubts: [
+    { title: 'Why is 1 neither prime nor composite?', meta: 'Answered · Rehan Sir', by: 'Aarav G.' },
+    { title: 'Doubt in Q14 — divisibility by 7', meta: 'Answered · 2h ago', by: 'Ishita V.' }
+  ]
+};
+
+export const COMMUNITY = {
+  announcements: [
+    {
+      title: 'Weekly planner is live',
+      body: 'Your plan for this week is up. Two lectures a day plus one sectional test keeps you ahead of the batch schedule.',
+      author: 'StudySpace Team',
+      initials: 'SS',
+      time: '2 hours ago',
+      likes: 124,
+      comments: 12
+    },
+    {
+      title: 'Doubt-solving window moved to 9 PM',
+      body: 'From this week the doubt window starts at 9 PM instead of 8:30 PM, so evening classes are not cut short.',
+      author: 'Rehan Sir',
+      initials: 'RS',
+      time: '5 hours ago',
+      likes: 58,
+      comments: 7
+    },
+    {
+      title: 'New PYQ set — SSC CGL 2025',
+      body: 'The 2025 paper with worked solutions is now in the free test series, open to every account.',
+      author: 'StudySpace Team',
+      initials: 'SS',
+      time: 'yesterday',
+      likes: 92,
+      comments: 4
+    }
+  ],
+  discussion: [
+    {
+      title: 'How do you revise Arithmetic in one week?',
+      body: 'I have one week before the mock. Does anyone have a chapter order that actually works, or should I just do full papers?',
+      author: 'Aarav_2007',
+      initials: 'A2',
+      time: '3 hours ago',
+      likes: 18,
+      comments: 6
+    },
+    {
+      title: 'Today\u2019s class was amazing',
+      body: 'The divisibility rules trick in the last ten minutes saved me at least three questions in the sectional.',
+      author: 'Ishita V.',
+      initials: 'IV',
+      time: '6 hours ago',
+      likes: 34,
+      comments: 9
+    }
+  ]
+};
+
+export const PROFILE = {
+  name: 'Aarav Gupta',
+  email: 'student@studyspace.example',
+  enrolled: 3,
+  streak: 12,
+  menu: [
+    { label: 'My Enrolments', href: 'courses.html?tab=mine', icon: 'book' },
+    { label: 'Downloads', href: 'downloads.html', icon: 'download' },
+    { label: 'Bookmarks', href: 'dashboard.html#bookmarks', icon: 'bookmark' },
+    { label: 'Settings', href: 'legal.html#contact', icon: 'settings' },
+    { label: 'Help & Support', href: 'legal.html#codes', icon: 'info' }
+  ]
+};

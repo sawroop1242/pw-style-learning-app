@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <meta name="api-base" content="/api">
+  <title>My profile | StudySpace</title>
+  <meta name="description" content="Your StudySpace profile, enrolments, downloads and settings.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/screens.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <div class="container">
+      <div class="player-shell">
+        <div class="player-top">
+          <a class="icon-btn" href="index.html" aria-label="Back to home"><svg><use href="#i-arrow-left"/></svg></a>
+          <h1>My Profile</h1>
+          <a class="icon-btn" href="login.html" aria-label="Account settings"><svg><use href="#i-edit"/></svg></a>
+        </div>
+
+        <div class="profile-head">
+          <span class="profile-avatar" id="profile-avatar">AG</span>
+          <div>
+            <h2 id="profile-name">Aarav Gupta</h2>
+            <p id="profile-email">student@studyspace.example</p>
+          </div>
+        </div>
+
+        <div class="profile-stats">
+          <div class="profile-stat"><strong id="stat-enrolled">3</strong><span>Batches</span></div>
+          <div class="profile-stat"><strong id="stat-streak">12</strong><span>Day streak</span></div>
+          <div class="profile-stat"><strong id="stat-tests">26</strong><span>Tests taken</span></div>
+        </div>
+
+        <div class="menu-list" id="profile-menu"></div>
+
+        <div style="margin-top:20px;display:grid;gap:10px">
+          <a class="btn btn-primary btn-block" href="dashboard.html">Open my learning</a>
+          <button class="btn btn-ghost btn-block" type="button" data-sign-out>Sign out</button>
+        </div>
+
+        <p class="tiny subtle" id="profile-note" style="margin-top:16px">
+          Browsing as a guest. <a class="link" href="login.html">Sign in</a> to see your own enrolments.
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+  <div id="site-tabbar"></div>
+  <script type="module" src="assets/js/profile.js"></script>
+</body>
+</html>

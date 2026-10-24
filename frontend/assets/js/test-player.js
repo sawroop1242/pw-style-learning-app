@@ -42,7 +42,13 @@ const state = {
   durationMinutes: 180,
   submitted: false,
   result: null,
-  released: true
+  released: true,
+  paused: false,
+  pauseStartedAt: null,
+  questionMs: new Map(),     // questionId → accumulated ms on screen
+  activeId: null,            // the question the clock is currently running for
+  activeSince: null,         // ms timestamp that question went live
+  reports: new Map()         // questionId → reason text
 };
 
 let ticker = null;
@@ -59,6 +65,22 @@ function clock(seconds) {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   return h > 0 ? `${h}:${pad(m)}:${pad(s % 60)}` : `${pad(m)}:${pad(s % 60)}`;
+}
+
+/** Always HH:MM:SS — the exam clock never drops the hour field. */
+function clockParts(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  return {
+    h: pad(Math.floor(s / 3600)),
+    m: pad(Math.floor((s % 3600) / 60)),
+    s: pad(s % 60)
+  };
+}
+
+/** mm:ss for the per-question timer. */
+function shortClock(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
 }
 
 const setText = (selector, value) => {
@@ -84,7 +106,8 @@ function fixturePaper() {
     negative: Number(q.negative ?? 1),
     type: q.type || 'single',
     answerIndex: q.answer,
-    explanation: q.explanation || ''
+    explanation: q.explanation || '',
+    comprehension: q.comprehension || null
   }));
 
   return {
@@ -168,7 +191,9 @@ function persist() {
     questionIds: state.questions.map((q) => q.id),
     answers: Object.fromEntries(state.answers),
     marked: [...state.marked],
-    visited: [...state.visited]
+    visited: [...state.visited],
+    questionMs: Object.fromEntries(state.questionMs),
+    reports: Object.fromEntries(state.reports)
   });
 }
 
@@ -184,6 +209,12 @@ function applySaved(saved) {
   }
   for (const id of saved.marked || []) state.marked.add(Number(id));
   for (const id of saved.visited || []) state.visited.add(Number(id));
+  for (const [id, ms] of Object.entries(saved.questionMs || {})) {
+    if (Number.isFinite(Number(ms))) state.questionMs.set(Number(id), Number(ms));
+  }
+  for (const [id, reason] of Object.entries(saved.reports || {})) {
+    if (typeof reason === 'string') state.reports.set(Number(id), reason);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -203,11 +234,15 @@ async function loadPaper() {
     const quiz = await request(`/quizzes/${state.apiId}/`, { timeout: 2500 });
     if (!quiz || !Array.isArray(quiz.questions) || !quiz.questions.length) return;
 
+    // Labels come from the payload; the fixture paper is only the shape.
+    const examLabel = quiz.series_subject || quiz.course_subject || fallback.test.exam;
+    const seriesLabel = quiz.series_title || (quiz.timing_mode === 'untimed' ? 'Practice' : 'Timed mock');
+
     if (quiz.has_access === false) {
       state.test = {
         ...fallback.test,
         title: quiz.title || fallback.test.title,
-        exam: fallback.test.exam,
+        exam: examLabel,
         kind: 'Locked',
         duration: minDuration(quiz.duration_minutes || fallback.test.duration)
       };
@@ -220,8 +255,8 @@ async function loadPaper() {
     state.test = {
       id: quiz.id,
       title: quiz.title || fallback.test.title,
-      exam: fallback.test.exam,
-      kind: fallback.test.kind,
+      exam: examLabel,
+      kind: seriesLabel,
       duration: minDuration(quiz.duration_minutes || fallback.test.duration),
       instructions: quiz.instructions || ''
     };
@@ -327,6 +362,11 @@ function enterExam() {
   $('#intro-view').hidden = true;
   $('#exam-view').hidden = false;
   document.body.classList.add('is-exam');
+  const skip = document.querySelector('.skip-link');
+  if (skip) {
+    skip.href = '#exam-main';
+    skip.textContent = 'Skip to the question';
+  }
 
   setText('#exam-name', state.test.title);
   setText('#exam-sub', `${state.test.exam} · ${state.test.kind}`);
@@ -399,29 +439,111 @@ function currentQuestion() {
   return state.questions[state.current];
 }
 
+/* Per-question clock: time only accrues while the question is on screen and
+   the paper is not paused, so a break never inflates the reading. */
+/** Stop the per-question clock and credit the time to the question it ran for. */
+function bankQuestionTime() {
+  if (state.activeSince === null || state.activeId === null) return;
+  const spent = Date.now() - state.activeSince;
+  state.questionMs.set(state.activeId, (state.questionMs.get(state.activeId) || 0) + spent);
+  state.activeSince = null;
+  state.activeId = null;
+}
+
+function timeOnQuestion(q) {
+  if (!q) return 0;
+  const banked = state.questionMs.get(q.id) || 0;
+  const running = q.id === state.activeId && state.activeSince !== null && !state.paused;
+  return banked + (running ? Date.now() - state.activeSince : 0);
+}
+
+/** Inline SVG bar chart for data-interpretation passages. */
+function barChart(chart) {
+  if (!chart?.labels?.length) return '';
+  const w = 520;
+  const h = 220;
+  const padL = 34;
+  const padB = 26;
+  const padT = 12;
+  const max = Number(chart.max) || Math.max(...chart.values) || 1;
+  const slot = (w - padL - 12) / chart.labels.length;
+  const barW = Math.min(46, slot * 0.56);
+  const ticks = Array.from({ length: 5 }, (_, i) => Math.round((max / 4) * i));
+
+  return `
+    <figure class="qchart">
+      <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(chart.alt || 'Bar chart')}">
+        ${ticks
+          .map((tick) => {
+            const y = padT + (h - padT - padB) * (1 - tick / max);
+            return `<g class="qchart-tick">
+              <line x1="${padL}" x2="${w - 8}" y1="${y}" y2="${y}"/>
+              <text x="${padL - 8}" y="${y + 4}" text-anchor="end">${tick}</text>
+            </g>`;
+          })
+          .join('')}
+        ${chart.values
+          .map((value, i) => {
+            const x = padL + slot * i + (slot - barW) / 2;
+            const barH = ((h - padT - padB) * value) / max;
+            const y = h - padB - barH;
+            return `<g class="qchart-bar">
+              <rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3"><title>${esc(chart.labels[i])}: ${value}${esc(chart.unit || '')}</title></rect>
+              <text class="qchart-label" x="${x + barW / 2}" y="${h - 8}" text-anchor="middle">${esc(chart.labels[i])}</text>
+            </g>`;
+          })
+          .join('')}
+        <line class="qchart-axis" x1="${padL}" x2="${w - 8}" y1="${h - padB}" y2="${h - padB}"/>
+      </svg>
+      ${chart.caption ? `<figcaption>${esc(chart.caption)}</figcaption>` : ''}
+    </figure>`;
+}
+
+function renderComprehension(q) {
+  const host = $('#comprehension');
+  if (!host) return;
+  const passage = q.comprehension;
+  if (!passage) {
+    host.hidden = true;
+    host.innerHTML = '';
+    document.body.classList.remove('has-passage');
+    return;
+  }
+  host.hidden = false;
+  document.body.classList.add('has-passage');
+  host.innerHTML = `
+    <header class="comprehension-head">
+      <h2>${esc(passage.title || 'Comprehension')}</h2>
+      ${passage.range ? `<span class="comprehension-range">${esc(passage.range)}</span>` : ''}
+    </header>
+    ${passage.text ? `<p class="comprehension-text">${esc(passage.text)}</p>` : ''}
+    ${barChart(passage.chart)}`;
+}
+
 function renderQuestion({ focus = false } = {}) {
   const q = currentQuestion();
   if (!q) return;
 
+  bankQuestionTime();
+
   const chosen = state.answers.get(q.id);
   const marked = state.marked.has(q.id);
-  const positionInSection = state.sections
-    .find((s) => s.name === q.section)
-    ?.questions.findIndex((row) => row.id === q.id);
+  const number = state.current + 1;
+
+  setText('#q-number', `Question No. ${number}`);
+  setText('#q-marks', `+${q.marks}`);
+  const negNode = $('#q-negative');
+  if (negNode) {
+    negNode.textContent = q.negative ? `-${q.negative}` : '';
+    negNode.hidden = !q.negative;
+  }
+  setText('#q-time', shortClock(timeOnQuestion(q)));
+  $('#report-btn')?.classList.toggle('is-reported', state.reports.has(q.id));
+
+  renderComprehension(q);
 
   $('#qpanel').innerHTML = `
-    <header class="qpanel-head">
-      <div class="qpanel-index">
-        <span class="qpanel-number">Question ${state.current + 1}</span>
-        <span class="qpanel-of">of ${state.questions.length}${positionInSection >= 0 ? ` · ${esc(q.section)}` : ''}</span>
-      </div>
-      <div class="qpanel-marks">
-        <span class="pos">+${q.marks}</span>
-        ${q.negative ? `<span class="neg">−${q.negative}</span>` : ''}
-        <span class="qpanel-type">${q.type === 'single' ? 'Single correct' : 'Multiple correct'}</span>
-      </div>
-    </header>
-
+    <p class="qpanel-label">Question:</p>
     <p class="qpanel-text" id="qpanel-text">${esc(q.prompt)}</p>
 
     <div class="qpanel-options" role="radiogroup" aria-labelledby="qpanel-text">
@@ -431,7 +553,7 @@ function renderQuestion({ focus = false } = {}) {
         <label class="qoption ${chosen === option.id ? 'is-selected' : ''}">
           <input type="radio" name="answer" value="${esc(option.id)}" data-choice="${esc(option.id)}"
                  ${chosen === option.id ? 'checked' : ''}>
-          <span class="qoption-key">${LETTERS[i]}</span>
+          <span class="qoption-key" aria-hidden="true"></span>
           <span class="qoption-text">${esc(option.text)}</span>
         </label>`
         )
@@ -447,7 +569,10 @@ function renderQuestion({ focus = false } = {}) {
 
   if (focus) $('#qpanel').focus({ preventScroll: true });
   state.visited.add(q.id);
+  state.activeId = q.id;
+  state.activeSince = state.paused ? null : Date.now();
   syncSectionTab();
+  renderPalette();
   persist();
 }
 
@@ -482,6 +607,7 @@ function goTo(index) {
   $('#qpanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/** Advance one question; syncSectionTab keeps the strip in step. */
 function goNext() {
   if (state.current < state.questions.length - 1) goTo(state.current + 1);
   else openSubmit();
@@ -531,53 +657,81 @@ function counts() {
   let answered = 0;
   let marked = 0;
   let visited = 0;
+  let markedAnswered = 0;
+  let markedOnly = 0;
 
   for (const q of state.questions) {
-    if (state.answers.has(q.id)) answered += 1;
-    if (state.marked.has(q.id)) marked += 1;
+    const isAnswered = state.answers.has(q.id);
+    const isMarked = state.marked.has(q.id);
+    if (isAnswered) answered += 1;
+    if (isMarked) marked += 1;
     if (state.visited.has(q.id)) visited += 1;
+    if (isMarked && isAnswered) markedAnswered += 1;
+    else if (isMarked) markedOnly += 1;
   }
 
   return {
     answered,
     marked,
+    markedAnswered,
+    markedOnly,
     visited,
     notAnswered: visited - answered,
     unvisited: state.questions.length - visited
   };
 }
 
+const LEGEND = [
+  ['is-answered', 'Answered'],
+  ['is-marked', 'Marked'],
+  ['is-unvisited', 'Not Visited'],
+  ['is-marked-answered', 'Marked and answered'],
+  ['is-not-answered', 'Not Answered']
+];
+
+function renderLegend(c) {
+  const host = $('#legend-counts');
+  if (!host) return;
+  const value = {
+    'is-answered': c.answered,
+    'is-marked': c.markedOnly,
+    'is-unvisited': c.unvisited,
+    'is-marked-answered': c.markedAnswered,
+    'is-not-answered': c.notAnswered
+  };
+  host.innerHTML = LEGEND.map(
+    ([cls, label]) => `<li><i class="lg ${cls}" aria-hidden="true"></i><span>${label}</span><b>${value[cls]}</b></li>`
+  ).join('');
+}
+
 function renderPalette() {
   const host = $('#palette-groups');
   if (!host) return;
 
-  host.innerHTML = state.sections
-    .map((section) => {
-      return `
-        <div class="palette-group">
-          <p class="palette-group-title">${esc(section.name)} <span>${section.questions.length}</span></p>
-          <div class="palette-grid">
-            ${section.questions
-              .map((q) => {
-                const index = state.questions.findIndex((row) => row.id === q.id);
-                const status = statusOf(q);
-                return `<button class="pal-btn ${status} ${index === state.current ? 'is-current' : ''}"
-                          type="button" data-jump="${index}"
-                          aria-label="Question ${index + 1} · ${status.replace('is-', '').replace('-', ' ')}"
-                          aria-current="${index === state.current ? 'true' : 'false'}">${index + 1}</button>`;
-              })
-              .join('')}
-          </div>
-        </div>`;
-    })
-    .join('');
+  // The rail mirrors the reference: only the section you are in is numbered.
+  const section = state.sections.find((s) => s.name === activeSection) || state.sections[0];
+  const name = section?.name || 'Questions';
+  setText('#palette-section', name);
+
+  host.innerHTML = section
+    ? `<div class="palette-grid">
+         ${section.questions
+           .map((q) => {
+             const index = state.questions.findIndex((row) => row.id === q.id);
+             const status = statusOf(q);
+             const human = status.replace('is-', '').replace(/-/g, ' ');
+             return `<button class="pal-btn ${status} ${index === state.current ? 'is-current' : ''}"
+                       type="button" data-jump="${index}"
+                       aria-label="Question ${index + 1}, ${human}"
+                       aria-current="${index === state.current ? 'true' : 'false'}">${index + 1}</button>`;
+           })
+           .join('')}
+       </div>`
+    : '';
 
   const c = counts();
+  renderLegend(c);
   setText('#palette-progress', `${c.answered} of ${state.questions.length} answered`);
-  setText('#sum-answered', c.answered);
-  setText('#sum-unanswered', c.notAnswered);
-  setText('#sum-marked', c.marked);
-  setText('#sum-unvisited', c.unvisited);
 }
 
 $('#palette-groups').addEventListener('click', (e) => {
@@ -638,16 +792,31 @@ function saveAnswer(questionId) {
 /* Timer                                                              */
 /* ------------------------------------------------------------------ */
 
+function paintClock(remaining) {
+  const parts = clockParts(remaining);
+  setText('#timer-h', parts.h);
+  setText('#timer-m', parts.m);
+  setText('#timer-s', parts.s);
+  $('#exam-timer')?.classList.toggle('is-critical', remaining <= 300);
+  const label = $('#exam-timer');
+  if (label) label.setAttribute('aria-label', `Time left ${parts.h} hours ${parts.m} minutes`);
+}
+
+function remainingSeconds() {
+  return Math.max(0, Math.floor((state.deadline - Date.now()) / 1000));
+}
+
 function startTimer() {
   if (ticker) clearInterval(ticker);
   warned = false;
 
   const tick = () => {
-    if (state.submitted) return;
-    const remaining = Math.max(0, Math.floor((state.deadline - Date.now()) / 1000));
-    const value = $('#timer-value');
-    if (value) value.textContent = clock(remaining);
-    $('#exam-timer')?.classList.toggle('is-critical', remaining <= 300);
+    if (state.submitted || state.paused) return;
+    const remaining = remainingSeconds();
+    paintClock(remaining);
+
+    const q = currentQuestion();
+    if (q) setText('#q-time', shortClock(timeOnQuestion(q)));
 
     if (remaining <= 300 && !warned) {
       warned = true;
@@ -664,6 +833,111 @@ function startTimer() {
   tick();
   ticker = setInterval(tick, 1000);
 }
+
+/* ------------------------------------------------------------------ */
+/* Pause, full screen, report, instructions                           */
+/* ------------------------------------------------------------------ */
+
+function pauseExam() {
+  if (state.paused || state.mode !== 'exam' || state.submitted) return;
+  bankQuestionTime();
+  state.paused = true;
+  state.pauseStartedAt = Date.now();
+  state.activeSince = null;
+  state.activeId = null;
+  if (ticker) clearInterval(ticker);
+  ticker = null;
+
+  const veil = $('#pause-veil');
+  if (veil) veil.hidden = false;
+  document.body.classList.add('is-paused');
+  $('#resume-btn')?.focus();
+  persist();
+}
+
+function resumeExam() {
+  if (!state.paused) return;
+  const pausedFor = Date.now() - (state.pauseStartedAt || Date.now());
+  // Push the local deadline by the pause duration so the candidate keeps the
+  // time they did not use. A scheduled, server-scored test still expires on
+  // the server's own deadline.
+  state.deadline += pausedFor;
+  state.paused = false;
+  state.pauseStartedAt = null;
+  state.activeId = currentQuestion()?.id ?? null;
+  state.activeSince = Date.now();
+
+  const veil = $('#pause-veil');
+  if (veil) veil.hidden = true;
+  document.body.classList.remove('is-paused');
+  startTimer();
+  $('#pause-btn')?.focus();
+  persist();
+}
+
+$('#pause-btn')?.addEventListener('click', pauseExam);
+$('#resume-btn')?.addEventListener('click', resumeExam);
+
+/* Full screen — offered only where the browser supports it. */
+const fullscreenBtn = $('#fullscreen-btn');
+if (fullscreenBtn && document.documentElement.requestFullscreen) {
+  fullscreenBtn.hidden = false;
+  const syncFullscreenLabel = () => {
+    fullscreenBtn.textContent = document.fullscreenElement ? 'Exit Full Screen' : 'Enter Full Screen';
+  };
+  fullscreenBtn.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      toast('This browser blocked full screen. Press F11 instead.', 'info');
+    }
+    syncFullscreenLabel();
+  });
+  document.addEventListener('fullscreenchange', syncFullscreenLabel);
+  syncFullscreenLabel();
+}
+
+/* Instructions, available at any point during the paper. */
+function instructionItems() {
+  return [
+    'The paper has several sections. Use the section tabs to move between them.',
+    'Every question shows its marks and negative marking at the top of the panel.',
+    'Save & Next records the answer and moves on. Mark for Review & Next flags it so you can return.',
+    'Clear Response removes the answer you picked for this question.',
+    'The palette shows the status of every question in the current section, and the legend counts the whole paper.',
+    'When the timer reaches zero the paper is submitted automatically.'
+  ];
+}
+
+$('#instructions-btn')?.addEventListener('click', () => {
+  const list = $('#instruction-list');
+  if (list) list.innerHTML = instructionItems().map((text) => `<li>${esc(text)}</li>`).join('');
+  openModal('#instructions-modal');
+});
+
+/* Report a question. Stored with the attempt; no endpoint to send it to yet. */
+$('#report-btn')?.addEventListener('click', () => {
+  const q = currentQuestion();
+  if (!q) return;
+  setText('#report-context', `Question ${state.current + 1} · ${q.section}`);
+  const field = $('#report-reason');
+  if (field) field.value = state.reports.get(q.id) || '';
+  openModal('#report-modal');
+  field?.focus();
+});
+
+$('#report-form')?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const q = currentQuestion();
+  const reason = $('#report-reason')?.value.trim();
+  if (!q || !reason) return;
+  state.reports.set(q.id, reason);
+  $('#report-btn')?.classList.add('is-reported');
+  persist();
+  closeModal('#report-modal');
+  toast('Report saved with this attempt.', 'success');
+});
 
 /* ------------------------------------------------------------------ */
 /* Submit                                                             */
@@ -720,7 +994,7 @@ function closeModal(selector) {
 }
 
 $('#submit-btn').addEventListener('click', openSubmit);
-$('#submit-btn-side').addEventListener('click', openSubmit);
+$('#submit-rail-btn')?.addEventListener('click', openSubmit);
 $('#confirm-submit').addEventListener('click', () => {
   closeModal('#submit-modal');
   submitAttempt(false);
@@ -729,17 +1003,24 @@ $('#confirm-submit').addEventListener('click', () => {
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-close-modal]')) closeModal('#submit-modal');
   if (e.target.closest('[data-close-paper]')) closeModal('#paper-modal');
+  if (e.target.closest('[data-close-instructions]')) closeModal('#instructions-modal');
+  if (e.target.closest('[data-close-report]')) closeModal('#report-modal');
   if (e.target.id === 'submit-modal') closeModal('#submit-modal');
   if (e.target.id === 'paper-modal') closeModal('#paper-modal');
+  if (e.target.id === 'instructions-modal') closeModal('#instructions-modal');
+  if (e.target.id === 'report-modal') closeModal('#report-modal');
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeModal('#submit-modal');
     closeModal('#paper-modal');
+    closeModal('#instructions-modal');
+    closeModal('#report-modal');
     return;
   }
-  if (state.mode !== 'exam' || e.target.matches('input, textarea, select')) return;
+  if (state.mode !== 'exam' || state.paused) return;
+  if (e.target.matches('input, textarea, select')) return;
 
   if (e.key === 'ArrowRight') {
     e.preventDefault();
@@ -763,6 +1044,8 @@ async function submitAttempt(auto) {
   state.submitted = true;
   if (ticker) clearInterval(ticker);
   ticker = null;
+  bankQuestionTime();
+  document.body.classList.remove('is-paused');
 
   setSaveState('Submitting…');
 

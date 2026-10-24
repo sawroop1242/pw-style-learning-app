@@ -1,27 +1,42 @@
 /** Test series listing with exam filters. */
 
-import { $, esc, live, compact, countdown, shortDate } from './core.js';
+import { $, $$, esc, live, initials, storage } from './core.js';
 import { mountChrome, testCard, emptyState, icon } from './ui.js';
 import { TESTS } from './data.js';
 
 mountChrome('tests');
 
+const avatar = document.querySelector('[data-welcome-avatar]');
+if (avatar) avatar.textContent = initials(storage.user?.username || 'Student');
+
 const state = { exam: 'all', all: [] };
 
-const FALLBACK_FIELDS = (quiz, index) => {
+/**
+ * Turn an API quiz row into a card view model.
+ *
+ * Every field is read from the payload; the fixture row is only consulted when
+ * the API genuinely has nothing to say (an older server without the label
+ * fields), and the card is never given a number the server did not send.
+ */
+const shapeTest = (quiz, index) => {
   const fixture = TESTS.find((t) => t.id === quiz.id) || TESTS[index] || TESTS[0];
+  const exam = quiz.series_subject || quiz.course_subject || quiz.exam || null;
+  const timed = quiz.timing_mode && quiz.timing_mode !== 'untimed';
   return {
-    ...fixture,
     id: quiz.id ?? fixture.id,
     title: quiz.title || fixture.title,
-    exam: fixture.exam,
-    kind: fixture.kind,
-    duration: quiz.duration_minutes || fixture.duration,
+    exam: exam || fixture.exam,
+    kind: quiz.series_title ? (timed ? 'Timed mock' : 'Practice') : fixture.kind,
+    duration: quiz.duration_minutes ?? fixture.duration,
     questions: quiz.question_count ?? fixture.questions,
-    attempts: fixture.attempts,
-    startsAt: quiz.opens_at || fixture.startsAt,
+    marks: quiz.marks_per_question
+      ? Math.round(Number(quiz.marks_per_question) * (quiz.question_count ?? 0))
+      : null,
+    attempts: quiz.attempt_count ?? fixture.attempts,
+    startsAt: quiz.opens_at || null,
     price: quiz.price ?? fixture.price,
-    badge: fixture.badge
+    badge: timed ? null : 'Practice',
+    locked: quiz.has_access === false
   };
 };
 
@@ -85,7 +100,7 @@ async function load() {
   $('#test-grid').innerHTML = `<div class="skeleton" style="height:250px;border-radius:20px"></div>`.repeat(6);
   const { data } = await live('/quizzes/?page_size=40', TESTS);
   const rows = Array.isArray(data) ? data : data.results || [];
-  state.all = rows.map(FALLBACK_FIELDS);
+  state.all = rows.map(shapeTest);
   renderFilters();
   renderGrid();
 }
@@ -96,6 +111,56 @@ $('#test-filters').addEventListener('click', (e) => {
   state.exam = chip.dataset.exam;
   renderFilters();
   renderGrid();
+});
+
+/* All / Attempted / Bookmarked ------------------------------------- */
+
+function emptyFor(host, { title, body, iconName }) {
+  if (!host) return;
+  host.innerHTML = emptyState({
+    title,
+    body,
+    actionLabel: 'Browse all tests',
+    actionHref: 'tests.html',
+    iconName
+  });
+}
+
+const TAB_PANELS = ['panel-alltests', 'panel-attempted', 'panel-bookmarked'];
+function selectTab(index) {
+  const tabs = $$('.tabs .tab');
+  tabs.forEach((tab, i) => {
+    const selected = i === index;
+    tab.setAttribute('aria-selected', String(selected));
+    const panel = document.getElementById(TAB_PANELS[i]);
+    if (panel) panel.hidden = !selected;
+  });
+  if (index === 1) {
+    emptyFor($('#attempted-empty'), {
+      title: 'No attempts yet',
+      body: 'Finish any test and it appears here with its score, rank and a link to the full solution review.',
+      iconName: 'file-text'
+    });
+  }
+  if (index === 2) {
+    emptyFor($('#bookmarked-empty'), {
+      title: 'No bookmarked tests',
+      body: 'Bookmark a test from its card to keep it at the top of this list when the next window opens.',
+      iconName: 'bookmark'
+    });
+  }
+}
+
+$$('.tabs .tab').forEach((tab, i) => {
+  tab.addEventListener('click', () => selectTab(i));
+  tab.addEventListener('keydown', (e) => {
+    const tabs = $$('.tabs .tab');
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[next].focus();
+    selectTab(next);
+  });
 });
 
 renderSteps();

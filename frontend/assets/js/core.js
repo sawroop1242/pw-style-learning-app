@@ -349,18 +349,25 @@ export const adaptCourse = (row = {}) => ({
   badge: row.badge || null
 });
 
-export const adaptTest = (row = {}) => ({
-  id: row.id,
-  title: row.title || 'Untitled test',
-  exam: row.exam || 'General',
-  kind: row.kind || 'Mock',
-  questions: row.questions ?? row.question_count ?? 0,
-  duration: row.duration ?? row.duration_minutes ?? 0,
-  attempts: row.attempts ?? row.attempt_count ?? 0,
-  startsAt: row.startsAt ?? row.starts_at ?? null,
-  price: Number(row.price ?? 0),
-  badge: row.badge || null
-});
+export const adaptTest = (row = {}) => {
+  const timed = row.timing_mode ? row.timing_mode !== 'untimed' : true;
+  return {
+    id: row.id,
+    title: row.title || 'Untitled test',
+    exam: row.exam || row.series_subject || row.course_subject || 'General',
+    kind: row.kind || (timed ? 'Timed mock' : 'Practice'),
+    questions: row.questions ?? row.question_count ?? 0,
+    marks: row.marks ?? (row.marks_per_question
+      ? Math.round(Number(row.marks_per_question) * (row.question_count ?? 0))
+      : undefined),
+    duration: row.duration ?? row.duration_minutes ?? 0,
+    attempts: row.attempts ?? row.attempt_count ?? 0,
+    startsAt: row.startsAt ?? row.starts_at ?? row.opens_at ?? null,
+    price: Number(row.price ?? 0),
+    badge: row.badge || null,
+    locked: row.has_access === false
+  };
+};
 
 export const qsParam = (key) => new URLSearchParams(location.search).get(key);
 

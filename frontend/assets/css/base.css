@@ -68,7 +68,7 @@ table { border-collapse: collapse; width: 100%; }
   outline-color: var(--amber-400);
 }
 
-::selection { background: var(--violet-600); color: #fff; }
+::selection { background: var(--violet-600); color: var(--text-invert); }
 
 /* Scrollbars — subtle, not hidden (hidden scrollbars hurt a11y). */
 * { scrollbar-width: thin; scrollbar-color: var(--slate-300) transparent; }
@@ -89,7 +89,7 @@ table { border-collapse: collapse; width: 100%; }
   z-index: 200;
   padding: 12px 20px;
   background: var(--violet-600);
-  color: #fff;
+  color: var(--text-invert);
   border-radius: var(--r-md);
   font-weight: 700;
   transition: top var(--dur) var(--ease);

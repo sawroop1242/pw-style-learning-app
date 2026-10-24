@@ -90,6 +90,7 @@ const ICONS = {
   message: '<path d="M20.5 12a8.5 8.5 0 1 1-4.3-7.4"/><path d="M20.5 4.5 12 13l-3-1"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/>',
   flask: '<path d="M9.5 3.5h5"/><path d="M10.5 3.5v5.2L5.6 17a2.4 2.4 0 0 0 2.1 3.6h8.6a2.4 2.4 0 0 0 2.1-3.6l-4.9-8.3V3.5"/><path d="M7.5 14h9"/>',
+  pause: '<path d="M9 4.5v15M15 4.5v15" stroke-width="2.6"/>',
   megaphone: '<path d="M3.5 10.5v3a1.5 1.5 0 0 0 1.5 1.5h2l7 4V5l-7 4H5a1.5 1.5 0 0 0-1.5 1.5z"/><path d="M17 8.5a4.5 4.5 0 0 1 0 7"/><path d="M6.5 15v4.5a1.5 1.5 0 0 0 3 0V16"/>',
   wrench: '<path d="M14.5 6.5a4 4 0 1 0 4.9 4.9L21 13l-8 8-2-2 8-8z"/><path d="m5 19 4-4"/><path d="M4 8.5 6.5 6l2.5 2.5-2.5 2.5z"/>'
 };
@@ -186,20 +187,19 @@ export function confirmDialog({ title, body = '', confirmText = 'Confirm', cance
 
 const NAV = [
   { href: 'index.html', label: 'Home', id: 'home', icon: 'home' },
-  { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'layers' },
-  { href: 'tests.html', label: 'Test series', id: 'tests', icon: 'file-text' },
-  { href: 'index.html#khazana', label: 'Khazana', id: 'khazana', icon: 'grid' },
-  { href: 'index.html#announcements', label: 'Announcements', id: 'announcements', icon: 'megaphone' },
-  { href: 'index.html#community', label: 'Community', id: 'community', icon: 'users' },
-  { href: 'dashboard.html#tools', label: 'Study tools', id: 'dashboard', icon: 'sparkles' }
+  { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'book' },
+  { href: 'tests.html', label: 'Test Series', id: 'tests', icon: 'file-text' },
+  { href: 'community.html#announcements', label: 'Announcements', id: 'announcements', icon: 'megaphone' },
+  { href: 'community.html', label: 'Community', id: 'community', icon: 'users' },
+  { href: 'downloads.html', label: 'Downloads', id: 'downloads', icon: 'download' },
+  { href: 'dashboard.html#tools', label: 'Study Tools', id: 'tools', icon: 'sparkles' }
 ];
 
 const TABS = [
   { href: 'index.html', label: 'Home', id: 'home', icon: 'home' },
-  { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'layers' },
-  { href: 'tests.html', label: 'Test series', id: 'tests', icon: 'file-text' },
-  { href: 'index.html#khazana', label: 'Khazana', id: 'khazana', icon: 'grid' },
-  { href: 'dashboard.html', label: 'Profile', id: 'dashboard', icon: 'user' }
+  { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'book' },
+  { href: 'tests.html', label: 'Test Series', id: 'tests', icon: 'file-text' },
+  { href: 'profile.html', label: 'Profile', id: 'profile', icon: 'user' }
 ];
 
 /* The little shell card at the foot of the sidebar: sign-in prompt or the
@@ -441,7 +441,9 @@ const BADGE_LABEL = {
 };
 
 export function batchCard(course) {
-  const off = discountPercent(course.price, course.mrp);
+  const faculty = course.faculty || [];
+  const faces = faculty.slice(0, 4);
+  const extra = faculty.length - faces.length;
   const badge = course.pricing_mode === 'free'
     ? '<span class="badge badge-free">Free</span>'
     : course.badge === 'live'
@@ -450,15 +452,18 @@ export function batchCard(course) {
         ? '<span class="badge badge-hot">Bestseller</span>'
         : '';
 
-  const faculty = (course.faculty || [])[0];
-  const rating = Number(course.rating || 4.7).toFixed(1);
-
   return `
     <article class="batch-card">
-      <a class="batch-thumb ${thumbTone(course.subject)}" href="course.html?slug=${encodeURIComponent(course.slug)}" aria-label="${esc(course.title)}">
+      <a class="batch-cover ${thumbTone(course.subject)}" href="course.html?slug=${encodeURIComponent(course.slug)}" aria-label="${esc(course.title)}">
         ${badge}
-        <span class="glyph">${esc(course.exam || course.subject || 'Batch')}</span>
-        <span class="thumb-subject">${esc(course.subject || 'General')}</span>
+        <span class="cover-tag">${esc(course.exam || course.subject || 'Batch')}</span>
+        <span class="cover-faces">
+          ${faces.length
+            ? faces.map((f) => `<span class="cover-face">${esc(f.initials || initials(f.name))}</span>`).join('')
+            : `<span class="cover-face">${esc(initials(course.subject || 'StudySpace'))}</span>`}
+          ${extra > 0 ? `<span class="cover-more">+${extra}</span>` : ''}
+        </span>
+        ${course.withBooks ? '<span class="cover-pill">with Hindi Books</span>' : ''}
       </a>
       <div class="batch-body">
         <h3 class="batch-title">
@@ -466,17 +471,36 @@ export function batchCard(course) {
         </h3>
         <p class="batch-meta">
           <span>${esc(course.subject || 'General')}</span>
-          ${course.startsOn ? `<span>Starts ${shortDate(course.startsOn)}</span>` : `<span>${esc(course.lessons || 0)} lessons</span>`}
-          <span>${rating} ★</span>
+          <span>${esc(course.language || 'Hinglish')}</span>
+        </p>
+        <p class="batch-start">
+          ${icon('calendar')}
+          <span>${course.startsOn ? `Starts on ${shortDate(course.startsOn)}` : 'Starts soon'}</span>
         </p>
         <div class="batch-foot">
-          <div class="price-block">
-            <span class="price-now">${money(course.price)}</span>
-            ${course.mrp > course.price ? `<span class="price-was">${money(course.mrp)}</span>` : ''}
-            ${off > 0 ? `<span class="price-off">${off}% off</span>` : ''}
-          </div>
-          <a class="btn btn-ghost btn-sm batch-cta" href="course.html?slug=${encodeURIComponent(course.slug)}">
-            View details ${icon('arrow-right')}
+          <a class="btn btn-primary btn-sm batch-cta" href="course.html?slug=${encodeURIComponent(course.slug)}">
+            View Details ${icon('arrow-right')}
+          </a>
+        </div>
+      </div>
+    </article>`;
+}
+
+export function todayClassCard(item) {
+  const live = item.status === 'live';
+  return `
+    <article class="today-card">
+      <div class="today-video ${live ? 'is-live' : ''}">
+        <span class="today-face">${esc(initials(item.faculty))}</span>
+        ${live ? '<span class="today-live">LIVE NOW</span>' : `<span class="today-time">${esc(item.status)}</span>`}
+      </div>
+      <div class="today-body">
+        <h3>${esc(item.title)}</h3>
+        <p>${esc(item.faculty)} · ${esc(item.subject)}</p>
+        <div class="today-foot">
+          <span class="today-clock">${icon('clock')} ${esc(item.time)}</span>
+          <a class="link" href="${item.status === 'live' ? `player.html?lesson=${encodeURIComponent(item.slug || 'number-system-1')}` : 'courses.html'}">
+            ${live ? 'Join' : 'Remind me'} ${icon('arrow-right')}
           </a>
         </div>
       </div>
@@ -485,6 +509,7 @@ export function batchCard(course) {
 
 export function testCard(test) {
   const free = !test.price;
+  const marks = test.marks || (test.questions ? test.questions * 2 : 0);
   return `
     <article class="test-card">
       <div class="test-card-top">
@@ -493,11 +518,18 @@ export function testCard(test) {
       </div>
       <h3 class="test-title">${esc(test.title)}</h3>
       <p class="test-meta">
-        ${test.questions} questions · ${test.duration} minutes · ${compact(test.attempts)} attempts
+        ${test.questions} Questions · ${marks} Marks
+      </p>
+      <p class="test-meta">
+        ${test.duration} minutes · ${compact(test.attempts)} attempts
       </p>
       <div class="test-card-foot">
         <span class="tiny subtle">${countdown(test.startsAt) || shortDate(test.startsAt) || 'Always open'}</span>
-        <a class="btn btn-ghost btn-sm" href="test-player.html?test=${test.id}">Start test</a>
+        ${
+          test.locked
+            ? '<span class="badge badge-outline">Enrol to unlock</span>'
+            : `<a class="btn btn-primary btn-sm" href="test-player.html?test=${test.id}">Start Test</a>`
+        }
       </div>
     </article>`;
 }

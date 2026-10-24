@@ -7,6 +7,10 @@
 /* Desktop: a fixed left rail plus a sticky top bar. Phones: the rail becomes
    an off-canvas drawer and the tab bar at the foot does the navigating. */
 
+/* The chrome host is a bare wrapper: `display: contents` lets the top bar be
+   a child of <body> so its `position: sticky` is measured against the page,
+   not against this zero-height div. */
+#site-header { display: contents; }
 .site-header { position: relative; z-index: var(--z-header); }
 
 .sidebar {
@@ -28,14 +32,7 @@
 
 .sidebar .brand { margin: 0 var(--sp-2) var(--sp-6); }
 
-.side-label {
-  margin: 0 var(--sp-3) var(--sp-2);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-}
+
 
 .side-nav { display: grid; gap: 2px; }
 .side-link {
@@ -53,10 +50,11 @@
 .side-link svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .side-link:hover { background: var(--surface-raised); color: var(--text-strong); }
 .side-link[aria-current="page"] {
-  background: rgba(91, 91, 246, 0.16);
-  color: var(--text-strong);
+  background: var(--violet-600);
+  color: var(--text-invert);
+  box-shadow: 0 6px 16px rgba(91, 91, 246, 0.28);
 }
-.side-link[aria-current="page"] svg { color: var(--violet-400); }
+.side-link[aria-current="page"] svg { color: var(--text-invert); }
 
 .side-foot {
   margin-top: auto;
@@ -117,7 +115,7 @@
   place-items: center;
   flex: 0 0 auto;
 }
-.brand-mark svg { width: 17px; height: 17px; color: #fff; }
+.brand-mark svg { width: 17px; height: 17px; color: var(--text-invert); }
 .brand-text small {
   display: block;
   font-family: var(--font-sans);
@@ -237,8 +235,6 @@
 .user-chip .avatar { width: 30px; height: 30px; font-size: 11px; }
 
 /* Nav-toggle / mobile drawer affordances are only meaningful below 1024px. */
-.nav-toggle { display: none; }
-
 /* ============================== BUTTONS ================================ */
 .btn {
   display: inline-flex;
@@ -292,7 +288,7 @@
   color: var(--text-invert);
 }
 
-.btn-danger { background: var(--danger-solid); color: #fff; }
+.btn-danger { background: var(--danger-solid); color: var(--text-invert); }
 .btn-danger:hover { background: var(--danger-solid-hover); }
 
 .btn-sm { min-height: 34px; padding: 0 var(--sp-4); font-size: var(--text-xs); border-radius: var(--r-sm); }
@@ -338,7 +334,7 @@
 .badge-free { background: var(--success-100); color: var(--success-600); }
 .badge-paid { background: var(--violet-100); color: var(--violet-700); }
 .badge-neutral { background: var(--slate-100); color: var(--slate-600); }
-.badge-dark { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.badge-dark { background: rgba(255, 255, 255, 0.12); color: var(--text-invert); }
 .badge-outline { border: 1px solid var(--border-strong); color: var(--text-muted); }
 
 /* ============================== CHIPS ================================== */
@@ -361,7 +357,7 @@
 .chip[aria-pressed="true"], .chip.is-active {
   background: var(--ink-900);
   border-color: var(--ink-900);
-  color: #fff;
+  color: var(--text-invert);
 }
 .chip svg { width: 15px; height: 15px; }
 
@@ -554,14 +550,14 @@
   padding: 13px 15px;
   border-radius: var(--r-md);
   background: var(--ink-900);
-  color: #fff;
+  color: var(--text-invert);
   box-shadow: var(--shadow-lg);
   font-size: var(--text-sm);
   animation: toast-in var(--dur) var(--ease-out);
 }
 .toast svg { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; }
-.toast-success svg { color: #4ade80; }
-.toast-error svg { color: #f87171; }
+.toast-success svg { color: var(--toast-success); }
+.toast-error svg { color: var(--toast-error); }
 .toast-info svg { color: var(--violet-400); }
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(12px) scale(0.97); }
@@ -637,7 +633,7 @@
   left: 50%;
   transform: translateX(-50%);
   background: var(--ink-900);
-  color: #fff;
+  color: var(--text-invert);
   font-size: var(--text-2xs);
   font-weight: 600;
   padding: 5px 9px;
@@ -700,7 +696,7 @@
 .footer-brand .brand { margin-bottom: var(--sp-4); }
 .footer-brand p { font-size: var(--text-sm); line-height: 1.75; max-width: 30ch; }
 .footer-col h4 {
-  color: #fff;
+  color: var(--text-invert);
   font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -710,7 +706,7 @@
 }
 .footer-col li { margin-bottom: 11px; }
 .footer-col a { font-size: var(--text-sm); transition: color var(--dur-fast) var(--ease); }
-.footer-col a:hover { color: #fff; }
+.footer-col a:hover { color: var(--text-invert); }
 .footer-bottom {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-block: var(--sp-5);
@@ -730,7 +726,7 @@
   text-underline-offset: 3px;
   text-decoration-color: rgba(255, 255, 255, 0.28);
 }
-.footer-contact a:hover { color: #fff; text-decoration-color: currentColor; }
+.footer-contact a:hover { color: var(--text-invert); text-decoration-color: currentColor; }
 
 /* Preview notice (shown only when running on demo fixtures) */
 .preview-flag {

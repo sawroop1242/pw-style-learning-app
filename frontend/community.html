@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <meta name="api-base" content="/api">
+  <title>Community | StudySpace</title>
+  <meta name="description" content="Batch announcements and student discussion in one place.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/screens.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <div class="container">
+      <div class="player-shell">
+        <div class="player-top">
+          <a class="icon-btn" href="index.html" aria-label="Back to home"><svg><use href="#i-arrow-left"/></svg></a>
+          <h1>Community</h1>
+          <a class="icon-btn" href="legal.html#contact" aria-label="Community guidelines"><svg><use href="#i-info"/></svg></a>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Community sections">
+          <button class="tab" role="tab" aria-selected="true" aria-controls="panel-discussion" id="tab-discussion">Discussion</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-announcements" id="tab-announcements">Announcements</button>
+        </div>
+
+        <section class="tab-panel" id="panel-discussion" role="tabpanel" aria-labelledby="tab-discussion">
+          <div class="post-list" id="discussion-list"></div>
+        </section>
+        <section class="tab-panel" id="panel-announcements" role="tabpanel" aria-labelledby="tab-announcements" hidden>
+          <div class="post-list" id="announcement-list"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <button class="compose-fab" type="button" aria-label="Start a discussion" data-compose>
+    <svg><use href="#i-plus"/></svg>
+  </button>
+
+  <div id="site-footer"></div>
+  <div id="site-tabbar"></div>
+  <script type="module" src="assets/js/community.js"></script>
+</body>
+</html>

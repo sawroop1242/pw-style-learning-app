@@ -1,12 +1,15 @@
 /** Catalogue: filtering, sorting, search and pagination over the batch list. */
 
-import { $, $$, esc, live, qsParam, debounce } from './core.js';
+import { $, $$, esc, live, qsParam, debounce, initials, storage } from './core.js';
 import {
   mountChrome, batchCard, emptyState, skeletonBatchGrid, icon, thumbTone
 } from './ui.js';
 import { COURSES } from './data.js';
 
 mountChrome('courses');
+
+const avatar = document.querySelector('[data-welcome-avatar]');
+if (avatar) avatar.textContent = initials(storage.user?.username || 'Student');
 
 const PAGE_SIZE = 9;
 
@@ -78,8 +81,9 @@ function buildFacets() {
   renderFacet($('#filter-subject'), 'subjects', count('subject'), state.subjects);
   renderFacet($('#filter-language'), 'languages', count('language'), state.languages);
 
-  // Header quick chips
+  // Header quick chips (only present when a page head renders them)
   const chips = $('#exam-chips');
+  if (!chips) return;
   const exams = [...count('exam').keys()];
   chips.innerHTML = exams
     .map(
@@ -239,6 +243,56 @@ function syncChips() {
     chip.setAttribute('aria-pressed', String(state.exams.has(chip.dataset.chipExam)));
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* All / My / Favorite tabs                                           */
+/* ------------------------------------------------------------------ */
+
+const TAB_PANELS = ['panel-all', 'panel-mine', 'panel-fav'];
+
+function selectTab(index) {
+  const tabs = $$('.tabs .tab');
+  tabs.forEach((tab, i) => {
+    const selected = i === index;
+    tab.setAttribute('aria-selected', String(selected));
+    const panel = document.getElementById(TAB_PANELS[i]);
+    if (panel) panel.hidden = !selected;
+  });
+  if (index === 1) renderMine();
+  if (index === 2) renderFavorites();
+}
+
+function renderMine() {
+  const host = $('#my-grid');
+  if (!host) return;
+  // "My batches" needs an enrolment endpoint; until then show the same
+  // catalogue with a plain explanation rather than inventing enrolments.
+  host.innerHTML = state.all.slice(0, 3).map(batchCard).join('');
+}
+
+function renderFavorites() {
+  const host = $('#fav-empty');
+  if (!host) return;
+  host.innerHTML = emptyState({
+    title: 'No favourite batches yet',
+    body: 'Open any batch and tap Save. Favourites are stored against your account, not this browser, so they follow you to another device.',
+    actionLabel: 'Browse all batches',
+    actionHref: 'courses.html',
+    iconName: 'bookmark'
+  });
+}
+
+$$('.tabs .tab').forEach((tab, i) => {
+  tab.addEventListener('click', () => selectTab(i));
+  tab.addEventListener('keydown', (e) => {
+    const tabs = $$('.tabs .tab');
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[next].focus();
+    selectTab(next);
+  });
+});
 
 /* ------------------------------------------------------------------ */
 /* Events                                                             */

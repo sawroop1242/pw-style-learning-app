@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <meta name="api-base" content="/api">
+  <title>StudySpace — Learn. Practise. Rank.</title>
+  <meta name="description" content="Structured batches, exam-pattern tests and one revision space. Learn. Practise. Rank.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/screens.css">
+</head>
+<body>
+  <main id="main" class="splash">
+    <div class="splash-inner">
+      <span class="splash-mark" aria-hidden="true"><svg><use href="#i-zap"/></svg></span>
+      <h1>StudySpace</h1>
+      <p>Learn. Practise. Rank.</p>
+
+      <ul class="splash-points" style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:10px;text-align:left">
+        <li class="feature-item"><svg aria-hidden="true"><use href="#i-check-circle"/></svg> Live batches with recorded backups</li>
+        <li class="feature-item"><svg aria-hidden="true"><use href="#i-check-circle"/></svg> Exam-pattern tests, scored on the server</li>
+        <li class="feature-item"><svg aria-hidden="true"><use href="#i-check-circle"/></svg> Notes, bookmarks and doubts in one account</li>
+      </ul>
+
+      <div class="splash-actions">
+        <a class="btn btn-primary btn-lg btn-block" href="index.html">Get started</a>
+        <a class="btn btn-ghost btn-block" href="login.html">I already have an account</a>
+      </div>
+      <a class="splash-skip" href="index.html">Continue as guest</a>
+    </div>
+  </main>
+  <script type="module">
+    import { mountSprite } from './assets/js/ui.js';
+    mountSprite();
+  </script>
+</body>
+</html>

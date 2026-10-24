@@ -77,25 +77,35 @@ function matchFixture(raw) {
   );
 }
 
+/**
+ * Merge an API row with the matching fixture.
+ *
+ * Fields the API owns (title, price, counts, description) always come from the
+ * server. Fields it does not store yet (learners, rating, start date, language,
+ * validity) come from the fixture for sample rows, and stay empty for live rows
+ * rather than inventing social proof for a real batch.
+ */
 function normalise(raw) {
   const fixture = matchFixture(raw || {});
   const subject = raw?.subject || fixture.subject;
+  const live = Boolean(raw?.id);
   return {
     ...fixture,
     ...raw,
     subject,
     exam: fixture.exam || subject,
-    faculty: fixture.faculty || [],
-    rating: fixture.rating || 4.7,
-    ratingCount: fixture.ratingCount || 0,
-    learners: fixture.learners || 0,
+    faculty: live ? [] : fixture.faculty || [],
+    rating: live ? Number(raw.rating ?? 0) : fixture.rating || 4.7,
+    ratingCount: live ? Number(raw.rating_count ?? 0) : fixture.ratingCount || 0,
+    learners: live ? Number(raw.learners ?? 0) : fixture.learners || 0,
     lessons: raw?.lesson_count ?? fixture.lessons ?? 0,
-    tests: fixture.tests ?? 0,
-    language: fixture.language || 'Hinglish',
-    mrp: fixture.mrp || (raw?.price ? Math.round(Number(raw.price) * 2.4) : 0),
-    durationMonths: fixture.durationMonths || 12,
-    startsOn: fixture.startsOn || null,
+    tests: raw?.quiz_count ?? (live ? 0 : fixture.tests ?? 0),
+    language: live ? raw.language || null : fixture.language || 'Hinglish',
+    mrp: live ? Number(raw.mrp ?? 0) : fixture.mrp || (raw?.price ? Math.round(Number(raw.price) * 2.4) : 0),
+    durationMonths: live ? raw.duration_months ?? null : fixture.durationMonths || 12,
+    startsOn: live ? raw.starts_on ?? null : fixture.startsOn || null,
     badge: fixture.badge || null,
+    withBooks: Boolean(raw?.with_books),
     description: raw?.description || fixture.description,
     title: raw?.title || fixture.title,
     slug: raw?.slug || fixture.slug,
@@ -106,9 +116,16 @@ function normalise(raw) {
 async function loadCourse() {
   let course;
   try {
-    const { data } = await live(`/courses/?slug=${encodeURIComponent(slug || '')}`, null, { timeout: 2200 });
-    const rows = data ? (Array.isArray(data) ? data : data.results || []) : [];
-    course = normalise(rows[0] || {});
+    // Two hops: the list endpoint resolves the slug to an id, then the detail
+    // endpoint returns the folders, lessons and lock state the page renders.
+    const { data: list } = await live(`/courses/?slug=${encodeURIComponent(slug || '')}`, null, { timeout: 2200 });
+    const rows = list ? (Array.isArray(list) ? list : list.results || []) : [];
+    const match = rows[0];
+    let detail = match;
+    if (match?.id) {
+      detail = await request(`/courses/${match.id}/`, { timeout: 2200 }).catch(() => match);
+    }
+    course = normalise(detail || {});
   } catch {
     course = normalise({});
   }
@@ -135,6 +152,7 @@ function render(course) {
   renderCurriculum(course);
   renderTests(course);
   renderFaculty(course);
+  renderFaq(course);
   renderAside(course);
   renderSimilar(course);
   wireTabs();
@@ -144,23 +162,37 @@ function render(course) {
 function renderHeadline(course) {
   const host = $('#course-headline');
   const off = discountPercent(course.price, course.mrp);
+  const faculty = course.faculty || [];
+
   host.innerHTML = `
-    <div class="badges">
+    <span class="badges">
       ${course.pricing_mode === 'free'
         ? '<span class="badge badge-free">Free batch</span>'
         : '<span class="badge badge-live">Live + recorded</span>'}
       <span class="badge badge-dark">${esc(course.exam)}</span>
       ${off ? `<span class="badge badge-hot">${off}% off</span>` : ''}
-    </div>
-    <span class="course-title">${esc(course.title)}</span>
+    </span>
+    <span class="course-title">${esc(course.title)}${course.withBooks ? '<span class="with-books">with Hindi Books</span>' : ''}</span>
     <p class="course-hero-lead">${esc(course.description || '')}</p>
-    <div class="course-hero-meta">
-      <div><svg><use href="#i-star"/></svg> ${course.rating.toFixed(1)} · ${course.ratingCount ? `${course.ratingCount.toLocaleString('en-IN')} ratings` : 'New batch'}</div>
-      <div><svg><use href="#i-users"/></svg> ${course.learners.toLocaleString('en-IN')} enrolled</div>
-      <div><svg><use href="#i-play"/></svg> ${course.lessons} lessons</div>
-      <div><svg><use href="#i-file-text"/></svg> ${course.tests} tests</div>
-      <div><svg><use href="#i-globe"/></svg> ${esc(course.language)}</div>
+    <div class="batch-facts-inline">
+      <span>${icon('calendar')} Starts ${course.startsOn ? shortDate(course.startsOn) : 'soon'}</span>
+      <span>${icon('play')} ${course.lessons} ${course.lessons === 1 ? 'lesson' : 'lessons'}</span>
+      <span>${icon('file-text')} ${course.tests} ${course.tests === 1 ? 'test' : 'tests'}</span>
+      ${course.learners ? `<span>${icon('users')} ${course.learners.toLocaleString('en-IN')} enrolled</span>` : ''}
+      ${course.rating ? `<span>${icon('star')} ${course.rating.toFixed(1)}${course.ratingCount ? ` · ${course.ratingCount.toLocaleString('en-IN')} ratings` : ''}</span>` : ''}
     </div>`;
+
+  const cover = $('#course-cover');
+  if (cover) {
+    cover.className = `batch-cover-lg ${thumbTone(course.subject)}`;
+    cover.innerHTML = `
+      ${course.withBooks ? '<span class="cover-pill">with Hindi Books</span>' : ''}
+      <span class="cover-faces">
+        ${faculty.length
+          ? faculty.slice(0, 6).map((f) => `<span class="cover-face">${esc(f.initials || initials(f.name))}</span>`).join('')
+          : `<span class="cover-face">${esc(initials(course.subject || 'SS'))}</span>`}
+      </span>`;
+  }
 }
 
 function renderPurchase(course) {
@@ -168,60 +200,69 @@ function renderPurchase(course) {
   const off = discountPercent(course.price, course.mrp);
   const isFree = course.pricing_mode === 'free' || Number(course.price) === 0;
   host.innerHTML = `
-    <div class="purchase-card">
-      <div class="purchase-preview ${thumbTone(course.subject)}">
-        <span class="glyph">${esc(course.exam)}</span>
-      </div>
-      <div class="purchase-body">
-        <div class="purchase-price">
-          <span class="now">${money(course.price)}</span>
-          ${course.mrp > course.price ? `<span class="was">${money(course.mrp)}</span>` : ''}
-          ${off ? `<span class="off">${off}% off</span>` : ''}
-        </div>
-        ${
-          course.startsOn
-            ? `<p class="tiny muted">Batch starts <strong class="strong">${longDate(course.startsOn)}</strong></p>`
-            : ''
-        }
-        <a class="btn ${isFree ? 'btn-primary' : 'btn-accent'} btn-lg btn-block" href="dashboard.html" data-primary-cta>
-          ${isFree ? 'Start learning free' : 'Unlock this batch'}
-        </a>
-        <button class="btn btn-ghost btn-block btn-sm" data-redeem ${isFree ? 'hidden' : ''}>
-          ${icon('lock')} I have an access code
-        </button>
+    <div class="batch-actions">
+      <a class="btn ${isFree ? 'btn-primary' : 'btn-accent'} btn-lg" href="dashboard.html" data-primary-cta>
+        ${isFree ? 'Start learning free' : 'Enroll Now'}
+      </a>
+      <button class="btn btn-ghost btn-lg" data-share>${icon('share')} Share</button>
+    </div>
+    ${
+      isFree
+        ? ''
+        : `<p class="tiny subtle" style="margin-top:12px">
+             ${money(course.price)}
+             ${course.mrp > course.price ? `<s>${money(course.mrp)}</s>` : ''}
+             ${off ? `· ${off}% off` : ''} · unlocks with an access code, no card payment
+           </p>`
+    }`;
 
-        <ul class="purchase-features">
-          <li>${icon('check-circle')} ${course.lessons}+ recorded lessons</li>
-          <li>${icon('check-circle')} ${course.tests} tests with All-India rank</li>
-          <li>${icon('check-circle')} Chapter notes and DPPs</li>
-          <li>${icon('check-circle')} Doubt support on every question</li>
-          <li>${icon('check-circle')} Downloadable for offline study</li>
-          <li>${icon('check-circle')} Valid until the exam date</li>
-        </ul>
-
-        <div class="purchase-note">${icon('shield-check')} No card payment · access codes only</div>
-      </div>
-    </div>`;
+  // Sticky purchase bar for phones, mirroring the app screens.
+  const mobile = $('#mobile-buy');
+  if (mobile) {
+    document.body.classList.add('has-mobile-buy');
+    mobile.innerHTML = `
+      <span class="mobile-buy-price">
+        ${isFree ? 'Free batch' : money(course.price)}
+        ${!isFree && off ? `<small>${off}% off</small>` : ''}
+      </span>
+      <a class="btn ${isFree ? 'btn-primary' : 'btn-accent'} btn-sm" href="dashboard.html">
+        ${isFree ? 'Start free' : 'Enroll Now'}
+      </a>`;
+  }
 }
 
 function renderAside(course) {
   const host = $('#course-aside');
   host.innerHTML = `
-    <div class="card card-pad" style="display:grid;gap:14px">
-      <h2 style="font-size:var(--text-md)">Batch at a glance</h2>
-      <div class="stack" style="gap:10px">
-        <div class="row-between tiny"><span class="muted">Language</span><strong>${esc(course.language)}</strong></div>
-        <div class="row-between tiny"><span class="muted">Duration</span><strong>${course.durationMonths} months</strong></div>
-        <div class="row-between tiny"><span class="muted">Starts</span><strong>${course.startsOn ? shortDate(course.startsOn) : 'Anytime'}</strong></div>
-        <div class="row-between tiny"><span class="muted">Lessons</span><strong>${course.lessons}</strong></div>
-        <div class="row-between tiny"><span class="muted">Tests</span><strong>${course.tests}</strong></div>
-        <div class="row-between tiny"><span class="muted">Validity</span><strong>Till exam</strong></div>
-      </div>
+    <div class="facts-card">
+      <dl style="display:grid;gap:var(--sp-4);margin:0">
+        <div class="facts-row">
+          <dt>Batch Starts</dt>
+          <dd>${course.startsOn ? longDate(course.startsOn) : 'Anytime'}</dd>
+        </div>
+        <div class="facts-row">
+          <dt>Validity</dt>
+          <dd>Till exam ${esc(course.exam)}</dd>
+        </div>
+        <div class="facts-row">
+          <dt>Language</dt>
+          <dd>${esc(course.language)}</dd>
+        </div>
+        <div class="facts-row">
+          <dt>Applicable For</dt>
+          <dd>${esc(course.exam)} ${esc(course.subject)} — all levels</dd>
+        </div>
+        <div class="facts-row">
+          <dt>Included</dt>
+          <dd>${course.lessons} lessons · ${course.tests} tests</dd>
+        </div>
+      </dl>
       <hr>
       <div class="row" style="gap:8px">
         <button class="btn btn-ghost btn-sm" style="flex:1" data-share>${icon('share')} Share</button>
         <button class="btn btn-ghost btn-sm" style="flex:1" data-bookmark>${icon('bookmark')} Save</button>
       </div>
+      <div class="purchase-note">${icon('shield-check')} No card payment · access codes only</div>
     </div>
 
     <div class="card card-pad" style="margin-top:16px;display:grid;gap:12px;background:rgba(91,91,246,0.1);border-color:var(--violet-600)">
@@ -254,6 +295,15 @@ function renderOverview(course) {
         </ul>
         <h3>Who this is for</h3>
         <p>Students preparing for ${esc(course.exam)} who want a fixed weekly rhythm rather than a pile of unlinked videos. If you are starting from scratch, begin with the free chapter tests before unlocking the full batch.</p>
+      </div>
+
+      <div class="check-list">
+        <div class="check-item">${icon('play')} Live &amp; recorded classes</div>
+        <div class="check-item">${icon('note')} Study material (PDF)</div>
+        <div class="check-item">${icon('file-text')} Mock tests with rank</div>
+        <div class="check-item">${icon('message')} Doubt support</div>
+        <div class="check-item">${icon('download')} Downloadable lessons</div>
+        <div class="check-item">${icon('book')} ${course.withBooks ? 'Hindi books included' : 'Chapter notes included'}</div>
       </div>
 
       <div class="alert alert-warn">
@@ -308,56 +358,157 @@ function renderCurriculum(course) {
     </div>`;
 }
 
-function renderTests(course) {
+/**
+ * The Tests tab lists the quizzes the API actually publishes for this batch.
+ * Nothing is invented: a batch with no tests says so.
+ */
+async function renderTests(course) {
   const host = $('#panel-tests');
-  const rows = [
-    { name: 'Chapter test — after every unit', count: Math.max(1, Math.round(course.tests * 0.6)), marks: 40 },
-    { name: 'Sectional tests — every two weeks', count: Math.max(1, Math.round(course.tests * 0.28)), marks: 100 },
-    { name: 'Full-length mock — monthly', count: Math.max(1, Math.round(course.tests * 0.12)), marks: 300 }
-  ];
+  if (!host) return;
+
+  const note = `
+      <div class="alert alert-info" style="margin-top:6px">
+        <svg><use href="#i-info"/></svg>
+        <span>Answers are scored on the server. Rank is published only after the test window closes.</span>
+      </div>`;
+
+  let rows = [];
+  if (course.id) {
+    try {
+      const { data } = await live(`/quizzes/?course=${encodeURIComponent(course.id)}&page_size=20`, null, { timeout: 2200 });
+      rows = (data ? (Array.isArray(data) ? data : data.results || []) : []).map((quiz) => ({
+        id: quiz.id,
+        name: quiz.title,
+        questions: quiz.question_count ?? 0,
+        minutes: quiz.duration_minutes ?? 0,
+        marks: quiz.marks_per_question
+          ? Math.round(Number(quiz.marks_per_question) * (quiz.question_count ?? 0))
+          : null,
+        locked: quiz.has_access === false
+      }));
+    } catch {
+      rows = [];
+    }
+  }
+
+  if (!rows.length) {
+    host.innerHTML = `
+      <div class="stack">
+        ${emptyState({
+          title: 'No tests published for this batch yet',
+          body: 'Chapter tests and full-length mocks appear here as soon as they are released.',
+          actionLabel: 'Browse all test series',
+          actionHref: 'tests.html',
+          iconName: 'file-text'
+        })}
+        ${note}
+      </div>`;
+    return;
+  }
+
   host.innerHTML = `
     <div class="stack">
       ${rows
         .map(
-          (r) => `
+          (test) => `
         <div class="card card-pad row-between" style="gap:14px;flex-wrap:wrap">
           <div style="display:flex;gap:12px;align-items:center">
             <span class="test-icon">${icon('target')}</span>
             <div>
-              <strong style="display:block;font-size:14px">${esc(r.name)}</strong>
-              <small class="tiny muted">${r.count} tests · up to ${r.marks} marks · All-India rank</small>
+              <strong style="display:block;font-size:14px">${esc(test.name)}</strong>
+              <small class="tiny muted">
+                ${test.questions} questions${test.marks ? ` · ${test.marks} marks` : ''}${test.minutes ? ` · ${test.minutes} minutes` : ''}
+              </small>
             </div>
           </div>
-          <a class="btn btn-ghost btn-sm" href="tests.html">Preview</a>
+          ${
+            test.locked
+              ? '<span class="badge badge-outline">Enrol to unlock</span>'
+              : `<a class="btn btn-ghost btn-sm" href="test-player.html?test=${test.id}">Start test</a>`
+          }
         </div>`
         )
         .join('')}
-      <div class="alert alert-info" style="margin-top:6px">
-        <svg><use href="#i-info"/></svg>
-        <span>Results are calculated on the server. Rank is published only after the test window closes, so early finishers cannot leak the paper.</span>
-      </div>
+      ${note}
     </div>`;
 }
 
 function renderFaculty(course) {
   const host = $('#panel-faculty');
-  const rows = course.faculty?.length ? course.faculty : [{ name: 'StudySpace Faculty', role: course.subject, initials: 'SF', tone: 'violet' }];
+  const rows = course.faculty || [];
+
+  // The API does not store faculty yet, so a live batch says so instead of
+  // showing a name, a tenure or a rating nobody supplied.
+  if (!rows.length) {
+    host.innerHTML = emptyState({
+      title: 'Faculty profiles are being added',
+      body: `This batch is taught by the ${course.subject} team. Names and profiles appear here once they are published.`,
+      actionLabel: 'Ask a doubt in the community',
+      actionHref: 'community.html',
+      iconName: 'user'
+    });
+    return;
+  }
+
   host.innerHTML = `
     <div class="faculty-list">
       ${rows
         .map(
           (f) => `
         <div class="faculty-row">
-          <span class="avatar avatar-lg avatar-${f.tone === 'violet' ? '' : f.tone}">${esc(f.initials || initials(f.name))}</span>
+          <span class="avatar avatar-lg">${esc(f.initials || initials(f.name))}</span>
           <div style="flex:1">
             <h4>${esc(f.name)}</h4>
-            <p>${esc(f.role)} · 8+ years teaching ${esc(course.exam)}</p>
+            <p>${esc(f.role || course.subject)}</p>
           </div>
-          <span class="badge badge-neutral">${icon('star')} 4.8</span>
         </div>`
         )
         .join('')}
     </div>`;
+}
+
+function renderFaq(course) {
+  const host = $('#panel-faq');
+  if (!host) return;
+  const items = [
+    ['How do I unlock a paid batch?', 'Paid batches unlock with a 12-character access code issued by your institute. There is no checkout and no card payment on StudySpace.'],
+    ['Are the classes live or recorded?', 'Both. Classes run live to a timetable and the recording appears in the same chapter within a couple of hours, so a missed class never becomes a gap.'],
+    ['Is there negative marking in the tests?', 'Each test carries its own marking scheme, shown on the instructions screen before you start. Scores are calculated on the server and cannot be changed by the browser.'],
+    ['What is the validity of this batch?', `${course.title} stays available on your account until the ${course.exam} exam date shown in the batch facts.`],
+    ['Can I study offline?', 'Yes. Opened lessons, notes and downloads stay readable without a connection. Tests need a connection to submit because they are scored on the server.']
+  ];
+  host.innerHTML = `
+    <div class="accordion" role="list">
+      ${items
+        .map(
+          ([q, a], i) => `
+        <div class="acc-item" role="listitem">
+          <button class="acc-head" type="button" aria-expanded="${i === 0}" aria-controls="faq-panel-${i}">
+            <span class="acc-title">${esc(q)}</span>
+            <svg class="acc-chevron"><use href="#i-chevron-down"/></svg>
+          </button>
+          <div class="acc-panel" id="faq-panel-${i}" ${i === 0 ? '' : 'hidden'}>
+            <p class="acc-text">${esc(a)}</p>
+          </div>
+        </div>`
+        )
+        .join('')}
+    </div>`;
+  host.addEventListener('click', (e) => {
+    const head = e.target.closest('.acc-head');
+    if (!head) return;
+    const open = head.getAttribute('aria-expanded') === 'true';
+    host.querySelectorAll('.acc-head').forEach((other) => {
+      other.setAttribute('aria-expanded', 'false');
+      const panel = document.getElementById(other.getAttribute('aria-controls'));
+      if (panel) panel.hidden = true;
+    });
+    if (!open) {
+      head.setAttribute('aria-expanded', 'true');
+      const panel = document.getElementById(head.getAttribute('aria-controls'));
+      if (panel) panel.hidden = false;
+    }
+  });
 }
 
 function renderSimilar(course) {
@@ -372,42 +523,36 @@ function renderSimilar(course) {
 /* ------------------------------------------------------------------ */
 
 function wireTabs() {
-  const tabs = $$('.tab');
-  const panels = {
-    'tab-overview': $('#panel-overview'),
-    'tab-curriculum': $('#panel-curriculum'),
-    'tab-tests': $('#panel-tests'),
-    'tab-faculty': $('#panel-faculty')
-  };
+  const tabs = $$('.tabs .tab');
+  if (!tabs.length) return;
+  // Panels are whatever the tabs declare via aria-controls, so adding a tab
+  // to the markup never leaves an orphan panel behind.
+  const panels = tabs.map((tab) => document.getElementById(tab.getAttribute('aria-controls')));
 
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => activate(tab.id));
     tab.addEventListener('keydown', (e) => {
       const idx = tabs.indexOf(tab);
-      if (e.key === 'ArrowRight') tabs[(idx + 1) % tabs.length].focus();
-      if (e.key === 'ArrowLeft') tabs[(idx - 1 + tabs.length) % tabs.length].focus();
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const next = (idx + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        tabs[next].focus();
+        activate(tabs[next].id);
+      }
     });
   });
 
   const fromHash = location.hash.replace('#', '');
-  if (panels[`tab-${fromHash}`]) activate(`tab-${fromHash}`);
+  const hashTab = tabs.find((tab) => tab.id === `tab-${fromHash}`);
+  if (hashTab) activate(hashTab.id);
 
   function activate(id) {
-    tabs.forEach((t) => t.setAttribute('aria-selected', String(t.id === id)));
-    Object.entries(panels).forEach(([key, panel]) => {
-      panel.hidden = key !== id;
+    tabs.forEach((tab, i) => {
+      const selected = tab.id === id;
+      tab.setAttribute('aria-selected', String(selected));
+      if (panels[i]) panels[i].hidden = !selected;
     });
   }
-
-  // Accordion
-  document.querySelectorAll('.acc-head').forEach((head) => {
-    head.addEventListener('click', () => {
-      const open = head.getAttribute('aria-expanded') === 'true';
-      head.setAttribute('aria-expanded', String(!open));
-      const panel = head.nextElementSibling;
-      if (panel) panel.hidden = open;
-    });
-  });
 }
 
 function wireRedeem(course) {

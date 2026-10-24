@@ -4,14 +4,17 @@ A mobile-first learning platform with a dark, app-style PWA frontend (desktop si
 
 ## Features
 
-- Responsive, installable PWA frontend with offline support
+- Responsive, installable PWA frontend with offline support — desktop sidebar shell, phone bottom
+  tabs, and app-style screens (exam-window test player, class player, downloads, community, profile)
 - Django REST API for courses, lessons, quizzes, notes, bookmarks, revision items, study tasks, and progress
-- Test series with timed/untimed modes, CSV import, attempt autosave/resume
+- Test series with timed/untimed modes, CSV import, attempt autosave/resume, and an exam-window test
+  player that runs on a light paper surface (palette, sections, pause, submit summary, answer review)
 - JWT authentication with email OTP password reset
 - Course access codes for paid content (Telegram provider contact)
 - Django admin for managing course content
 - SQLite locally; PostgreSQL-ready using `DATABASE_URL`
-- Comprehensive test suite (96 tests passing)
+- Comprehensive test suite (155 tests passing, including the seed command)
+- Seeded demo catalogue (`manage.py seed_demo`) and a committed front-end check suite (`tools/checks/`)
 
 ## Quick Start (Development)
 
@@ -100,7 +103,12 @@ pw-style-learning-app/
 │   ├── courses.html        # Catalogue
 │   ├── course.html         # Batch detail
 │   ├── tests.html          # Test series
-│   ├── test-player.html    # Exam + result screen
+│   ├── test-player.html    # Exam-window test player + result screen
+│   ├── player.html         # Class player
+│   ├── downloads.html      # Downloads
+│   ├── community.html      # Discussion + announcements
+│   ├── profile.html        # Account
+│   ├── splash.html         # App splash
 │   ├── dashboard.html      # Student dashboard
 │   ├── login.html          # Sign in / register
 │   ├── legal.html          # Terms, privacy, accessibility
@@ -141,16 +149,26 @@ See [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) for detailed milestone tracking
 ```bash
 cd backend
 ENVIRONMENT=test python manage.py test
-# Runs 142 tests: models, serializers, permissions, API security regression
+# Runs 155 tests: models, serializers, permissions, API security regression, seed data
 ```
 
-Frontend checks (no build step, no dependencies):
+### Seeded catalogue for local work
+
+```bash
+cd backend
+python manage.py migrate
+python manage.py seed_demo          # 6 batches, 4 series, 5 timed tests — safe to re-run
+python manage.py seed_demo --clear  # remove exactly the rows it made
+```
+
+Frontend checks (no build step; `tools/checks/` installs jsdom + css-tree on demand):
 
 ```bash
 node --check frontend/sw.js
 for f in frontend/assets/js/*.js; do node --check "$f"; done
 # then serve frontend/ and walk these pages with the browser console open:
-#   index, courses, course, tests, test-player, dashboard, login, legal, offline
+#   index, splash, courses, course, tests, test-player, dashboard, login, legal,
+#   offline, player, downloads, community, profile
 ```
 
 ## API Endpoints
