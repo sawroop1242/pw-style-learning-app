@@ -358,6 +358,11 @@ function enterExam() {
   $('#intro-view').hidden = true;
   $('#exam-view').hidden = false;
   document.body.classList.add('is-exam');
+  const skip = document.querySelector('.skip-link');
+  if (skip) {
+    skip.href = '#exam-main';
+    skip.textContent = 'Skip to the question';
+  }
 
   setText('#exam-name', state.test.title);
   setText('#exam-sub', `${state.test.exam} · ${state.test.kind}`);
