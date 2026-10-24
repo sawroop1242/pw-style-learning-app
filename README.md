@@ -7,7 +7,8 @@ A mobile-first learning platform with a dark, app-style PWA frontend (desktop si
 - Responsive, installable PWA frontend with offline support — desktop sidebar shell, phone bottom
   tabs, and app-style screens (exam-window test player, class player, downloads, community, profile)
 - Django REST API for courses, lessons, quizzes, notes, bookmarks, revision items, study tasks, and progress
-- Test series with timed/untimed modes, CSV import, attempt autosave/resume
+- Test series with timed/untimed modes, CSV import, attempt autosave/resume, and an exam-window test
+  player that runs on a light paper surface (palette, sections, pause, submit summary, answer review)
 - JWT authentication with email OTP password reset
 - Course access codes for paid content (Telegram provider contact)
 - Django admin for managing course content

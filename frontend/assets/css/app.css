@@ -343,11 +343,17 @@
 .intro-foot { margin-top: var(--sp-4); }
 
 /* ============================ TEST WINDOW ============================== */
+/* The test window runs on paper, not on the dark app canvas. A candidate is
+   reading a question paper, so this page — intro, exam and answer sheet —
+   flips the semantic tokens to a light surface. Everything is scoped to
+   body.exam-shell; no other page is affected. */
+
+body.exam-shell { background: var(--canvas); color: var(--text); }
+
 /* Exam-like chrome: a fixed status bar, the paper column, and a numbered
    palette rail. Structure follows the interface pattern; every colour, word
    and figure is ours. */
 
-body.exam-shell { background: var(--canvas); }
 body.is-exam { --header-h: 0px; }
 body.is-exam #site-header,
 body.is-exam #site-footer,
@@ -359,7 +365,8 @@ body.is-exam #site-tabbar { display: none !important; }
   position: sticky;
   top: 0;
   z-index: var(--z-header);
-  background: rgba(11, 11, 22, 0.94);
+  background: var(--paper);
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--border);
@@ -391,7 +398,7 @@ body.is-exam #site-tabbar { display: none !important; }
   flex: 0 0 auto;
   border-radius: 10px;
   background: var(--grad-brand);
-  color: var(--text-strong);
+  color: var(--text-invert);
 }
 
 .exam-brand svg { width: 17px; height: 17px; }
@@ -465,19 +472,29 @@ body.is-exam #site-tabbar { display: none !important; }
 .exam-subbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-4);
+  justify-content: flex-start;
+  gap: var(--sp-3);
   max-width: var(--container-wide);
   margin-inline: auto;
   padding-inline: var(--sp-4);
   border-top: 1px solid var(--border);
 }
 
+.exam-sections-label {
+  font-size: var(--text-2xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  padding-right: 6px;
+  white-space: nowrap;
+}
+
 .exam-sections {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
+  padding-block: 6px;
 }
 
 .exam-sections::-webkit-scrollbar { display: none; }
@@ -502,20 +519,15 @@ body.is-exam #site-tabbar { display: none !important; }
 .exam-tab:hover { color: var(--text-strong); }
 
 .exam-tab[aria-selected="true"] {
-  color: var(--text-strong);
+  color: var(--text-invert);
   font-weight: 600;
-  background: var(--surface-raised);
+  background: var(--violet-600);
 }
 
-.exam-tab[aria-selected="true"]::after {
-  content: "";
-  position: absolute;
-  left: 10px; right: 10px; bottom: -1px;
-  height: 2px;
-  background: var(--violet-500);
-}
+.exam-tab[aria-selected="true"] span { color: var(--text-invert); }
 
 .exam-sections-note {
+  margin-left: auto;
   font-size: var(--text-2xs);
   color: var(--text-subtle);
   white-space: nowrap;
@@ -642,7 +654,7 @@ body.is-exam #site-tabbar { display: none !important; }
 
 .q-report svg { width: 14px; height: 14px; }
 .q-report:hover { color: var(--text-strong); background: var(--surface-soft); }
-.q-report.is-reported { color: var(--amber-500); }
+.q-report.is-reported { color: var(--amber-500); border: 1px solid currentColor; }
 
 /* question card */
 .qpanel {
@@ -652,6 +664,7 @@ body.is-exam #site-tabbar { display: none !important; }
   padding: clamp(18px, 2.6vw, 30px);
   scroll-margin-top: 140px;
   outline: none;
+  box-shadow: var(--shadow-sm);
 }
 
 .qpanel:focus-visible { outline: 2px solid var(--violet-500); outline-offset: 2px; }
@@ -718,12 +731,12 @@ body.is-exam #site-tabbar { display: none !important; }
 .qoption-text { font-size: var(--text-base); color: var(--text); line-height: 1.5; }
 
 .qoption.is-selected {
-  border-color: var(--violet-500);
-  background: color-mix(in srgb, var(--violet-600) 18%, var(--surface-soft));
+  border-color: var(--violet-600);
+  background: color-mix(in srgb, var(--violet-600) 10%, var(--paper));
 }
 
-.qoption.is-selected .qoption-key { border-color: var(--violet-400); }
-.qoption.is-selected .qoption-key::after { background: var(--violet-400); }
+.qoption.is-selected .qoption-key { border-color: var(--violet-600); }
+.qoption.is-selected .qoption-key::after { background: var(--violet-600); }
 
 .qoption:focus-within {
   outline: 2px solid var(--violet-400);
@@ -858,6 +871,7 @@ body.is-exam #site-tabbar { display: none !important; }
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .candidate-row { display: flex; align-items: center; gap: 10px; }
@@ -895,8 +909,18 @@ body.is-exam #site-tabbar { display: none !important; }
   height: 14px;
   flex: 0 0 auto;
   border-radius: 4px;
-  border: 1px solid transparent;
+  border: 1px solid var(--pal-unvisited-edge);
+  background: var(--pal-unvisited);
 }
+
+.palette-legend .lg.is-answered { background: var(--pal-answered); border-color: transparent; }
+.palette-legend .lg.is-marked { background: var(--pal-marked); border-color: transparent; }
+.palette-legend .lg.is-marked-answered {
+  background: var(--pal-marked);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px var(--pal-answered);
+}
+.palette-legend .lg.is-not-answered { background: var(--pal-not-answered); border-color: transparent; }
 
 .palette-section-label {
   font-size: var(--text-2xs);
@@ -921,26 +945,27 @@ body.is-exam #site-tabbar { display: none !important; }
   min-width: 32px;
   min-height: 32px;
   border-radius: var(--r-sm);
-  border: 1px solid transparent;
+  border: 1px solid var(--pal-unvisited-edge);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--pal-ink);
-  background: var(--band-default);
+  color: var(--pal-unvisited-ink);
+  background: var(--pal-unvisited);
   transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
 .pal-btn:hover { transform: translateY(-1px); }
 .pal-btn:focus-visible { outline: 2px solid var(--text-strong); outline-offset: 2px; }
 
-.pal-btn.is-answered { background: var(--pal-answered); }
-.pal-btn.is-not-answered { background: var(--pal-not-answered); }
-.pal-btn.is-marked { background: var(--pal-marked); }
+.pal-btn.is-answered { background: var(--pal-answered); color: var(--pal-answered-ink); border-color: transparent; }
+.pal-btn.is-not-answered { background: var(--pal-not-answered); color: var(--pal-not-answered-ink); border-color: transparent; }
+.pal-btn.is-marked { background: var(--pal-marked); color: var(--pal-marked-ink); border-color: transparent; }
 .pal-btn.is-marked-answered {
   background: var(--pal-marked);
+  color: var(--pal-marked-ink);
+  border-color: transparent;
   box-shadow: inset 0 0 0 2px var(--pal-answered);
 }
-.pal-btn.is-unvisited { background: var(--slate-600); color: var(--slate-200); }
 
 .pal-btn.is-current {
   box-shadow: 0 0 0 2px var(--canvas), 0 0 0 4px var(--text-strong);
@@ -1230,6 +1255,13 @@ body.is-paused .exam-layout { visibility: hidden; }
 
 /* ============================ RESPONSIVE =============================== */
 
+/* Wide screens read the passage and its question side by side, the way a
+   printed comprehension set is laid out. */
+@media (min-width: 980px) {
+  .exam-paper { grid-template-columns: minmax(0, 1fr); }
+  body.has-passage .exam-paper { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+}
+
 @media (max-width: 1080px) {
   .exam-layout { grid-template-columns: minmax(0, 1fr); }
   .exam-side { position: static; }
@@ -1254,6 +1286,7 @@ body.is-paused .exam-layout { visibility: hidden; }
 
   .exam-subbar { padding-inline: 0; }
   .exam-sections-note { display: none; }
+  .exam-sections-label { display: none; }
   .exam-tab { padding-inline: 12px; }
 
   .exam-layout { padding: 14px var(--sp-3) var(--sp-8); gap: var(--sp-3); }

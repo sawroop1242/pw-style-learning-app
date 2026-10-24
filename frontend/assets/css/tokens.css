@@ -225,6 +225,52 @@
   --z-toast: 90;
 }
 
+/* ---- Paper theme: the test window ------------------------------------
+   The exam page is read like a printed paper, so it flips the semantic
+   tokens to a light surface. Scoped to body.exam-shell — the class the test
+   page sets — so no other screen is touched. */
+body.exam-shell {
+  --canvas: #eef1f7;
+  --paper: #ffffff;
+  --surface: #ffffff;
+  --surface-raised: #f7f9fc;
+  --surface-sunken: #f1f4f9;
+  --surface-soft: #f8fafc;
+  --surface-inverse: #101827;
+
+  --text-strong: #0d1526;
+  --text: #1b2434;
+  --text-muted: #4a5568;
+  --text-subtle: #5b6577;
+
+  --border: #e2e7f0;
+  --border-strong: #cbd3e1;
+  --border-input: #737e93;
+
+  --success-500: #0f7a4d;
+  --success-600: #0b6a42;
+  --success-100: #e6f6ee;
+  --danger-500: #c0263a;
+  --danger-600: #a91f31;
+  --danger-100: #fdecef;
+  --amber-500: #92590a;
+  --live: #c0263a;
+
+  /* Question-palette statuses on white: saturated fills, white numerals,
+     and an outline for the untouched questions. */
+  --pal-answered: #15803d;
+  --pal-answered-ink: #ffffff;
+  --pal-marked: #6d28d9;
+  --pal-marked-ink: #ffffff;
+  --pal-not-answered: #b91c1c;
+  --pal-not-answered-ink: #ffffff;
+  --pal-unvisited: #ffffff;
+  --pal-unvisited-ink: #333c4e;
+  --pal-unvisited-edge: #c5cddb;
+
+  color-scheme: light;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0ms;

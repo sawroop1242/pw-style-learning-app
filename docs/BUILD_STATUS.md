@@ -1348,3 +1348,63 @@ The site is now **14 pages**. Nothing redirects to Khazana and no nav item point
 | `node --check` | 16/16 scripts (15 page modules + `sw.js`) |
 | HTTP through `tools/serve.py` | **14/14 pages + 8/8 assets 200**, `khazana.html` → 404 |
 | Palette contrast (ink on fill) | answered 10.3 · marked 8.1 · not answered 8.1 · unvisited 5.6 — all above 4.5:1 |
+
+## Run 10 — the exam window moves onto paper (2026-10-24, branch `arena/f7cbb940-pw-style-learning-app`)
+
+The user supplied the saved source of the reference test page (`Online Test.html`). It is an AngularJS
+shell: a `<div ng-view>` plus the site header, login/notification modals and analytics, with the question
+interface rendered client-side and therefore absent from the saved file. A search of the file returns
+**zero** matches for palette, legend, section-tab, mark-for-review or save-next markup. What the file does
+establish is the environment: the exam runs on a **light interface**. The layout reference stays the
+attached screen, and its palette is now reproduced on paper.
+
+### What changed
+
+| Area | Before | Now |
+|---|---|---|
+| Surface | Dark app canvas inside the exam window | Light paper: white cards on a `#eef1f7` desk. Scoped to `body.exam-shell`, so **only the test page** (intro → exam → answer sheet) is light; the rest of the app stays dark. |
+| Tokens | Dark semantic tokens only | A documented "paper theme" block in `tokens.css` overrides surface, text, border, state and palette tokens on `body.exam-shell`, plus `color-scheme: light` for native controls. |
+| Section strip | Tabs with an underlined active state | A `SECTIONS` label and an active tab filled in the brand violet with white text, as in the reference. |
+| Comprehension | Passage stacked above the question, always | At ≥980px the passage and its question sit side by side, the way a comprehension set is printed; below that they stack. |
+| Palette | Soft pastel fills on dark | Solid status chips: green answered, violet marked, red not answered, outlined white unvisited, with the current question carrying a dark ring. Legend swatches share the same fills. |
+| Chrome | Glassy dark bar | Translucent white bar, bordered countdown, outlined Pause and full-screen buttons, white question cards with a soft shadow. |
+
+The **violet brand action colour is kept** — the reference's teal is its brand, ours is violet, and the
+standing rule is to borrow the layout, not the identity. The functional status colours (green / violet /
+red) are the convention every exam interface uses.
+
+### Contrast (WCAG 2.2 AA, computed on the new surfaces)
+
+| Pair | Ratio |
+|---|---|
+| Headings on paper / body on paper | 18.22 / 15.57 |
+| Muted on paper · subtle on paper · subtle on raised | 7.53 · 5.46 · 5.17 |
+| White on brand violet (primary button, active tab) | 4.92 |
+| Positive marks · negative marks · report amber | 5.37 · 5.87 · 5.74 |
+| Palette numerals: answered · marked · not answered · unvisited | 5.02 · 7.10 · 6.47 · 11.07 |
+| Control boundary (non-text) | 4.09 |
+
+Two values were corrected during the pass: the tab's question count and `--text-subtle` on the desk
+colour were both under 4.5:1 and were darkened to pass.
+
+### Deliberate omissions
+
+- **No teal, no logo, no candidate details.** The saved page carries a real student name, e-mail and
+  mobile number in hidden inputs; none of it is used or copied.
+- **No language switcher.** The reference's *View in English* control is omitted — this build has one
+  language of content, and a dead control is worse than none.
+- **No rank/percentile** for the same reason as Run 9: there is no cohort behind a sample paper.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Pages rendered headlessly (jsdom) | **10/10** app pages, no console errors |
+| Structural a11y | **14/14 pages clean** |
+| Interaction suite | **107/107** |
+| CSS classes | **422 used / 0 missing** (2 dynamic prefixes) |
+| Custom properties | 164 defined / 139 referenced / **0 undefined** |
+| Literal hex outside `tokens.css` | **16** — the paper theme lives in `tokens.css`, so the baseline is unchanged |
+| CSS parse (css-tree) | 6 stylesheets, no errors |
+| HTTP through `tools/serve.py` | 14/14 pages, all shell assets 200 |
+| Scope check | only `test-player.html` carries `exam-shell`; the other 13 pages are untouched |
