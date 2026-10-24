@@ -1,12 +1,12 @@
 /**
- * Home page — welcome, hero, today's classes, Khazana, recommended batches,
- * free mocks, announcements and FAQ. Catalogue reads go through `live()` so
- * the page works against the API or the bundled fixtures.
+ * Home page — welcome, hero, today's classes, recommended batches, free
+ * mocks, announcements and FAQ. Catalogue reads go through `live()` so the
+ * page works against the API or the bundled fixtures.
  */
 
 import { $, $$, esc, live, initials, storage, adaptCourse, adaptTest } from './core.js';
 import { mountChrome, batchCard, testCard, todayClassCard, icon, toast } from './ui.js';
-import { COURSES, TESTS, FAQS, TODAY_CLASSES, SUBJECTS, COMMUNITY } from './data.js';
+import { COURSES, TESTS, FAQS, TODAY_CLASSES, COMMUNITY } from './data.js';
 
 mountChrome('home');
 
@@ -34,27 +34,6 @@ function renderToday() {
   const host = $('#today-grid');
   if (!host) return;
   host.innerHTML = TODAY_CLASSES.map(todayClassCard).join('');
-}
-
-/* ------------------------------------------------------------------ */
-/* Khazana — subject tiles with chapter and lecture counts            */
-/* ------------------------------------------------------------------ */
-
-function renderKhazana() {
-  const host = $('#khazana-grid');
-  if (!host) return;
-  host.innerHTML = SUBJECTS.slice(0, 8)
-    .map(
-      (subject) => `
-      <a class="subject-tile" href="khazana.html?subject=${encodeURIComponent(subject.name)}">
-        <span class="subject-icon tone-${subject.tone}">${icon(subject.icon)}</span>
-        <span class="subject-body">
-          <strong>${esc(subject.name)}</strong>
-          <small>${subject.chapters} ${subject.chapters === 1 ? 'chapter' : 'chapters'} · ${subject.lectures} ${subject.lectures === 1 ? 'lecture' : 'lectures'}</small>
-        </span>
-      </a>`
-    )
-    .join('');
 }
 
 /* ------------------------------------------------------------------ */
@@ -179,7 +158,6 @@ searchForm?.addEventListener('submit', (e) => {
 
 renderWelcome();
 renderToday();
-renderKhazana();
 renderNotices();
 renderTrending();
 renderTests();

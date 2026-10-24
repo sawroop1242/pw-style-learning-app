@@ -647,7 +647,82 @@ export const EXAM_QUESTIONS = [
     options: ['(3, 4, 0)', '(4, 3, 0)', '(0, 3, 4)', '(5, 0, 0)'],
     answer: 0,
     explanation: 'Each component is the magnitude times the corresponding direction cosine: (5×0.6, 5×0.8, 0) = (3, 4, 0).'
-  }
+  },
+  {
+    id: 100,
+    type: 'single',
+    section: 'Reasoning',
+    marks: 2,
+    negative: 0.5,
+    comprehension: {
+      title: 'Comprehension',
+      range: 'Questions 100–102',
+      text:
+        'The chart shows the number of candidates (in thousands) who appeared for a scholarship test from five districts in 2025. Read it and answer the questions that follow.',
+      chart: {
+        alt: 'Bar chart of candidates in thousands by district: North 42, South 55, East 38, West 61, Central 49.',
+        unit: 'k',
+        max: 70,
+        labels: ['North', 'South', 'East', 'West', 'Central'],
+        values: [42, 55, 38, 61, 49],
+        caption: 'Candidates per district, 2025 (thousands).'
+      }
+    },
+    prompt: 'Which district had the fewest candidates?',
+    options: ['North', 'South', 'East', 'West'],
+    answer: 2,
+    explanation: 'East is the shortest bar at 38 thousand, below North (42) and Central (49).'
+  },
+  {
+    id: 101,
+    type: 'single',
+    section: 'Reasoning',
+    marks: 2,
+    negative: 0.5,
+    comprehension: {
+      title: 'Comprehension',
+      range: 'Questions 100–102',
+      text:
+        'The chart shows the number of candidates (in thousands) who appeared for a scholarship test from five districts in 2025. Read it and answer the questions that follow.',
+      chart: {
+        alt: 'Bar chart of candidates in thousands by district: North 42, South 55, East 38, West 61, Central 49.',
+        unit: 'k',
+        max: 70,
+        labels: ['North', 'South', 'East', 'West', 'Central'],
+        values: [42, 55, 38, 61, 49],
+        caption: 'Candidates per district, 2025 (thousands).'
+      }
+    },
+    prompt: 'How many more candidates appeared from West than from East?',
+    options: ['13 thousand', '19 thousand', '23 thousand', '27 thousand'],
+    answer: 2,
+    explanation: 'West is 61 thousand and East is 38 thousand, so the difference is 23 thousand.'
+  },
+  {
+    id: 102,
+    type: 'single',
+    section: 'Reasoning',
+    marks: 2,
+    negative: 0.5,
+    comprehension: {
+      title: 'Comprehension',
+      range: 'Questions 100–102',
+      text:
+        'The chart shows the number of candidates (in thousands) who appeared for a scholarship test from five districts in 2025. Read it and answer the questions that follow.',
+      chart: {
+        alt: 'Bar chart of candidates in thousands by district: North 42, South 55, East 38, West 61, Central 49.',
+        unit: 'k',
+        max: 70,
+        labels: ['North', 'South', 'East', 'West', 'Central'],
+        values: [42, 55, 38, 61, 49],
+        caption: 'Candidates per district, 2025 (thousands).'
+      }
+    },
+    prompt: 'Candidates from North and Central together are closest to:',
+    options: ['85 thousand', '91 thousand', '97 thousand', '103 thousand'],
+    answer: 1,
+    explanation: 'North 42 + Central 49 = 91 thousand.'
+  },
 ];
 
 export const DASHBOARD = {
@@ -777,25 +852,6 @@ export const TODAY_CLASSES = [
 ];
 
 /* ------------------------------------------------------------------ */
-/* Khazana — the free subject library                                  */
-/* ------------------------------------------------------------------ */
-
-export const SUBJECTS = [
-  { name: 'Physics',   icon: 'atom',       chapters: 5,  lectures: 21,  tone: 'physics' },
-  { name: 'Science',   icon: 'flask',      chapters: 1,  lectures: 0,   tone: 'chemistry' },
-  { name: 'Reasoning', icon: 'lightbulb',  chapters: 27, lectures: 71,  tone: 'maths' },
-  { name: 'Current Affairs', icon: 'globe', chapters: 1, lectures: 12,  tone: 'biology' },
-  { name: 'Polity',    icon: 'shield',     chapters: 1,  lectures: 0,   tone: 'reasoning' },
-  { name: 'Geography', icon: 'globe',      chapters: 9,  lectures: 21,  tone: 'english' },
-  { name: 'Economics', icon: 'chart',      chapters: 21, lectures: 49,  tone: 'computer' },
-  { name: 'Mathematics', icon: 'target',   chapters: 1,  lectures: 32,  tone: 'default' },
-  { name: 'Starter Kit', icon: 'cap',      chapters: 3,  lectures: 6,   tone: 'physics' },
-  { name: 'Computer',  icon: 'cpu',        chapters: 12, lectures: 13,  tone: 'maths' },
-  { name: 'Static GK', icon: 'building',   chapters: 0,  lectures: 0,   tone: 'chemistry' },
-  { name: 'History',   icon: 'book-open',  chapters: 0,  lectures: 0,   tone: 'biology' }
-];
-
-/* ------------------------------------------------------------------ */
 /* Downloads, player, community, profile                               */
 /* ------------------------------------------------------------------ */
 
@@ -860,7 +916,7 @@ export const COMMUNITY = {
     },
     {
       title: 'New PYQ set — SSC CGL 2025',
-      body: 'The 2025 paper with worked solutions is now inside the Khazana library, free for every account.',
+      body: 'The 2025 paper with worked solutions is now in the free test series, open to every account.',
       author: 'StudySpace Team',
       initials: 'SS',
       time: 'yesterday',

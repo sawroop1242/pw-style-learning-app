@@ -115,6 +115,12 @@
   --band-reasoning: linear-gradient(135deg, #f4dd9c 0%, #e9c974 100%);
   --band-english: linear-gradient(135deg, #d3bdf7 0%, #b79ef0 100%);
   --band-computer: linear-gradient(135deg, #a3ddd6 0%, #82c9c1 100%);
+  /* Question-palette statuses: pastel fills carrying dark ink, exactly like the
+     coloured status squares in an exam interface. */
+  --pal-answered: #3ddc97;
+  --pal-not-answered: #ff8a8a;
+  --pal-marked: #b79dff;
+  --pal-ink: #14141f;
   --band-default: linear-gradient(135deg, #c3c3d4 0%, #a8a8bd 100%);
   /* Text and mentor chips printed on a pastel band. */
   --band-ink: #14141f;
@@ -132,13 +138,6 @@
   --grad-avatar: linear-gradient(135deg, #d5ceff 0%, #a9a2f4 100%);
   --grad-avatar-soft: linear-gradient(135deg, #ded8ff 0%, #a9a2f4 100%);
   --poster-ink: #0d0b1d;
-
-  /* Subject icon tints, matched to the pastel bands. */
-  --tone-violet: #a9a2f4;
-  --tone-mint: #7fd4b4;
-  --tone-rose: #f3a8bd;
-  --tone-amber: #f0cf88;
-  --tone-lilac: #c3aef7;
 
   /* Toast glyph colours, kept bright for a 3:1 icon contrast on --ink. */
   --toast-success: #4ade80;

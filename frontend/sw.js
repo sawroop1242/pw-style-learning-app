@@ -9,7 +9,7 @@
  * Bump CACHE_VERSION whenever a shell asset changes so old clients refresh.
  */
 
-const CACHE_VERSION = 'studyspace-v9';
+const CACHE_VERSION = 'studyspace-v10';
 const SHELL = [
   './',
   './index.html',
@@ -17,7 +17,6 @@ const SHELL = [
   './course.html',
   './tests.html',
   './test-player.html',
-  './khazana.html',
   './player.html',
   './downloads.html',
   './community.html',
@@ -49,7 +48,6 @@ const SHELL = [
   './assets/js/dashboard.js',
   './assets/js/auth.js',
   './assets/js/legal.js',
-  './assets/js/khazana.js',
   './assets/js/player.js',
   './assets/js/downloads.js',
   './assets/js/community.js',

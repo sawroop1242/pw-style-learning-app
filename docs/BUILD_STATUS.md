@@ -1189,7 +1189,7 @@ reproduced.
 | `assets/css/pages.css` | Hero is now a gradient banner with a violet CTA and a glass featured-batch card; category tiles and batch cards use rounded icon/keyline treatments; new Khazana, announcements and community panels; pill tab strips on batch pages; accented auth panel. |
 | `assets/css/app.css` | Dashboard cards, exam bar, question panel, options, palette and action bar restyled dark; print stylesheet force-restores light tokens so a printed paper stays black-on-white. |
 | `assets/js/ui.js` | Shell rewritten (`renderHeader`, `renderTabbar`), new `megaphone`/`wrench`/`flask` glyphs, seven-item nav, five-tab bar, drawer focus/escape handling, search toggle, batch-card facts row. |
-| `assets/js/home.js` | New `renderKhazana()` — subject tiles derived from the live catalogue (batches + lesson counts), not hand-written fake rows. |
+| `assets/js/home.js` | New `renderKhazana()` — subject tiles derived from the live catalogue (batches + lesson counts), not hand-written fake rows. *Deleted in Run 9.* |
 | `index.html` | Khazana section plus announcements/community panels with real product copy; `theme-color` updated. |
 | `manifest.webmanifest`, `sw.js` | Splash/theme colours match the dark canvas; cache bumped to `studyspace-v8`. |
 
@@ -1235,7 +1235,7 @@ and faculty identities are our own — no third-party logo, photography or wordi
 | Screen | File | What it does |
 |---|---|---|
 | App splash | `splash.html` | Brand mark, tagline, three value lines, *Get started* / *I already have an account* / continue as guest. No forced timer — a redirect nobody asked for is an accessibility problem. |
-| Khazana | `khazana.html` + `khazana.js` | Twelve subject tiles with real chapter and lecture counts, a running total, and the free batches pulled from the catalogue. |
+| Khazana | `khazana.html` + `khazana.js` | Twelve subject tiles with real chapter and lecture counts, a running total, and the free batches pulled from the catalogue. **Removed in Run 9** — the page, its module, nav entry, tab, home rail, fixtures and styles no longer exist. |
 | Class player | `player.html` + `player.js` | Stage with transport, Chapters / Notes / Doubts tabs (arrow-key navigable), per-chapter lock and done states, Prev / Next. |
 | Downloads | `downloads.html` + `downloads.js` | Lectures / Notes / Tests tabs with per-item actions. |
 | Community | `community.html` + `community.js` | Discussion and Announcement tab strips, posts with like / reply / share, compose FAB. `#announcements` deep-links to the announcements tab. |
@@ -1247,10 +1247,10 @@ and faculty identities are our own — no third-party logo, photography or wordi
 ### Restored from the board's visual language
 
 - **Pastel header bands** on every batch card (`--band-*`), dark ink on pastel measured at 6.8–13.6:1.
-- **Coloured subject tiles** for the Khazana grid, one tint per subject.
+- **Coloured subject tiles** for the Khazana grid, one tint per subject. *Retired with Khazana in Run 9; the subject-tint tokens were deleted with it.*
 - **Solid violet active state** in the sidebar, matching the board's selected row.
-- **Top bar** now carries search, Khazana, notifications and the avatar.
-- Home was reordered to the board's rhythm: greeting → hero → quick tiles → Today's Classes → Recommended Batches → Khazana → Tests → announcements / community → poster → FAQ.
+- **Top bar** now carries search, notifications and the avatar *(the Khazana link was removed in Run 9)*.
+- Home was reordered to the board's rhythm: greeting → hero → quick tiles → Today's Classes → Recommended Batches → Khazana → Tests → announcements / community → poster → FAQ. *The Khazana band was removed in Run 9; the quick tile now points at Downloads.*
 
 ### Deliberate omissions
 
@@ -1278,3 +1278,73 @@ and faculty identities are our own — no third-party logo, photography or wordi
 
 The preview runs on the bundled fixtures: the sandbox API answers with an empty catalogue, and an empty
 catalogue would render empty grids. The page flag "Preview · sample data" stays visible.
+
+## Run 9 — exam-window rebuild, Khazana removed (2026-10-24, branch `arena/f7cbb940-pw-style-learning-app`)
+
+Two changes asked for in one message: rebuild the test system so the exam window reads like the attached
+exam-interface reference, and delete the Khazana section.
+
+The reference is a commercial test-prep interface. Only its **structure** was borrowed — fixed status bar
+with test identity and a boxed countdown, section strip, question header carrying marks / per-question
+time / report, the passage-plus-figure block, lettered option rows, a status legend and numbered palette,
+and the Mark for Review · Clear Response · Save & Next action bar. Every colour, glyph, label and question
+in this build is StudySpace's own; no third-party logo, wordmark, faculty image or question text is copied.
+
+### The new exam window
+
+| Area | What it does now |
+|---|---|
+| Status bar | Brand mark, test name and paper line; boxed **Time Left** in `HH:MM:SS` that turns red under five minutes; **Pause**; **Enter / Exit Full Screen** shown only where the browser exposes the API; autosave state line. |
+| Section strip | One tab per section with its question count. The active tab is filled, not just underlined, and switching jumps to that section's first question. |
+| Question header | `Question No. n`, `Marks +x / −y` (negative marking hidden when a question has none), a live per-question clock, and **Report**. |
+| Passage and figure | Comprehension sets render above the question: title, question range, instruction text and a bar chart drawn as inline SVG with a text alternative and per-bar `<title>` values. |
+| Question panel | Labelled "Question:", the prompt, and radio rows with a circular key that fills when chosen. Status line under the options says Answered / Marked / Not answered. |
+| Action bar | **Mark for Review & Next**, **Clear Response**, **Previous**, **Save & Next**, **Submit Test**. On phones it becomes a sticky bottom bar with full-width targets. |
+| Palette rail | Candidate row with attempt badge, a five-row legend with live counts, `SECTION :` label with the active section, the numbered grid for that section only, answered / not-answered / marked / marked-and-answered / unvisited colours, an outline on the current question, and **Question Paper**, **Instructions**, **Submit Test**. |
+| Pause | Real, not decorative: the paper is covered by a veil, the countdown stops, the per-question clock is banked, and resuming pushes the deadline forward by exactly the paused duration. The veil is a labelled `role="dialog"`. |
+| Instructions | Opens the same rules at any point in the paper instead of only on the intro screen. |
+| Report | Writes the reason against that question in the attempt, marks the Report control, and says plainly that it is stored on the device — there is no reporting endpoint yet, so it does not claim to have been sent. |
+
+Behaviour that had to survive the rebuild still does: section switching, per-section palette, frozen
+question order from the saved attempt, 450 ms debounced autosave to `/quiz-attempts/{id}/autosave/`,
+the five-minute warning, auto-submit at zero, the submit summary, server-first grading with the local
+fallback and a "not released" note on 403, the answer-sheet review with filters, and 1–6 / ← → keyboard
+shortcuts (suspended while paused or typing).
+
+### Khazana, removed
+
+| File | Change |
+|---|---|
+| `khazana.html`, `assets/js/khazana.js` | Deleted. |
+| `index.html`, `assets/js/home.js`, `assets/js/data.js` | Section, renderer, `SUBJECTS` fixture and import removed; the Khazana quick tile now opens Downloads. |
+| `assets/js/ui.js` | Nav entry and the top-bar grid link removed — seven sidebar links, four bottom tabs. |
+| `assets/css/screens.css`, `assets/css/tokens.css` | Khazana block, its media rules and the subject-tint tokens deleted. |
+| `sw.js` | Shell entries removed, cache bumped to `studyspace-v10`. |
+
+The site is now **14 pages**. Nothing redirects to Khazana and no nav item points at it.
+
+### Deliberate omissions
+
+- **No rank or percentile.** There is no cohort behind the sample paper, so the result screen reports
+  marks, accuracy and section breakdown and stops there.
+- **No language switch.** The reference shows a language toggle; this build has one language of content,
+  so the control was left out rather than rendered dead.
+- **No server-side report.** The reason is kept with the attempt on the device and the UI says so.
+- **Pause does not extend a live, scheduled test on the server.** The local deadline moves; a
+  server-scored attempt still expires on the server's own deadline.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Django suite (`accounts` + `courses`) | **146 tests, OK** (no backend change; re-run for the record) |
+| Pages rendered headlessly (jsdom) | **10/10** app pages — content, sidebar, tab bar, no console errors |
+| Structural a11y (h1, labels, `aria-controls`, duplicate ids, alt text) | **14/14 pages clean** |
+| Interaction suite | **107/107**, including 48 checks on the new exam window |
+| CSS classes | **421 used / 0 missing** (2 are dynamic prefixes: `avatar-`, `toast-`) |
+| Custom properties | 158 defined / 133 referenced / **0 undefined** |
+| Literal hex outside `tokens.css` | **16** (15 print stylesheet, 1 clipped mask fill) |
+| CSS parse (css-tree) | 6 stylesheets, no errors |
+| `node --check` | 16/16 scripts (15 page modules + `sw.js`) |
+| HTTP through `tools/serve.py` | **14/14 pages + 8/8 assets 200**, `khazana.html` → 404 |
+| Palette contrast (ink on fill) | answered 10.3 · marked 8.1 · not answered 8.1 · unvisited 5.6 — all above 4.5:1 |

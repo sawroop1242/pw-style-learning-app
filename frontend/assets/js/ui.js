@@ -90,6 +90,7 @@ const ICONS = {
   message: '<path d="M20.5 12a8.5 8.5 0 1 1-4.3-7.4"/><path d="M20.5 4.5 12 13l-3-1"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/>',
   flask: '<path d="M9.5 3.5h5"/><path d="M10.5 3.5v5.2L5.6 17a2.4 2.4 0 0 0 2.1 3.6h8.6a2.4 2.4 0 0 0 2.1-3.6l-4.9-8.3V3.5"/><path d="M7.5 14h9"/>',
+  pause: '<path d="M9 4.5v15M15 4.5v15" stroke-width="2.6"/>',
   megaphone: '<path d="M3.5 10.5v3a1.5 1.5 0 0 0 1.5 1.5h2l7 4V5l-7 4H5a1.5 1.5 0 0 0-1.5 1.5z"/><path d="M17 8.5a4.5 4.5 0 0 1 0 7"/><path d="M6.5 15v4.5a1.5 1.5 0 0 0 3 0V16"/>',
   wrench: '<path d="M14.5 6.5a4 4 0 1 0 4.9 4.9L21 13l-8 8-2-2 8-8z"/><path d="m5 19 4-4"/><path d="M4 8.5 6.5 6l2.5 2.5-2.5 2.5z"/>'
 };
@@ -188,7 +189,6 @@ const NAV = [
   { href: 'index.html', label: 'Home', id: 'home', icon: 'home' },
   { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'book' },
   { href: 'tests.html', label: 'Test Series', id: 'tests', icon: 'file-text' },
-  { href: 'khazana.html', label: 'Khazana', id: 'khazana', icon: 'grid' },
   { href: 'community.html#announcements', label: 'Announcements', id: 'announcements', icon: 'megaphone' },
   { href: 'community.html', label: 'Community', id: 'community', icon: 'users' },
   { href: 'downloads.html', label: 'Downloads', id: 'downloads', icon: 'download' },
@@ -199,7 +199,6 @@ const TABS = [
   { href: 'index.html', label: 'Home', id: 'home', icon: 'home' },
   { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'book' },
   { href: 'tests.html', label: 'Test Series', id: 'tests', icon: 'file-text' },
-  { href: 'khazana.html', label: 'Khazana', id: 'khazana', icon: 'grid' },
   { href: 'profile.html', label: 'Profile', id: 'profile', icon: 'user' }
 ];
 
@@ -265,7 +264,6 @@ export function renderHeader(active = '') {
       </div>
       <div class="topbar-actions">
         <button class="icon-btn" aria-label="Search" data-search-toggle>${icon('search')}</button>
-        <a class="icon-btn" href="khazana.html" aria-label="Open Khazana">${icon('grid')}</a>
         <button class="icon-btn has-dot" aria-label="Notifications" data-tip="Notifications">${icon('bell')}</button>
         ${
           isSignedIn() && user

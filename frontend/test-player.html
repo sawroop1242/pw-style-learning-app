@@ -74,9 +74,9 @@
   <!-- --------------------------------- EXAM ---------------------------------- -->
   <div id="exam-view" hidden>
     <header class="exam-bar">
-      <div class="container exam-bar-inner">
+      <div class="exam-bar-inner">
         <div class="exam-identity">
-          <span class="exam-mark" aria-hidden="true"><svg><use href="#i-file-text"/></svg></span>
+          <span class="exam-brand" aria-hidden="true"><svg><use href="#i-zap"/></svg></span>
           <div class="exam-titles">
             <strong id="exam-name">JEE Main Full Mock #12</strong>
             <span id="exam-sub">Physics · Chemistry · Mathematics</span>
@@ -85,69 +85,82 @@
 
         <div class="exam-status">
           <span class="exam-save" id="autosave-state" aria-live="polite">All answers saved</span>
-          <span class="exam-timer" id="exam-timer" role="timer" aria-live="off">
-            <svg aria-hidden="true"><use href="#i-clock"/></svg>
-            <b id="timer-value">--:--</b>
+          <span class="exam-clock" id="exam-timer" role="timer" aria-live="off" aria-label="Time left">
+            <span class="exam-clock-label">Time Left</span>
+            <span class="exam-clock-digits">
+              <b id="timer-h">00</b><i aria-hidden="true">:</i><b id="timer-m">00</b><i aria-hidden="true">:</i><b id="timer-s">00</b>
+            </span>
           </span>
-          <button class="btn btn-ghost btn-sm" type="button" id="paper-btn">Question paper</button>
-          <button class="btn btn-primary btn-sm" type="button" id="submit-btn">Submit</button>
+          <button class="btn btn-ghost btn-sm exam-tool" type="button" id="fullscreen-btn" hidden>Exit Full Screen</button>
+          <button class="btn btn-ghost btn-sm exam-tool" type="button" id="pause-btn">Pause</button>
         </div>
       </div>
 
-      <div class="container exam-sections" id="section-tabs" role="tablist" aria-label="Sections"></div>
+      <div class="exam-subbar">
+        <div class="exam-sections" id="section-tabs" role="tablist" aria-label="Sections"></div>
+        <p class="exam-sections-note" id="section-note">Switching sections jumps to that section’s first question</p>
+      </div>
     </header>
 
-    <main class="container exam-layout" id="exam-main">
-      <section class="exam-question" aria-label="Question panel">
-        <div class="candidate-strip">
-          <span class="avatar avatar-sm" id="candidate-avatar">G</span>
-          <span class="candidate-name" id="candidate-name">Guest candidate</span>
-          <span class="badge badge-outline" id="attempt-badge">Sample paper</span>
+    <main class="exam-layout" id="exam-main">
+      <div class="exam-paper">
+        <section class="exam-comprehension" id="comprehension" aria-label="Passage" hidden></section>
+
+        <div class="exam-question-col">
+          <div class="qpanel-meta">
+            <span class="qpanel-number" id="q-number">Question No. 1</span>
+            <span class="q-meta-marks">
+              <span class="q-meta-label">Marks</span>
+              <b class="pos" id="q-marks">+2</b><b class="neg" id="q-negative">-0.5</b>
+            </span>
+            <span class="q-meta-time">
+              <span class="q-meta-label">Time</span> <b id="q-time">00:00</b>
+            </span>
+            <button class="q-report" type="button" id="report-btn">
+              <svg aria-hidden="true"><use href="#i-flag"/></svg> Report
+            </button>
+          </div>
+
+          <article class="qpanel" id="qpanel" tabindex="-1"></article>
+
+          <nav class="exam-actions" aria-label="Question actions">
+            <div class="exam-actions-left">
+              <button class="btn btn-ghost btn-sm" type="button" id="mark-btn">Mark for Review &amp; Next</button>
+              <button class="btn btn-ghost btn-sm" type="button" id="clear-btn">Clear Response</button>
+            </div>
+            <div class="exam-actions-right">
+              <button class="btn btn-ghost btn-sm" type="button" id="prev-btn" aria-label="Previous question">
+                <svg aria-hidden="true"><use href="#i-chevron-left"/></svg> Previous
+              </button>
+              <button class="btn btn-primary btn-sm" type="button" id="next-btn">Save &amp; Next</button>
+              <button class="btn btn-accent btn-sm" type="button" id="submit-btn">Submit Test</button>
+            </div>
+          </nav>
         </div>
-
-        <article class="qpanel" id="qpanel" tabindex="-1"></article>
-
-        <nav class="qpanel-actions" aria-label="Question actions">
-          <button class="btn btn-ghost" type="button" id="prev-btn">
-            <svg><use href="#i-arrow-left"/></svg> Previous
-          </button>
-          <span class="qpanel-spacer"></span>
-          <button class="btn btn-ghost" type="button" id="clear-btn">Clear response</button>
-          <button class="btn btn-ghost" type="button" id="mark-btn">
-            <svg><use href="#i-flag"/></svg> Mark for review &amp; next
-          </button>
-          <button class="btn btn-primary" type="button" id="next-btn">Save &amp; next</button>
-        </nav>
-      </section>
+      </div>
 
       <aside class="exam-side" aria-label="Question palette">
-        <section class="palette-card">
-          <header class="palette-head">
-            <h2>Questions</h2>
-            <span class="tiny subtle" id="palette-progress">0 of 10 answered</span>
-          </header>
+        <div class="palette-card">
+          <div class="candidate-row">
+            <span class="avatar avatar-sm" id="candidate-avatar">G</span>
+            <div class="candidate-info">
+              <strong id="candidate-name">Guest candidate</strong>
+              <span class="badge badge-outline" id="attempt-badge">Sample paper</span>
+            </div>
+          </div>
 
+          <ul class="palette-legend" id="legend-counts"></ul>
+
+          <p class="palette-section-label">Section : <b id="palette-section">Questions</b></p>
+          <p class="palette-progress" id="palette-progress">0 of 0 answered</p>
           <div class="palette-groups" id="palette-groups"></div>
 
-          <div class="palette-legend">
-            <span><i class="lg is-answered"></i> Answered</span>
-            <span><i class="lg is-not-answered"></i> Not answered</span>
-            <span><i class="lg is-marked"></i> Marked</span>
-            <span><i class="lg is-marked-answered"></i> Answered &amp; marked</span>
-            <span><i class="lg is-unvisited"></i> Not visited</span>
+          <div class="palette-foot">
+            <button class="btn btn-ghost btn-sm" type="button" id="paper-btn">Question Paper</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="instructions-btn">Instructions</button>
+            <button class="btn btn-primary btn-sm palette-submit" type="button" id="submit-rail-btn">Submit Test</button>
           </div>
-        </section>
-
-        <section class="exam-summary-card">
-          <h2 class="tiny subtle">Summary</h2>
-          <dl class="exam-summary">
-            <div><dt>Answered</dt><dd id="sum-answered">0</dd></div>
-            <div><dt>Not answered</dt><dd id="sum-unanswered">0</dd></div>
-            <div><dt>Marked</dt><dd id="sum-marked">0</dd></div>
-            <div><dt>Not visited</dt><dd id="sum-unvisited">0</dd></div>
-          </dl>
-          <button class="btn btn-primary btn-block" type="button" id="submit-btn-side">Submit test</button>
-        </section>
+        </div>
       </aside>
     </main>
   </div>
@@ -233,6 +246,59 @@
         <p class="tiny subtle">Read-only view of the whole paper. Choose a question to jump back into the test.</p>
         <div class="paper-list" id="paper-list"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ------------------------------ PAUSE ------------------------------------ -->
+  <div class="pause-veil" id="pause-veil" hidden>
+    <div class="pause-card" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <span class="pause-mark" aria-hidden="true"><svg><use href="#i-pause"/></svg></span>
+      <h2 id="pause-title">Test paused</h2>
+      <p>The paper is hidden and the clock is stopped. Your answers stay saved on this device.</p>
+      <button class="btn btn-primary" type="button" id="resume-btn">Resume test</button>
+    </div>
+  </div>
+
+  <!-- ---------------------------- INSTRUCTIONS -------------------------------- -->
+  <div class="modal" id="instructions-modal" role="dialog" aria-modal="true" aria-labelledby="instructions-title">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2 class="modal-title" id="instructions-title">Instructions</h2>
+        <button class="icon-btn" type="button" data-close-instructions aria-label="Close">
+          <svg><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <ol class="instruction-list" id="instruction-list"></ol>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" type="button" data-close-instructions>Back to the paper</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- -------------------------------- REPORT ---------------------------------- -->
+  <div class="modal" id="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-title">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2 class="modal-title" id="report-title">Report this question</h2>
+        <button class="icon-btn" type="button" data-close-report aria-label="Close">
+          <svg><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <form id="report-form" class="modal-body" style="display:grid;gap:14px">
+        <p class="tiny subtle" id="report-context">Question 1</p>
+        <div class="field">
+          <label for="report-reason">What is wrong?</label>
+          <textarea class="textarea" id="report-reason" name="reason" rows="3" required
+                    placeholder="Wrong answer key, typo, missing data in the chart…"></textarea>
+        </div>
+        <p class="tiny subtle">
+          The report is stored with this attempt on this device. It reaches the content team once the
+          reporting endpoint exists — this build does not pretend to send it.
+        </p>
+        <button class="btn btn-primary btn-block" type="submit">Save report</button>
+      </form>
     </div>
   </div>
 
