@@ -1481,3 +1481,86 @@ sessions:
 | Live API suite (seeded data) | **31/31** |
 | CSS classes · stylesheets | **417 used / 0 missing** · 6 parse clean |
 | HTTP through `tools/serve.py` | 14/14 pages, API proxy answering |
+
+## Run 13 — real CSV question import (2026-10-26, branch `arena/66cbe9f9-pw-style-learning-app`)
+
+### The problem
+
+The staff API could only create one question per request. A 100-question mock
+therefore meant 100 questions and 400 choices posted one at a time — which is
+not how a paper gets written. Worse, the two endpoints that were supposed to
+make this possible were stubs: `CsvImportJobViewSet.validate` set the job to
+`validated` with `total_rows = 0` and confirmed nothing, and `confirm_import`
+marked a job `imported` without writing a single question. A test that "passed"
+could not exist.
+
+### What now exists
+
+`backend/courses/csv_import.py` implements schema **v1** as one source of truth:
+
+| Piece | Detail |
+|---|---|
+| `COLUMNS` | 13 ordered `(name, required, help)` tuples — `section`, `question_type`, `question_text`, `option_a`–`option_e`, `correct_option`, `explanation`, `marks`, `negative_marks`, `difficulty` |
+| `template_csv()` | The header plus two illustrative rows, generated from `COLUMNS` |
+| `parse_questions_csv()` | Whole-file validation; row problems carry Excel row number, column and a stable code |
+| `import_questions()` | Transactional, all-or-nothing writer with `append` / `replace` and a quiz row lock |
+| `export_quiz_csv()` | Round-trippable export with formula-injection escaping |
+| `fetch_csv()` | HTTPS-only, redirect-refusing, size-capped fetch with a public-address check |
+
+`schema` is stored in `Question.topic` — the field the exam window already
+groups by (`test-player.js` maps `section: q.topic`), so there is no second
+section column to disagree with it. `short_answer` (suggested in the spec) is
+rejected with a clear message because the engine only scores
+`single_choice` / `multiple_choice` / `true_false`; rejecting beats silently
+mis-scoring.
+
+### The endpoints that were stubs
+
+| Endpoint | Before | Now |
+|---|---|---|
+| `GET /api/staff/import-jobs/template/` | — | Downloads the v1 template |
+| `GET /api/staff/import-jobs/schema/` | — | Column contract as JSON |
+| `POST …/{id}/validate/` | `total_rows = 0`, nothing read | Fetches, parses, stores counts + SHA-256 + capped errors, returns preview and row errors; writes **no** questions |
+| `POST …/{id}/confirm_import/` | Set `imported` without importing | Re-fetches, **refuses a changed digest**, imports atomically; `409` when `replace` would delete attempts |
+| `GET …/export/?quiz=<id>` | — | Round-trippable export |
+
+`CsvImportJob` gained `source_sha256` (migration `0003`) and an `owner`
+property. Without the latter, object-level permissions resolved ownership to
+`None` and every staff action on their own job returned 403.
+
+### The standard
+
+`docs/CSV_QUESTION_IMPORT.md` documents the columns, the option/answer rules,
+every rejection code, both delivery paths (URL and `manage.py
+import_questions`), the append-vs-replace policy and how to version the schema.
+`test_template_is_itself_valid` fails if the shipped template stops parsing, so
+the template and the importer cannot drift apart.
+
+### Safety decisions worth naming
+
+- **Nothing is stored.** Only the URL, a digest, counts and a capped summary.
+- **A file with one bad row imports nothing.** No half-built papers.
+- **Validate ≠ import.** The digest recorded at validation must still match at
+  confirmation, so the file previewed is the file imported.
+- **Re-import cannot destroy history.** `replace` is refused once attempts
+  exist, because `Answer.question` cascades on delete.
+- **Errors do not echo the paper.** Messages are short and never print whole
+  question text.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `python manage.py check` | no issues |
+| New CSV suite (`courses.tests.test_csv_import`) | **57 tests OK** |
+| Full backend suite (`python manage.py test`) | **215 tests OK** — includes the 57 new |
+
+`/admin/ → CSV import jobs` carries **Validate** and **Import** actions, so the
+whole flow is usable from the browser without a staff console. `replace` stays
+out of the admin: it belongs behind an explicit API call or command flag.
+
+What is *not* done: there is no frontend staff screen for this — the project has
+no staff console at all — so the entry points are the staff API, the Django
+admin and the management command. The live server was not restarted or pointed
+at a real hosted file in this run; the fetch path is covered with mocks, so a
+first real import is still worth watching.

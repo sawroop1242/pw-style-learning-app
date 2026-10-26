@@ -255,11 +255,25 @@ class CsvImportJob(TimeStampedModel):
     )
     total_rows = models.PositiveIntegerField(default=0)
     imported_rows = models.PositiveIntegerField(default=0)
+    source_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="SHA-256 of the exact bytes that were validated. Confirmation refuses a different file.",
+    )
     error_summary = models.TextField(blank=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+    @property
+    def owner(self):
+        """The provider who owns the target test.
+
+        Object-level permissions resolve ownership through ``owner``; without
+        this every staff action on a job answers 403 to its own creator.
+        """
+        return self.quiz.owner
 
     def __str__(self):
         return f"CsvImportJob(quiz={self.quiz_id}, {self.status})"
