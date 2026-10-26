@@ -1,12 +1,4 @@
-# Vercel resolves a Django project by running manage.py and then importing the
-# module named in WSGI_APPLICATION / ASGI_APPLICATION. Those paths are relative
-# to the repository root, and this project's Django package lives in backend/,
-# so neither can be imported from there -- which is why every path answered
-# 500 FUNCTION_INVOCATION_FAILED, including the database-free /healthz/.
-#
-# `tool.vercel.entrypoint` is written as "<dotted module>:<attribute>" and
-# overrides that guesswork. The module is the wsgi.py at the repository root,
-# which puts backend/ on sys.path, sets DJANGO_SETTINGS_MODULE and exposes the
-# application under both `application` and `app`.
-[tool.vercel]
-entrypoint = "wsgi:application"
+# The serverless handler is declared in vercel.json + api/index.py: the project
+# is deployed with the framework preset switched off, because the built-in
+# Django detection imports WSGI_APPLICATION from the repository root and this
+# project's Django package lives in backend/.
