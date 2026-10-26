@@ -1682,3 +1682,39 @@ cannot reach, so the deployment uses the Supavisor pooler in session mode
 | Production settings `check --deploy` | one expected warning (`SECURE_SSL_REDIRECT`), nothing else |
 | `collectstatic` under production storage | 154 files, 444 post-processed, `staticfiles.json` written |
 | One Django process, every URL | `/` `/tests.html` `/test-player.html` `/assets/css/base.css` `/assets/js/core.js` `/sw.js` `/manifest.webmanifest` `/api/quizzes/` `/healthz/` `/healthz/ready/` `/admin/login/` — all `200` with the intended content type |
+
+## Run 15 — the production deployment runs the app, on Supabase Postgres
+
+**Branch:** `arena/4974053a-pw-style-learning-app` → merged as PR #7 (`cfa9052`).
+
+### What was deployed
+
+| | |
+|---|---|
+| Production deployment | `dpl_HCJYX5GYReA7VDCTz5jHVwwHwcgi` — `main` @ `cfa9052`, READY |
+| Preview deployment | `dpl_3xTQWNz2HpV4kuVyhu2ry6VzsrXP` — branch @ `f3cfe39`, READY |
+| Database | Supabase `studyspace` / `hcidfvqszalkggurfriw` (Postgres 17.11, `ap-south-1`), via the Supavisor session-mode pooler |
+| Runtime | one Django 5.2.18 lambda, `iad1`, serving `/`, the pages, the assets and the service worker, `/api/`, `/admin/`, `/healthz/` |
+
+### Build evidence (from the deployment log, not inferred)
+
+- `collectstatic` → 154 files, 444 post-processed, `staticfiles.json` written.
+- `migrate` → **34 migrations applied** to Supabase: `contenttypes`, `auth`,
+  `accounts`, `admin`, `courses` 0001–0003, `sessions`, `token_blacklist`.
+  This is the first proof that the pooler is reachable from a Vercel build.
+- `seed_demo` → "Demo catalogue ready — 6 courses, 4 test series, 5 tests."
+- `ensure_admin` → "created administrator `admin`" and "can open /admin/ as a
+  main administrator".
+- Post-check against the database: 6 courses, 5 quizzes, 18 questions, 1 user
+  (`admin`, role `main_admin`).
+
+### One open item, and it is not in the code
+
+The project was created with Vercel Authentication on
+(`ssoProtection: all_except_custom_domains`), so **every** `*.vercel.app` URL —
+including the production alias — redirects an anonymous browser to a Vercel
+login before Django is reached. The connector has no tool for that project
+setting, so it has to be switched off once in the dashboard:
+**Settings → Deployment Protection → Vercel Authentication → Disabled**.
+The symptom is a `vercel.com/login` redirect, not a Django error; the runbook is
+in `docs/DEPLOY_VERCEL.md`.
