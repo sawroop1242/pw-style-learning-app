@@ -104,8 +104,12 @@ TEMPLATES = [
         },
     },
 ]
+# The deployment host reads this setting, turns "config.wsgi.application" into
+# the file path config/wsgi.py and loads that file directly, so the entry point
+# lives at the repository root and points back at this project. Only one of
+# WSGI_APPLICATION / ASGI_APPLICATION may be set: when both are present the
+# ASGI one wins, and the WSGI server then refuses to start.
 WSGI_APPLICATION = "config.wsgi.application"
-ASGI_APPLICATION = "config.asgi.application"
 
 # Serverless platforms bill per instance and freeze it between requests, so a
 # long-lived connection is a leak rather than a saving: set DB_CONN_MAX_AGE=0
