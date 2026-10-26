@@ -1,0 +1,4 @@
+# Vercel installs dependencies from the project root. The real pin list lives
+# next to the Django project; keep it that way so local and hosted installs
+# cannot drift apart.
+-r backend/requirements.txt
