@@ -12,6 +12,9 @@ This server makes the local setup work end to end:
 * static files from ``frontend/`` (no directory listings, ``no-store`` on HTML)
 * ``/api/*`` forwarded verbatim to Django, method, headers, body and status
   included, so JWTs, DRF errors and throttling behave exactly as in production
+* ``/admin/*``, ``/static/admin/*`` and ``/healthz/`` forwarded the same way, so
+  the Django admin is reachable from the one preview URL instead of a second
+  port (and its login POST works, which a static server would answer 405 to)
 * same origin, so there is no CORS preflight and no cookie/JWT split
 
 Usage::
@@ -58,8 +61,16 @@ HOP_BY_HOP = {
 }
 
 
+#: Path prefixes that belong to Django, not to the static front end. ``/static``
+#: is deliberately narrow: ``/static/admin/*`` is Django's admin CSS and JS,
+#: while the app's own assets live under ``/assets``.
+PROXIED_PREFIXES = ("/api", "/admin", "/healthz")
+PROXIED_EXACT = ("/api", "/admin", "/healthz")
+PROXIED_SUBPATHS = ("/static/admin/",)
+
+
 class Handler(SimpleHTTPRequestHandler):
-    """Static files for everything, a transparent proxy for ``/api``."""
+    """Static files for the app, a transparent proxy for the Django paths."""
 
     api_origin: str = DEFAULT_API
     verbose = False
@@ -69,9 +80,13 @@ class Handler(SimpleHTTPRequestHandler):
 
     # -- helpers -------------------------------------------------------
 
-    def _is_api(self) -> bool:
+    def _should_proxy(self) -> bool:
         path = self.path.split("?", 1)[0]
-        return path == "/api" or path.startswith("/api/")
+        if path in PROXIED_EXACT:
+            return True
+        if any(path.startswith(prefix + "/") for prefix in PROXIED_PREFIXES):
+            return True
+        return any(path.startswith(prefix) for prefix in PROXIED_SUBPATHS)
 
     def _read_body(self) -> bytes | None:
         raw = self.headers.get("Content-Length")
@@ -124,7 +139,10 @@ class Handler(SimpleHTTPRequestHandler):
             self._send_json(
                 HTTPStatus.BAD_GATEWAY,
                 {
-                    "detail": "The API is not reachable. Start Django, or browse the static preview.",
+                    "detail": (
+                        "The backend is not reachable. Start Django "
+                        "(python manage.py runserver), or browse the static preview."
+                    ),
                     "api_origin": self.api_origin,
                 },
             )
@@ -145,37 +163,37 @@ class Handler(SimpleHTTPRequestHandler):
     # -- HTTP verbs ----------------------------------------------------
 
     def do_GET(self):  # noqa: N802 - stdlib naming
-        if self._is_api():
+        if self._should_proxy():
             return self._proxy()
         return super().do_GET()
 
     def do_HEAD(self):  # noqa: N802
-        if self._is_api():
+        if self._should_proxy():
             return self._proxy()
         return super().do_HEAD()
 
     def do_POST(self):  # noqa: N802
-        if self._is_api():
+        if self._should_proxy():
             return self._proxy()
         self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
 
     def do_PUT(self):  # noqa: N802
-        if self._is_api():
+        if self._should_proxy():
             return self._proxy()
         self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
 
     def do_PATCH(self):  # noqa: N802
-        if self._is_api():
+        if self._should_proxy():
             return self._proxy()
         self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
 
     def do_DELETE(self):  # noqa: N802
-        if self._is_api():
+        if self._should_proxy():
             return self._proxy()
         self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
 
     def do_OPTIONS(self):  # noqa: N802
-        if self._is_api():
+        if self._should_proxy():
             return self._proxy()
         self.send_response(HTTPStatus.NO_CONTENT)
         self.send_header("Allow", "GET, HEAD")
@@ -225,7 +243,7 @@ def main() -> int:
     Handler.verbose = args.verbose
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"StudySpace dev server  http://{args.host}:{args.port}  →  {FRONTEND}")
-    print(f"API proxy              /api/*  →  {Handler.api_origin}")
+    print(f"Backend proxy          /api/*, /admin/*, /static/admin/*, /healthz/  →  {Handler.api_origin}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

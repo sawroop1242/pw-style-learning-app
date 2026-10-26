@@ -1143,7 +1143,9 @@ shared address cannot be used to spray one account, without one class throttling
 ### 5. A dev server where the real thing runs
 
 `tools/serve.py` (standard library only) serves `frontend/` and proxies `/api/*` to Django, so the same
-relative `/api` base used in production works locally with no CORS and no build step:
+relative `/api` base used in production works locally with no CORS and no build step. It now also proxies
+`/admin/*` and `/static/admin/*`, so the Django admin opens from the same preview URL as the site — a
+static server answered the admin login POST with `405`:
 
 ```bash
 python manage.py runserver 127.0.0.1:8000      # backend
@@ -1585,3 +1587,28 @@ covered by unit tests with the network mocked, so the first real hosted import
 is still worth watching. `question_image_url` from the spec's suggested columns
 is not implemented: `Question` has no image field yet, and inventing one would
 mean a model change rather than a column.
+
+### Admin panel reachable (2026-10-26)
+
+The admin itself was running, but opening it on the Django port answered
+`403 Forbidden (Origin checking failed - https://…e2b.app does not match any
+trusted origins)` on login: the sandbox terminates TLS and forwards plain HTTP,
+so Django compared an `https://` origin against an `http://` host. Two fixes,
+neither needing a code change to the app:
+
+- `CSRF_TRUSTED_ORIGINS=https://*.e2b.app` on the dev server (it is already
+  env-driven; production sets its real origins).
+- `tools/serve.py` now proxies `/admin/*`, `/static/admin/*` and `/healthz/`
+  alongside `/api/*`, so the admin lives at the same preview URL as the site
+  instead of a second port — and the login POST reaches Django rather than a
+  static handler that answers `405`.
+
+Verified through the site preview with browser-like headers:
+
+| Check | Result |
+|---|---|
+| `GET /admin/` | `302` → login |
+| `GET /admin/login/` | `200`, admin CSS `200 text/css` |
+| `POST /admin/login/` (Origin `https://…e2b.app`) | `302` → `/admin/` — no CSRF rejection |
+| `GET /admin/courses/csvimportjob/` | `200`, **Add csv import job** visible |
+| Site + `/api/*` after the change | `200`, assets `200`, no regression |
