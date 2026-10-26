@@ -19,59 +19,33 @@ if BACKEND_DIR not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 
-def _report(stage, detail):
-    """Temporary diagnostics: record a failure where it can actually be read.
+def _fallback(detail):
+    """TEMPORARY: answer with the startup traceback instead of an opaque 500.
 
-    A crashed serverless function only returns an opaque 500 page, so the
-    traceback is written straight to the database over psycopg (which does not
-    need Django, or the app it failed to build).
+    A crashed serverless function only shows "FUNCTION_INVOCATION_FAILED", so
+    until the deployment is understood the failure has to come back through the
+    only channel that exists: the response. Remove this once it is fixed.
     """
-    try:
-        import psycopg
 
-        url = os.environ.get("DATABASE_URL")
-        if not url:
-            return
-        with psycopg.connect(url, connect_timeout=10) as conn:
-            conn.execute(
-                "create table if not exists deploy_diagnostics ("
-                "id bigserial primary key,"
-                "created_at timestamptz not null default now(),"
-                "stage text not null,"
-                "detail text not null)"
-            )
-            conn.execute(
-                "insert into deploy_diagnostics (stage, detail) values (%s, %s)",
-                (stage, detail[-6000:]),
-            )
-            conn.commit()
-    except Exception:
-        traceback.print_exc()
+    def application(environ, start_response):
+        body = detail.encode("utf-8", "replace")
+        start_response(
+            "200 OK",
+            [
+                ("Content-Type", "text/plain; charset=utf-8"),
+                ("Content-Length", str(len(body))),
+            ],
+        )
+        return [body]
 
-
-class _DiagnosingApp:
-    """Pass requests through, recording any unhandled exception first."""
-
-    def __init__(self, app):
-        self.app = app
-
-    def __call__(self, environ, start_response):
-        try:
-            return self.app(environ, start_response)
-        except Exception:
-            _report("request %s" % environ.get("PATH_INFO"), traceback.format_exc())
-            start_response(
-                "500 Internal Server Error", [("Content-Type", "text/plain; charset=utf-8")]
-            )
-            return [b"Server error\n"]
+    return application
 
 
 try:
     from django.core.wsgi import get_wsgi_application
 
-    application = _DiagnosingApp(get_wsgi_application())
+    application = get_wsgi_application()
 except Exception:
-    _report("startup", traceback.format_exc())
-    raise
+    application = _fallback(traceback.format_exc())
 
 app = application
