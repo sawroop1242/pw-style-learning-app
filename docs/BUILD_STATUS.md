@@ -1612,3 +1612,35 @@ Verified through the site preview with browser-like headers:
 | `POST /admin/login/` (Origin `https://…e2b.app`) | `302` → `/admin/` — no CSRF rejection |
 | `GET /admin/courses/csvimportjob/` | `200`, **Add csv import job** visible |
 | Site + `/api/*` after the change | `200`, assets `200`, no regression |
+
+### Admin login: "CSRF cookie not set" (2026-10-26)
+
+The admin page loaded, but signing in answered `403 CSRF verification failed —
+CSRF cookie not set`. The server log pinned it to the POST, not the form:
+
+```
+WARNING django.security.csrf Forbidden (CSRF cookie not set.): /admin/login/
+```
+
+Django was healthy — the same POST over plain HTTP returned `302` in every test.
+What the browser did not do was **send the `csrftoken` cookie**, because the
+preview is rendered inside an iframe on a different top-level site and a
+`SameSite=Lax` cookie is withheld on a cross-site form POST.
+
+`SESSION_COOKIE_SAMESITE` / `CSRF_COOKIE_SAMESITE` are now env-driven (they were
+hardcoded to `Lax`), defaulting to `Lax` so production is unchanged. The preview
+runs with `None` + the existing `*_COOKIE_SECURE` flags enabled; browsers only
+honour `SameSite=None` together with `Secure`.
+
+| Check | Result |
+|---|---|
+| `GET /admin/login/` through the site preview | `Set-Cookie: csrftoken=…; SameSite=None; Secure` |
+| `POST /admin/login/` with that cookie | `302` → `/admin/`, `sessionid … SameSite=None; Secure` |
+| `GET /admin/` with the session | `200` |
+| Tests | `courses.tests.test_admin.AdminCookieTests` (3) pin the mapping; suite **220 OK** |
+
+Caveat kept on purpose: Safari (and any browser blocking third-party cookies
+outright) will still drop cookies inside an iframe. Opening the preview in its
+own tab makes the site first-party and the admin works with the default `Lax`
+policy — the settings only exist to make the embedded case work where the
+browser allows it.
