@@ -1,0 +1,4 @@
+# The serverless handler is declared in vercel.json + api/index.py: the project
+# is deployed with the framework preset switched off, because the built-in
+# Django detection imports WSGI_APPLICATION from the repository root and this
+# project's Django package lives in backend/.
