@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import filters, permissions, serializers, status, viewsets
@@ -16,7 +17,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from accounts.models import Role
-from . import grading, policy
+from . import csv_import, grading, policy
 from .models import (
     AccessCode,
     AttemptAnswer,
@@ -987,21 +988,33 @@ class StaffChoiceViewSet(viewsets.ModelViewSet):
 
 
 class CsvImportJobViewSet(viewsets.ModelViewSet):
-    """Staff CSV import job management."""
-    serializer_class = serializers.ModelSerializer
+    """Staff CSV import: create a job, validate it, then import it.
+
+    The CSV itself is never received or stored — staff host it over HTTPS and
+    hand over the URL. Validation downloads and parses the whole file, stores a
+    digest of the exact bytes and every row error, and writes nothing to the
+    question bank. Confirmation then imports all-or-nothing.
+    """
+
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
-    
+
     class CsvImportJobSerializer(serializers.ModelSerializer):
+        quiz_title = serializers.CharField(source="quiz.title", read_only=True)
+
         class Meta:
             model = CsvImportJob
             fields = [
-                "id", "quiz", "source_url", "status", "total_rows",
-                "imported_rows", "error_summary", "confirmed_at", "created_at"
+                "id", "quiz", "quiz_title", "source_url", "status", "total_rows",
+                "imported_rows", "source_sha256", "error_summary", "confirmed_at",
+                "created_at"
             ]
-            read_only_fields = ["id", "status", "total_rows", "imported_rows", "error_summary", "confirmed_at", "created_at"]
-    
+            read_only_fields = [
+                "id", "status", "total_rows", "imported_rows", "source_sha256",
+                "error_summary", "confirmed_at", "created_at"
+            ]
+
     serializer_class = CsvImportJobSerializer
-    
+
     def get_queryset(self):
         user = self.request.user
         profile = getattr(user, "profile", None)
@@ -1010,38 +1023,205 @@ class CsvImportJobViewSet(viewsets.ModelViewSet):
         return CsvImportJob.objects.filter(
             Q(quiz__series__owner=user) | Q(quiz__course__owner=user)
         ).distinct().select_related("quiz")
-    
+
+    def perform_create(self, serializer):
+        quiz = serializer.validated_data["quiz"]
+        self._assert_can_manage(quiz)
+        serializer.save(requested_by=self.request.user)
+
+    def _assert_can_manage(self, quiz):
+        user = self.request.user
+        profile = getattr(user, "profile", None)
+        if profile and profile.role == Role.MAIN_ADMIN:
+            return
+        owned = (
+            (quiz.series_id and quiz.series.owner_id == user.id)
+            or (quiz.course_id and quiz.course.owner_id == user.id)
+        )
+        if not owned:
+            raise PermissionDenied("This test belongs to another provider.")
+
+    @action(detail=False, methods=["get"])
+    def template(self, request):
+        """Download the schema-v1 template, so the file and importer cannot drift."""
+        response = HttpResponse(csv_import.template_csv(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = (
+            f'attachment; filename="question-import-template-v{csv_import.SCHEMA_VERSION}.csv"'
+        )
+        return response
+
+    @action(detail=False, methods=["get"])
+    def schema(self, request):
+        """The column contract, for a form or a help panel."""
+        return Response(
+            {
+                "schema_version": csv_import.SCHEMA_VERSION,
+                "columns": [
+                    {"name": name, "required": required, "description": description}
+                    for name, required, description in csv_import.COLUMNS
+                ],
+                "question_types": list(csv_import.QUESTION_TYPES),
+                "difficulties": list(csv_import.DIFFICULTIES),
+                "limits": {
+                    "max_bytes": csv_import.MAX_CSV_BYTES,
+                    "max_rows": csv_import.MAX_ROWS,
+                    "option_letters": "".join(csv_import.OPTION_LETTERS),
+                },
+                "notes": [
+                    "Row order is question order.",
+                    "section is stored as the question's topic; blank means General.",
+                    "Blank marks/negative_marks inherit the test defaults.",
+                    "A file with any row error imports nothing.",
+                ],
+            }
+        )
+
+    @action(detail=False, methods=["get"])
+    def export(self, request):
+        """Export one test's questions in the same schema, ready to re-import."""
+        quiz_id = request.query_params.get("quiz")
+        if not quiz_id:
+            raise ValidationError("Pass ?quiz=<id>.")
+        quiz = get_object_or_404(Quiz.objects.select_related("series", "course"), pk=quiz_id)
+        self._assert_can_manage(quiz)
+        response = HttpResponse(
+            csv_import.export_quiz_csv(quiz), content_type="text/csv; charset=utf-8"
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="quiz-{quiz.id}-questions-v{csv_import.SCHEMA_VERSION}.csv"'
+        )
+        return response
+
     @action(detail=True, methods=["post"])
     def validate(self, request, pk=None):
-        """Validate CSV from URL without importing."""
+        """Download, parse and fully validate; write nothing to the question bank."""
         job = self.get_object()
-        
-        if job.status != CsvImportJob.Status.PENDING:
-            raise ValidationError("Job already processed.")
-        
-        # In a real implementation, fetch and validate CSV here
-        # For now, just update status
-        job.status = CsvImportJob.Status.VALIDATED
-        job.total_rows = 0  # Would be set from actual CSV
-        job.save(update_fields=["status", "total_rows", "updated_at"])
-        
-        return Response({"status": "validated", "preview": []})
-    
+        self._assert_can_manage(job.quiz)
+        if job.status == CsvImportJob.Status.IMPORTED:
+            raise ValidationError("This job has already been imported.")
+
+        try:
+            text = csv_import.fetch_csv(job.source_url)
+            report = csv_import.parse_questions_csv(text)
+        except csv_import.CsvImportError as error:
+            job.status = CsvImportJob.Status.FAILED
+            job.total_rows = 0
+            job.source_sha256 = ""
+            job.error_summary = str(error)[:4000]
+            job.save(
+                update_fields=["status", "total_rows", "source_sha256", "error_summary", "updated_at"]
+            )
+            return Response(
+                {"status": "failed", "schema_version": csv_import.SCHEMA_VERSION, "errors": [str(error)]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        clash = self._prompts_already_on_test(job.quiz, report)
+        report.warnings.extend(clash)
+
+        job.total_rows = report.total_rows
+        job.error_summary = report.summary()
+        job.source_sha256 = report.digest if not report.errors else ""
+        job.status = (
+            CsvImportJob.Status.VALIDATED if not report.errors else CsvImportJob.Status.FAILED
+        )
+        job.save(
+            update_fields=["status", "total_rows", "source_sha256", "error_summary", "updated_at"]
+        )
+
+        payload = report.as_dict()
+        payload["status"] = "validated" if not report.errors else "failed"
+        payload["quiz"] = {"id": job.quiz_id, "title": job.quiz.title}
+        return Response(payload)
+
+    @staticmethod
+    def _prompts_already_on_test(quiz, report):
+        """Warn about questions the test already holds, so an append is deliberate."""
+        existing = {
+            " ".join(prompt.lower().split())
+            for prompt in quiz.questions.values_list("prompt", flat=True)
+        }
+        return [
+            csv_import.RowProblem(
+                parsed.row,
+                "this question_text already exists on the test; importing will duplicate it.",
+                "question_text",
+                "already_on_test",
+            )
+            for parsed in report.questions
+            if " ".join(parsed.prompt.lower().split()) in existing
+        ]
+
     @action(detail=True, methods=["post"])
     def confirm_import(self, request, pk=None):
-        """Confirm and execute CSV import."""
+        """Import the file that was validated, all-or-nothing."""
         job = self.get_object()
-        
+        self._assert_can_manage(job.quiz)
+
         if job.status != CsvImportJob.Status.VALIDATED:
-            raise ValidationError("Job must be validated first.")
-        
-        # In a real implementation, import CSV here
+            raise ValidationError("Validate the file successfully before importing it.")
+
+        mode = str(request.data.get("mode") or "append").lower()
+        if mode not in ("append", "replace"):
+            raise ValidationError("mode must be 'append' or 'replace'.")
+
+        try:
+            text = csv_import.fetch_csv(job.source_url)
+        except csv_import.CsvImportError as error:
+            raise ValidationError(str(error))
+
+        try:
+            report = csv_import.parse_questions_csv(text)
+        except csv_import.CsvImportError as error:
+            raise ValidationError(str(error))
+
+        # The file must be the one that was validated, not merely one at the
+        # same URL that changed after the preview was approved.
+        if report.error_count or not report.digest:
+            job.status = CsvImportJob.Status.FAILED
+            job.error_summary = "The file became invalid after validation."
+            job.save(update_fields=["status", "error_summary", "updated_at"])
+            raise ValidationError("The file now has row errors. Validate it again.")
+        if report.digest != job.source_sha256:
+            job.status = CsvImportJob.Status.FAILED
+            job.error_summary = "The file at the source URL changed after validation."
+            job.save(update_fields=["status", "error_summary", "updated_at"])
+            raise ValidationError(
+                "The file at that URL changed since it was validated. "
+                "Validate it again to preview the new version."
+            )
+
+        try:
+            imported = csv_import.import_questions(
+                job.quiz,
+                report,
+                mode=mode,
+                allow_replace_with_attempts=bool(request.data.get("allow_replace_with_attempts")),
+            )
+        except csv_import.ImportBlocked as error:
+            return Response({"detail": str(error)}, status=status.HTTP_409_CONFLICT)
+
         job.status = CsvImportJob.Status.IMPORTED
-        job.imported_rows = job.total_rows
+        job.imported_rows = imported
+        job.total_rows = report.total_rows
         job.confirmed_at = timezone.now()
-        job.save(update_fields=["status", "imported_rows", "confirmed_at", "updated_at"])
-        
-        return Response({"status": "imported"})
+        job.error_summary = ""
+        job.save(
+            update_fields=[
+                "status", "imported_rows", "total_rows", "confirmed_at",
+                "error_summary", "updated_at",
+            ]
+        )
+
+        return Response(
+            {
+                "status": "imported",
+                "imported_rows": imported,
+                "mode": mode,
+                "quiz": {"id": job.quiz_id, "title": job.quiz.title},
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class StaffTestSeriesViewSet(viewsets.ModelViewSet):

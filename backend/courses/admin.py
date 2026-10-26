@@ -2,8 +2,10 @@ from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
+from django.utils import timezone
 
 from accounts.models import Role
+from courses import csv_import
 from courses.models import (
     AccessCode,
     AttemptAnswer,
@@ -305,9 +307,26 @@ class AttemptAnswerAdmin(OwnershipScopedAdmin):
 
 @admin.register(CsvImportJob)
 class CsvImportJobAdmin(OwnershipScopedAdmin):
-    list_display = ("quiz", "status", "total_rows", "imported_rows", "requested_by", "created_at")
+    """Validate and import CSV links without leaving the admin.
+
+    Admin actions are the only way to drive an import from the browser: there
+    is no staff console in the frontend, and an import must never be a file
+    upload. Both actions call the same module the API uses, so the rules (and
+    the error messages) are identical.
+    """
+
+    list_display = (
+        "quiz", "status", "total_rows", "imported_rows", "digest", "requested_by", "created_at",
+    )
     list_filter = ("status",)
     search_fields = ("quiz__title",)
+    readonly_fields = (
+        "status", "error_summary", "source_sha256", "total_rows", "imported_rows",
+        "confirmed_at", "requested_by",
+    )
+    fields = ("quiz", "source_url", "status", "requested_by", "total_rows",
+              "imported_rows", "source_sha256", "error_summary", "confirmed_at")
+    actions = ("validate_selected", "import_selected")
 
     def scope_filter(self, user):
         return Q(quiz__series__owner=user) | Q(quiz__course__owner=user)
@@ -319,8 +338,105 @@ class CsvImportJobAdmin(OwnershipScopedAdmin):
         }
 
     def has_add_permission(self, request):
-        # Import jobs are created by the import API, not by hand.
-        return False
+        # Pasting the URL of a hosted CSV is the whole job; the quiz choice is
+        # already restricted to the provider's own tests. No CSV body passes
+        # through the admin form.
+        return is_staff_role(request.user)
+
+    def save_model(self, request, obj, form, change):
+        if not change and obj.requested_by_id is None:
+            obj.requested_by = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.display(description="SHA-256")
+    def digest(self, obj):
+        return f"{obj.source_sha256[:12]}…" if obj.source_sha256 else "—"
+
+    @admin.action(description="Validate the selected files (writes no questions)")
+    def validate_selected(self, request, queryset):
+        validated = failed = 0
+        for job in queryset.exclude(status=CsvImportJob.Status.IMPORTED):
+            try:
+                report = csv_import.parse_questions_csv(csv_import.fetch_csv(job.source_url))
+            except csv_import.CsvImportError as error:
+                job.status = CsvImportJob.Status.FAILED
+                job.total_rows = 0
+                job.source_sha256 = ""
+                job.error_summary = str(error)[:4000]
+                job.save(update_fields=["status", "total_rows", "source_sha256", "error_summary"])
+                self.message_user(request, f"“{job}” failed: {error}", messages.ERROR)
+                failed += 1
+                continue
+
+            job.total_rows = report.total_rows
+            job.error_summary = report.summary()
+            job.source_sha256 = report.digest if not report.errors else ""
+            job.status = (
+                CsvImportJob.Status.VALIDATED if not report.errors else CsvImportJob.Status.FAILED
+            )
+            job.save(update_fields=["status", "total_rows", "source_sha256", "error_summary"])
+
+            if report.errors:
+                failed += 1
+                self.message_user(
+                    request,
+                    f"“{job}”: {report.error_count} row error(s); nothing will be imported. "
+                    "Open the job to read the error summary.",
+                    messages.ERROR,
+                )
+            else:
+                validated += 1
+                self.message_user(
+                    request,
+                    f"“{job}”: {report.valid_rows} question(s) ready to import.",
+                    messages.SUCCESS,
+                )
+
+        if validated or failed:
+            self.message_user(
+                request,
+                f"{validated} file(s) validated, {failed} failed. No questions were written yet.",
+                messages.INFO,
+            )
+
+    @admin.action(description="Import the selected files (append; all or nothing)")
+    def import_selected(self, request, queryset):
+        for job in queryset.filter(status=CsvImportJob.Status.VALIDATED):
+            try:
+                report = csv_import.parse_questions_csv(csv_import.fetch_csv(job.source_url))
+            except csv_import.CsvImportError as error:
+                self.message_user(request, f"“{job}” failed: {error}", messages.ERROR)
+                continue
+
+            if report.errors or report.digest != job.source_sha256:
+                job.status = CsvImportJob.Status.FAILED
+                job.source_sha256 = ""
+                job.error_summary = "The file changed or became invalid after validation."
+                job.save(update_fields=["status", "source_sha256", "error_summary"])
+                self.message_user(
+                    request,
+                    f"“{job}” was refetched and no longer matches what was validated. "
+                    "Validate it again.",
+                    messages.ERROR,
+                )
+                continue
+
+            try:
+                imported = csv_import.import_questions(job.quiz, report)
+            except csv_import.ImportBlocked as error:
+                self.message_user(request, f"“{job}” refused: {error}", messages.WARNING)
+                continue
+
+            job.status = CsvImportJob.Status.IMPORTED
+            job.imported_rows = imported
+            job.confirmed_at = timezone.now()
+            job.error_summary = ""
+            job.save(update_fields=["status", "imported_rows", "confirmed_at", "error_summary"])
+            self.message_user(
+                request,
+                f"“{job}”: imported {imported} question(s) into “{job.quiz.title}”.",
+                messages.SUCCESS,
+            )
 
 
 @admin.register(CommunityPost)

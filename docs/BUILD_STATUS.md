@@ -1143,7 +1143,9 @@ shared address cannot be used to spray one account, without one class throttling
 ### 5. A dev server where the real thing runs
 
 `tools/serve.py` (standard library only) serves `frontend/` and proxies `/api/*` to Django, so the same
-relative `/api` base used in production works locally with no CORS and no build step:
+relative `/api` base used in production works locally with no CORS and no build step. It now also proxies
+`/admin/*` and `/static/admin/*`, so the Django admin opens from the same preview URL as the site — a
+static server answered the admin login POST with `405`:
 
 ```bash
 python manage.py runserver 127.0.0.1:8000      # backend
@@ -1481,3 +1483,164 @@ sessions:
 | Live API suite (seeded data) | **31/31** |
 | CSS classes · stylesheets | **417 used / 0 missing** · 6 parse clean |
 | HTTP through `tools/serve.py` | 14/14 pages, API proxy answering |
+
+## Run 13 — real CSV question import (2026-10-26, branch `arena/66cbe9f9-pw-style-learning-app`)
+
+### The problem
+
+The staff API could only create one question per request. A 100-question mock
+therefore meant 100 questions and 400 choices posted one at a time — which is
+not how a paper gets written. Worse, the two endpoints that were supposed to
+make this possible were stubs: `CsvImportJobViewSet.validate` set the job to
+`validated` with `total_rows = 0` and confirmed nothing, and `confirm_import`
+marked a job `imported` without writing a single question. A test that "passed"
+could not exist.
+
+### What now exists
+
+`backend/courses/csv_import.py` implements schema **v1** as one source of truth:
+
+| Piece | Detail |
+|---|---|
+| `COLUMNS` | 13 ordered `(name, required, help)` tuples — `section`, `question_type`, `question_text`, `option_a`–`option_e`, `correct_option`, `explanation`, `marks`, `negative_marks`, `difficulty` |
+| `template_csv()` | The header plus two illustrative rows, generated from `COLUMNS` |
+| `parse_questions_csv()` | Whole-file validation; row problems carry Excel row number, column and a stable code |
+| `import_questions()` | Transactional, all-or-nothing writer with `append` / `replace` and a quiz row lock |
+| `export_quiz_csv()` | Round-trippable export with formula-injection escaping |
+| `fetch_csv()` | HTTPS-only, redirect-refusing, size-capped fetch with a public-address check |
+
+`schema` is stored in `Question.topic` — the field the exam window already
+groups by (`test-player.js` maps `section: q.topic`), so there is no second
+section column to disagree with it. `short_answer` (suggested in the spec) is
+rejected with a clear message because the engine only scores
+`single_choice` / `multiple_choice` / `true_false`; rejecting beats silently
+mis-scoring.
+
+### The endpoints that were stubs
+
+| Endpoint | Before | Now |
+|---|---|---|
+| `GET /api/staff/import-jobs/template/` | — | Downloads the v1 template |
+| `GET /api/staff/import-jobs/schema/` | — | Column contract as JSON |
+| `POST …/{id}/validate/` | `total_rows = 0`, nothing read | Fetches, parses, stores counts + SHA-256 + capped errors, returns preview and row errors; writes **no** questions |
+| `POST …/{id}/confirm_import/` | Set `imported` without importing | Re-fetches, **refuses a changed digest**, imports atomically; `409` when `replace` would delete attempts |
+| `GET …/export/?quiz=<id>` | — | Round-trippable export |
+
+`CsvImportJob` gained `source_sha256` (migration `0003`) and an `owner`
+property. Without the latter, object-level permissions resolved ownership to
+`None` and every staff action on their own job returned 403.
+
+### The standard
+
+`docs/CSV_QUESTION_IMPORT.md` documents the columns, the option/answer rules,
+every rejection code, both delivery paths (URL and `manage.py
+import_questions`), the append-vs-replace policy and how to version the schema.
+`test_template_is_itself_valid` fails if the shipped template stops parsing, so
+the template and the importer cannot drift apart.
+
+### Safety decisions worth naming
+
+- **Nothing is stored.** Only the URL, a digest, counts and a capped summary.
+- **A file with one bad row imports nothing.** No half-built papers.
+- **Validate ≠ import.** The digest recorded at validation must still match at
+  confirmation, so the file previewed is the file imported.
+- **Re-import cannot destroy history.** `replace` is refused once attempts
+  exist, because `Answer.question` cascades on delete.
+- **Errors do not echo the paper.** Messages are short and never print whole
+  question text.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `python manage.py check` | no issues |
+| New CSV suite (`courses.tests.test_csv_import`) | **59 tests OK** |
+| Full backend suite (`python manage.py test`) | **217 tests OK** — includes the 59 new |
+
+`/admin/ → CSV import jobs` is the whole browser flow: **add** a job (pick the
+test, paste the URL), then **Validate**, then **Import**. The form has no file
+field — the only input is the URL — and the quiz picker is already restricted to
+the provider's own tests. `replace` stays out of the admin: it belongs behind an
+explicit API call or command flag.
+
+### Live smoke test (local)
+
+| Check | Result |
+|---|---|
+| `GET /api/staff/import-jobs/template/` without a token | `401` |
+| `GET …/schema/` and `…/export/?quiz=6` with a staff JWT | `200`, 13 columns, round-trippable CSV |
+| `/admin/courses/csvimportjob/add/` as a main admin | form with only `quiz` + `source_url` |
+| Admin actions on a real job | `Validate the selected files`, `Import the selected files` |
+| `manage.py import_questions --quiz 6 --file quant-set.csv` | **12 questions, 46 choices** imported into demo test 6, five sections |
+| `GET /api/quizzes/6/` | 12 questions with their `topic` sections |
+
+The first hand-written version of that CSV had unquoted commas in the
+explanation column. The validator rejected it with 19 row-level errors naming
+the exact row and column, wrote nothing, and a corrected file imported cleanly —
+which is the behaviour the spec asks for, observed rather than asserted.
+
+What is *not* done: there is no frontend staff screen for this — the project has
+no staff console at all — so the entry points are the staff API, the Django
+admin and the management command. A fetch from a *real* public host was not
+exercised here (this sandbox cannot reach arbitrary hosts); the URL path is
+covered by unit tests with the network mocked, so the first real hosted import
+is still worth watching. `question_image_url` from the spec's suggested columns
+is not implemented: `Question` has no image field yet, and inventing one would
+mean a model change rather than a column.
+
+### Admin panel reachable (2026-10-26)
+
+The admin itself was running, but opening it on the Django port answered
+`403 Forbidden (Origin checking failed - https://…e2b.app does not match any
+trusted origins)` on login: the sandbox terminates TLS and forwards plain HTTP,
+so Django compared an `https://` origin against an `http://` host. Two fixes,
+neither needing a code change to the app:
+
+- `CSRF_TRUSTED_ORIGINS=https://*.e2b.app` on the dev server (it is already
+  env-driven; production sets its real origins).
+- `tools/serve.py` now proxies `/admin/*`, `/static/admin/*` and `/healthz/`
+  alongside `/api/*`, so the admin lives at the same preview URL as the site
+  instead of a second port — and the login POST reaches Django rather than a
+  static handler that answers `405`.
+
+Verified through the site preview with browser-like headers:
+
+| Check | Result |
+|---|---|
+| `GET /admin/` | `302` → login |
+| `GET /admin/login/` | `200`, admin CSS `200 text/css` |
+| `POST /admin/login/` (Origin `https://…e2b.app`) | `302` → `/admin/` — no CSRF rejection |
+| `GET /admin/courses/csvimportjob/` | `200`, **Add csv import job** visible |
+| Site + `/api/*` after the change | `200`, assets `200`, no regression |
+
+### Admin login: "CSRF cookie not set" (2026-10-26)
+
+The admin page loaded, but signing in answered `403 CSRF verification failed —
+CSRF cookie not set`. The server log pinned it to the POST, not the form:
+
+```
+WARNING django.security.csrf Forbidden (CSRF cookie not set.): /admin/login/
+```
+
+Django was healthy — the same POST over plain HTTP returned `302` in every test.
+What the browser did not do was **send the `csrftoken` cookie**, because the
+preview is rendered inside an iframe on a different top-level site and a
+`SameSite=Lax` cookie is withheld on a cross-site form POST.
+
+`SESSION_COOKIE_SAMESITE` / `CSRF_COOKIE_SAMESITE` are now env-driven (they were
+hardcoded to `Lax`), defaulting to `Lax` so production is unchanged. The preview
+runs with `None` + the existing `*_COOKIE_SECURE` flags enabled; browsers only
+honour `SameSite=None` together with `Secure`.
+
+| Check | Result |
+|---|---|
+| `GET /admin/login/` through the site preview | `Set-Cookie: csrftoken=…; SameSite=None; Secure` |
+| `POST /admin/login/` with that cookie | `302` → `/admin/`, `sessionid … SameSite=None; Secure` |
+| `GET /admin/` with the session | `200` |
+| Tests | `courses.tests.test_admin.AdminCookieTests` (3) pin the mapping; suite **220 OK** |
+
+Caveat kept on purpose: Safari (and any browser blocking third-party cookies
+outright) will still drop cookies inside an iframe. Opening the preview in its
+own tab makes the site first-party and the admin works with the default `Lax`
+policy — the settings only exist to make the embedded case work where the
+browser allows it.

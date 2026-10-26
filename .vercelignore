@@ -1,0 +1,10 @@
+# Hosting-only exclusions. Nothing here is needed to serve the API or the
+# admin, and shipping it would only slow the build down.
+.git
+.github
+node_modules
+docs
+tools/checks
+backend/staticfiles
+*.sqlite3
+*.log

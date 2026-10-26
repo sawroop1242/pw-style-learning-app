@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import Profile, Role
@@ -226,3 +226,32 @@ class TestSeriesAdminTests(AdminTestDataMixin, TestCase):
         self.assertIn(response.status_code, (403, 302))
         series.refresh_from_db()
         self.assertEqual(series.owner, self.sub_admin)
+
+
+class AdminCookieTests(TestCase):
+    """The admin login POST depends on cookies surviving the hosting context.
+
+    The site can be embedded in an iframe on another origin, where a Lax cookie
+    is not sent on a form POST and Django answers "CSRF cookie not set" (403).
+    These tests pin the mapping from settings to the actual Set-Cookie header,
+    so the embedded-preview configuration cannot be lost by a future edit.
+    """
+
+    def test_csrf_cookie_follows_the_configured_samesite(self):
+        with override_settings(CSRF_COOKIE_SAMESITE="None", CSRF_COOKIE_SECURE=True):
+            response = self.client.get("/admin/login/")
+
+        cookie = response.cookies["csrftoken"]
+        self.assertEqual(cookie["samesite"], "None")
+        self.assertTrue(cookie["secure"])
+
+    def test_default_samesite_is_still_lax(self):
+        with override_settings(CSRF_COOKIE_SAMESITE="Lax"):
+            response = self.client.get("/admin/login/")
+
+        self.assertEqual(response.cookies["csrftoken"]["samesite"], "Lax")
+
+    def test_login_form_carries_a_token(self):
+        """Without {% csrf_token %} the POST could never pass, cookie or not."""
+        response = self.client.get("/admin/login/")
+        self.assertContains(response, "csrfmiddlewaretoken")

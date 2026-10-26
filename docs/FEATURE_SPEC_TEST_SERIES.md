@@ -76,6 +76,8 @@ Keep this schema versioned and documented. The template and importer must agree 
 
 CSV URLs and fetched content are untrusted input. Prevent SSRF, unsafe redirects, DNS rebinding, oversized responses, parser abuse, formula injection in exports, cross-owner imports, and incorrect answer mapping. A correct answer must be validated against options present on that exact row. The backend stores the source URL and structured imported records only—not the CSV file or raw CSV contents.
 
+**Implemented standard:** `docs/CSV_QUESTION_IMPORT.md` (schema v1) and `backend/courses/csv_import.py`.
+
 ## 5. Timer modes and section timing
 
 Each test supports a clearly selected timing mode:
