@@ -1644,3 +1644,41 @@ outright) will still drop cookies inside an iframe. Opening the preview in its
 own tab makes the site first-party and the admin works with the default `Lax`
 policy — the settings only exist to make the embedded case work where the
 browser allows it.
+
+## Run 14 — the deployment actually serves the app, on Postgres (2026-10-26, branch `arena/4974053a-pw-style-learning-app`)
+
+### What was wrong with the Vercel URL
+
+Two things, and neither was the build:
+
+1. **There was no database.** The project fell back to SQLite on an ephemeral
+   filesystem, so every write — a login session first of all — failed. The URL
+   loaded and then did nothing useful.
+2. **Django was serving only `/api/` and `/admin/`.** `GET /` was a Django 404,
+   because the static front end had always been served by `tools/serve.py`
+   locally. On a one-process host there was nothing to serve the pages.
+
+### What changed
+
+| Change | Why |
+|---|---|
+| `config/views.py` + url patterns | Django now serves `frontend/` itself: `/`, `<page>.html`, `assets/…`, `manifest.webmanifest`, `sw.js`. Allowlisted paths only, so the directory cannot be listed and a new file never becomes public by accident |
+| `config/health.py` → `/healthz/ready/` | Liveness stays database-free; readiness runs `SELECT 1` and answers `503` with a class name (never a connection string) |
+| `ensure_admin` command | The deployment creates its administrator from `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD`: idempotent, non-destructive, and it will not reset a password changed in the UI |
+| `DB_CONN_MAX_AGE` env | 0 on a serverless host, where a held connection is a leak; 600 elsewhere |
+| `.vercelignore` | `backend/staticfiles` removed from the ignore list — `collectstatic` runs during the build and the admin stylesheet has to survive into the bundle |
+| `vercel.json` | `collectstatic && migrate && seed_demo (when SEED_DEMO=1) && ensure_admin` |
+
+Database: Supabase project **studyspace** (`hcidfvqszalkggurfriw`, Postgres
+17.11, `ap-south-1`). The direct host is **IPv6-only**, which a Vercel function
+cannot reach, so the deployment uses the Supavisor pooler in session mode
+(port 5432) with `sslmode=require`.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Backend suite | **233 tests OK** (226 + 7: site serving, readiness, admin bootstrap) |
+| Production settings `check --deploy` | one expected warning (`SECURE_SSL_REDIRECT`), nothing else |
+| `collectstatic` under production storage | 154 files, 444 post-processed, `staticfiles.json` written |
+| One Django process, every URL | `/` `/tests.html` `/test-player.html` `/assets/css/base.css` `/assets/js/core.js` `/sw.js` `/manifest.webmanifest` `/api/quizzes/` `/healthz/` `/healthz/ready/` `/admin/login/` — all `200` with the intended content type |
