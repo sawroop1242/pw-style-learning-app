@@ -174,11 +174,17 @@ class PaidQuizLeakTests(ApiTestMixin, TestCase):
 
 
 class StartAttemptTests(ApiTestMixin, TestCase):
-    def test_anonymous_start_is_rejected(self):
+    def test_anonymous_start_on_a_paid_quiz_is_forbidden(self):
+        """A guest may sit a public paper, never a paid one.
+
+        The guest path was added so that sitting a test needs no account; it
+        must not become a way around the grant check.
+        """
         response = self.anon().post(
             "/api/quizzes/start/", {"quiz_id": self.paid_quiz.id}, format="json"
         )
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(QuizAttempt.objects.filter(guest_token_hash__gt="").exists())
 
     def test_student_without_grant_is_forbidden(self):
         response = self.as_user(self.student).post(
