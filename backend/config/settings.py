@@ -107,10 +107,15 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+# Serverless platforms bill per instance and freeze it between requests, so a
+# long-lived connection is a leak rather than a saving: set DB_CONN_MAX_AGE=0
+# there. A long-running host keeps 600 seconds, which is what it is for.
+DB_CONN_MAX_AGE = int(os.getenv("DB_CONN_MAX_AGE", "0" if ENVIRONMENT in {"development", "test"} else "600"))
+
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600 if ENVIRONMENT not in {"development", "test"} else 0,
+        conn_max_age=DB_CONN_MAX_AGE,
         conn_health_checks=True,
     )
 }
