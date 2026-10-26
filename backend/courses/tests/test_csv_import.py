@@ -748,3 +748,20 @@ class AdminActionTests(TestCase):
         job.refresh_from_db()
         self.assertEqual(job.status, CsvImportJob.Status.PENDING)
         self.assertEqual(self.quiz.questions.count(), 0)
+
+    def test_a_job_can_be_created_from_the_admin(self):
+        """Paste a URL, pick a test: that is the whole job, with no upload."""
+        response = self.client.post(
+            "/admin/courses/csvimportjob/add/",
+            {"quiz": self.quiz.id, "source_url": "https://files.example.com/new.csv"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        job = CsvImportJob.objects.get(source_url="https://files.example.com/new.csv")
+        self.assertEqual(job.requested_by, self.admin_user)
+        self.assertEqual(job.status, CsvImportJob.Status.PENDING)
+
+    def test_a_student_cannot_create_or_open_a_job(self):
+        student = User.objects.create_user(username="csv_nobody", password="pw-12345!x")
+        self.client.force_login(student)
+        self.assertEqual(self.client.get("/admin/courses/csvimportjob/").status_code, 302)

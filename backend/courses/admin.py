@@ -320,7 +320,12 @@ class CsvImportJobAdmin(OwnershipScopedAdmin):
     )
     list_filter = ("status",)
     search_fields = ("quiz__title",)
-    readonly_fields = ("source_sha256", "total_rows", "imported_rows", "confirmed_at")
+    readonly_fields = (
+        "status", "error_summary", "source_sha256", "total_rows", "imported_rows",
+        "confirmed_at", "requested_by",
+    )
+    fields = ("quiz", "source_url", "status", "requested_by", "total_rows",
+              "imported_rows", "source_sha256", "error_summary", "confirmed_at")
     actions = ("validate_selected", "import_selected")
 
     def scope_filter(self, user):
@@ -333,8 +338,15 @@ class CsvImportJobAdmin(OwnershipScopedAdmin):
         }
 
     def has_add_permission(self, request):
-        # Import jobs are created by the import API, not by hand.
-        return False
+        # Pasting the URL of a hosted CSV is the whole job; the quiz choice is
+        # already restricted to the provider's own tests. No CSV body passes
+        # through the admin form.
+        return is_staff_role(request.user)
+
+    def save_model(self, request, obj, form, change):
+        if not change and obj.requested_by_id is None:
+            obj.requested_by = request.user
+        super().save_model(request, obj, form, change)
 
     @admin.display(description="SHA-256")
     def digest(self, obj):

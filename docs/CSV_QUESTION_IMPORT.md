@@ -121,7 +121,8 @@ so an error report cannot become a copy of the paper.
 
 ## 4. The workflow
 
-1. **Create a job** — `POST /api/staff/import-jobs/` with `{"quiz": <id>, "source_url": "https://…"}`.
+1. **Create a job** — `POST /api/staff/import-jobs/` with `{"quiz": <id>, "source_url": "https://…"}`, or the
+   **Add** form in `/admin/ → CSV import jobs`.
 2. **Validate** — `POST /api/staff/import-jobs/{id}/validate/`. The file is
    downloaded, parsed and fully validated. The response carries counts, every
    error, warnings, a preview of the parsed questions, and the SHA-256 digest.
@@ -193,8 +194,14 @@ passes in the API.
 
 ### From Django admin
 
-There is no staff console in the frontend yet, so `/admin/ → CSV import jobs`
-carries two actions that call the same importer:
+There is no staff console in the frontend yet, so `/admin/ → CSV import jobs` is
+the whole browser flow:
+
+1. **Add** a job — pick the test and paste the HTTPS URL. That is the only input.
+2. Select it and run **Validate the selected files**.
+3. Select it and run **Import the selected files**.
+
+The two actions call the same importer as the API:
 
 - **Validate the selected files** — fetches and validates, stores the counts and
   digest, writes nothing.

@@ -1552,15 +1552,36 @@ the template and the importer cannot drift apart.
 | Check | Result |
 |---|---|
 | `python manage.py check` | no issues |
-| New CSV suite (`courses.tests.test_csv_import`) | **57 tests OK** |
-| Full backend suite (`python manage.py test`) | **215 tests OK** — includes the 57 new |
+| New CSV suite (`courses.tests.test_csv_import`) | **59 tests OK** |
+| Full backend suite (`python manage.py test`) | **217 tests OK** — includes the 59 new |
 
-`/admin/ → CSV import jobs` carries **Validate** and **Import** actions, so the
-whole flow is usable from the browser without a staff console. `replace` stays
-out of the admin: it belongs behind an explicit API call or command flag.
+`/admin/ → CSV import jobs` is the whole browser flow: **add** a job (pick the
+test, paste the URL), then **Validate**, then **Import**. The form has no file
+field — the only input is the URL — and the quiz picker is already restricted to
+the provider's own tests. `replace` stays out of the admin: it belongs behind an
+explicit API call or command flag.
+
+### Live smoke test (local)
+
+| Check | Result |
+|---|---|
+| `GET /api/staff/import-jobs/template/` without a token | `401` |
+| `GET …/schema/` and `…/export/?quiz=6` with a staff JWT | `200`, 13 columns, round-trippable CSV |
+| `/admin/courses/csvimportjob/add/` as a main admin | form with only `quiz` + `source_url` |
+| Admin actions on a real job | `Validate the selected files`, `Import the selected files` |
+| `manage.py import_questions --quiz 6 --file quant-set.csv` | **12 questions, 46 choices** imported into demo test 6, five sections |
+| `GET /api/quizzes/6/` | 12 questions with their `topic` sections |
+
+The first hand-written version of that CSV had unquoted commas in the
+explanation column. The validator rejected it with 19 row-level errors naming
+the exact row and column, wrote nothing, and a corrected file imported cleanly —
+which is the behaviour the spec asks for, observed rather than asserted.
 
 What is *not* done: there is no frontend staff screen for this — the project has
 no staff console at all — so the entry points are the staff API, the Django
-admin and the management command. The live server was not restarted or pointed
-at a real hosted file in this run; the fetch path is covered with mocks, so a
-first real import is still worth watching.
+admin and the management command. A fetch from a *real* public host was not
+exercised here (this sandbox cannot reach arbitrary hosts); the URL path is
+covered by unit tests with the network mocked, so the first real hosted import
+is still worth watching. `question_image_url` from the spec's suggested columns
+is not implemented: `Question` has no image field yet, and inventing one would
+mean a model change rather than a column.
