@@ -1,11 +1,16 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pip install -r requirements.txt",
-  "buildCommand": "python -c \"import api.index as m; print('wsgi handler:', type(m.app).__name__)\" && python manage.py collectstatic --noinput && python manage.py migrate --noinput && if [ \"$SEED_DEMO\" = \"1\" ]; then python manage.py seed_demo; fi && python manage.py ensure_admin",
+  "buildCommand": "sh tools/vercel-build.sh",
   "functions": {
     "api/index.py": {
       "includeFiles": "{backend,frontend}/**"
     }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index.py" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.py"
+    }
+  ]
 }
