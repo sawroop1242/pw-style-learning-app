@@ -1805,6 +1805,7 @@ API answered, the fixtures were still what the visitor saw. That is now gone.
 | `profile.js` | `/auth/me/`, with counts from the API |
 | `player.js` | `/lessons/<id>/`; a lesson with no `video_url` says "no recording published" instead of showing a fake timestamp |
 | `ui.js` | removed the footer renderer (the footer stays deleted) and the "Preview · sample data" badge |
+| `auth.js` | removed the local "demo session": a session now exists only once the API issues a token, and an unreachable server leaves the form with an error instead of a fake sign-in |
 | `sw.js` | `CACHE_VERSION` → `studyspace-v13`; shell list no longer names `data.js` |
 
 ### Removed UI that had no backing field
