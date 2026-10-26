@@ -7,9 +7,9 @@ front end calls the API with relative `/api/...` paths.
 | Piece | Value |
 |---|---|
 | Vercel project | `studyspace` (`prj_700XAxzRHI6PtLBpJEKCt6jXXd91`), framework `django`, region `iad1` |
-| Production branch | `main` → `https://studyspace-swroopss487-4609.vercel.app` |
+| Production branch | `main` → `https://studyspace-eta-tan.vercel.app` (public) |
 | Database | Supabase project `studyspace` (`hcidfvqszalkggurfriw`), Postgres 17, `ap-south-1` |
-| Entry point | `manage.py` at the repository root (Vercel's Django detection needs it there) |
+| Entry point | `config/wsgi.py` at the repository root, named by `WSGI_APPLICATION` |
 | Pins | `requirements.txt` at the repository root — Vercel does **not** follow `-r` includes |
 
 ## Environment variables
@@ -35,11 +35,48 @@ function cannot reach it. Use the pooler on port 5432 (session mode). If session
 mode is unavailable, port 6543 with `?pgbouncer=true` (transaction mode) also
 works, at the cost of real prepared statements.
 
-## Build pipeline (`vercel.json`)
+## How the function is found, and why the first deploys answered 500
+
+Vercel's Django integration does **not** import `WSGI_APPLICATION` as a dotted
+module. It splits the setting into a file path and loads that file, relative to
+the directory that holds `manage.py`:
+
+| Setting | File the host loads |
+|---|---|
+| `WSGI_APPLICATION = "config.wsgi.application"` | `config/wsgi.py` |
+| `ASGI_APPLICATION = "config.asgi.application"` | `config/asgi.py` (wins when both are set) |
+
+This project's Django package lives in `backend/config/`, so both settings
+pointed at files that do not exist at the repository root. The lambda died at
+start-up, before a single line of app code, which is why *every* URL answered
+`500 FUNCTION_INVOCATION_FAILED` — even `/healthz/`, which needs no database —
+while pre-built static files kept returning `200`.
+
+The repair keeps one project, not a copy:
+
+- `config/wsgi.py` and `config/asgi.py` exist at the root as thin entry points;
+- `config/__init__.py` appends `backend/config` to the package search path and
+  puts `backend/` on `sys.path`, so `config.settings`, `config.urls` and the
+  `courses` / `accounts` apps are the same modules `manage.py` uses;
+- only `WSGI_APPLICATION` is set — with both set, the host picks ASGI and the
+  WSGI server refuses to start.
+
+If the project is ever moved so that `manage.py` sits beside `settings.py`,
+these two files become one-line `get_wsgi_application()` calls and the indirection
+can go.
+
+## Build pipeline
+
+`vercel.json` runs `sh tools/vercel-build.sh`, which is:
 
 ```
-collectstatic  →  migrate  →  seed_demo (SEED_DEMO=1)  →  ensure_admin
+manage.py check  →  migrate  →  seed_demo (SEED_DEMO=1)  →  ensure_admin
 ```
+
+`collectstatic` is **not** in that script: the host's Django integration runs it
+itself and writes straight into the CDN output that serves `/static/`. Running it
+twice only duplicated the files inside the function bundle. The build command is
+a file because the host caps an inline build command at 256 characters.
 
 A deploy therefore cannot come up with an unmigrated database, an empty
 catalogue or a missing administrator. Every step is idempotent:
@@ -62,9 +99,15 @@ during the build and the admin needs it.
 ## Deployment protection (one-time, and it is not a code setting)
 
 A new Vercel project is created with **Vercel Authentication** enabled
-(`ssoProtection: all_except_custom_domains`). That protects every `*.vercel.app`
-URL — preview *and* production — so an anonymous browser is redirected to a
-Vercel login page before Django is ever reached.
+(`ssoProtection: all_except_custom_domains`). The `all_except_custom_domains`
+part is what matters: the **production alias is a custom domain and is
+therefore public**, while a per-deployment URL
+(`studyspace-<hash>-<team>.vercel.app`) and the branch alias are not — those
+redirect an anonymous browser to a Vercel login before Django is reached.
+
+In practice: smoke-test and share `https://studyspace-eta-tan.vercel.app`
+(the production alias). A link copied from the dashboard's "Visit" button
+points at a deployment URL and will show the Vercel login instead.
 
 To make the site public:
 
@@ -80,7 +123,7 @@ Attaching a custom domain also lifts the wall for that domain
 ## Smoke test after a deploy
 
 ```bash
-BASE=https://studyspace-swroopss487-4609.vercel.app
+BASE=https://studyspace-eta-tan.vercel.app
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/                 # 200, home page
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/tests.html       # 200
 curl -s $BASE/healthz/ready/                                    # {"status": "ok", ...}

@@ -1718,3 +1718,64 @@ setting, so it has to be switched off once in the dashboard:
 **Settings → Deployment Protection → Vercel Authentication → Disabled**.
 The symptom is a `vercel.com/login` redirect, not a Django error; the runbook is
 in `docs/DEPLOY_VERCEL.md`.
+
+## Run 16 — the deployment serves the app: `500 FUNCTION_INVOCATION_FAILED` fixed
+
+**Branch:** `arena/4974053a-pw-style-learning-app`. Production deployment
+`dpl_DnrfHgTp1qGJCivJxh1pGC7DJJgz` (READY, promoted) on
+**`https://studyspace-eta-tan.vercel.app`**.
+
+### The bug
+
+Every URL on the deployed site answered `500 FUNCTION_INVOCATION_FAILED`,
+including the database-free `/healthz/`, while pre-built static files answered
+`200`. The function crashed at start-up, before any application code: a
+fallback WSGI app and a database heartbeat both never ran.
+
+The cause is in `vercel/vercel`'s Django integration
+(`packages/python/src/index.ts`): it does **not** import `WSGI_APPLICATION` as a
+dotted module. It splits the setting into a file path, resolves it against the
+directory holding `manage.py`, and loads that **file**:
+
+```
+ASGI_APPLICATION = "config.asgi.application"  ->  config/asgi.py   (preferred)
+WSGI_APPLICATION = "config.wsgi.application"  ->  config/wsgi.py
+```
+
+Both settings pointed into `backend/config/`, so both derived paths named files
+that do not exist at the repository root, and the runtime loaded a missing path.
+Because ASGI is preferred when both are set, the WSGI entry point was never
+consulted — which is why `tool.vercel.entrypoint`, a root `wsgi.py` fallback and
+a `sitecustomize.py` all changed nothing.
+
+### The fix
+
+| File | Role |
+|---|---|
+| `config/wsgi.py`, `config/asgi.py` | real entry points at the root — the paths the host derives |
+| `config/__init__.py` | appends `backend/config` to the package `__path__` and puts `backend/` on `sys.path`, so `config.settings`, `config.urls` and the apps stay the single real project |
+| `backend/config/settings.py` | `ASGI_APPLICATION` removed; with both set the host picks the protocol the server is not running |
+| `tools/vercel-build.sh` | build steps as a file (the host caps the inline command at 256 characters): `check` → `migrate` → `seed_demo` → `ensure_admin`. `collectstatic` removed — the host runs it into the CDN output itself |
+
+### Verified against the live deployment (HTTP, not inferred)
+
+| URL | Result |
+|---|---|
+| `/healthz/` | `{"status": "ok"}` |
+| `/healthz/ready/` | `{"status": "ok", "database": "ok", "vendor": "postgresql"}` |
+| `/` | 200 — full home page (batches, timetable, mocks, FAQ) |
+| `/tests.html` | 200 — test series page |
+| `/api/quizzes/` | 200 — 5 quizzes; first paper 6 questions, 4 choices each |
+| `/admin/login/` | 200 — styled Django admin login |
+| `/static/admin/css/base.css` | 200 — real stylesheet (served from the CDN output) |
+
+`233 tests OK` locally from `backend/` with the change in place, and the same
+production settings through the deployed entry point return 200 on all ten
+probed paths.
+
+### Deployment protection, clarified
+
+`studyspace-eta-tan.vercel.app` — the production alias — is **public** under
+`all_except_custom_domains`. Per-deployment URLs and the branch alias are behind
+Vercel Authentication and show a Vercel login to anonymous browsers. Share the
+production alias, not a deployment URL.
