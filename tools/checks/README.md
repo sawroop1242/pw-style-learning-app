@@ -12,14 +12,18 @@ on the DOM the user would see.
 cd tools/checks
 npm install            # jsdom + css-tree, dev only
 
-node check.js          # every page renders content, shell and no console errors
+node check.js          # every page renders rows, an honest outage state, no errors
 node a11y.js           # h1, labels, accessible names, aria-controls, duplicate ids
-node interact.js       # drawer, filters, the exam window end to end, likes
+node interact.js       # drawer, filters, tabs, the exam window end to end, notes
 node css.js            # every stylesheet parses; every class used exists
 ```
 
-`check.js`, `a11y.js`, `interact.js` and `css.js` run **offline** — the network
-is unreachable on purpose, which is what exercises the bundled fixture fallback.
+The front end has no fixture fallback any more: every row on every screen comes
+from the API. So the DOM suites answer the page's requests from `stub.js` — a
+deterministic double of the Django serializers — and `check.js` repeats each
+page with the network switched off to prove the outage path is honest.
+
+`a11y.js` and `css.js` read the files only and need no API at all.
 
 ## Live checks
 
@@ -57,3 +61,5 @@ is shaped the way it is.
   degrade differently in older engines.
 - **`live.js` needs seeded data.** Against an empty database it fails at the
   first assertion by design.
+- **`stub.js` is not an API test.** It proves the page handles a shape; only
+  `live.js` (and the Django test suite) prove the server sends that shape.

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b0b16">
   <meta name="api-base" content="/api">
-  <title>Downloads | StudySpace</title>
+  <title>Notes and media | StudySpace</title>
   <meta name="description" content="Lectures, notes and tests saved for offline study.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
@@ -25,12 +25,12 @@
       <div class="player-shell">
         <div class="player-top">
           <a class="icon-btn" href="dashboard.html" aria-label="Back to my learning"><svg><use href="#i-arrow-left"/></svg></a>
-          <h1>Downloads</h1>
+          <h1>Notes &amp; media</h1>
           <a class="icon-btn" href="profile.html" aria-label="Profile"><svg><use href="#i-user"/></svg></a>
         </div>
 
         <div class="tabs" role="tablist" aria-label="Download types">
-          <button class="tab" role="tab" aria-selected="true" aria-controls="panel-lectures" id="tab-lectures">Lectures</button>
+          <button class="tab" role="tab" aria-selected="true" aria-controls="panel-lectures" id="tab-lectures">Classes</button>
           <button class="tab" role="tab" aria-selected="false" aria-controls="panel-dln" id="tab-dln">Notes</button>
           <button class="tab" role="tab" aria-selected="false" aria-controls="panel-dlt" id="tab-dlt">Tests</button>
         </div>
@@ -46,14 +46,13 @@
         </section>
 
         <p class="tiny subtle" style="margin-top:24px">
-          Saved items stay readable offline once opened. Tests open the exam window and are always
-          scored on the server, so a saved test needs a connection to submit.
+          Everything here comes from the batches your account can open. Pages you have already
+          visited stay readable offline; papers always need a connection, because they are scored
+          on the server.
         </p>
       </div>
     </div>
   </main>
-
-  <div id="site-footer"></div>
   <div id="site-tabbar"></div>
   <script type="module" src="assets/js/downloads.js"></script>
 </body>

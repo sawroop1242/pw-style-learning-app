@@ -1,664 +1,459 @@
-/** Batch detail: headline, purchase panel, tabs, curriculum and similar rows. */
+/**
+ * Batch detail.
+ *
+ * One read of the catalogue (`?slug=`) resolves the batch, a second read of the
+ * detail endpoint brings its folders, lessons, PDFs and access state, and a
+ * third brings the tests attached to it. The curriculum, the lesson list and
+ * the test list are therefore the database, not a template — a batch with no
+ * folders renders "no lessons yet" instead of a plausible syllabus.
+ */
 
 import {
-  $, $$, esc, live, money, discountPercent, shortDate, longDate,
-  initials, qsParam, isSignedIn, request
+  $, $$, esc, getJson, rows, apiQuery, money, initials, qsParam, isSignedIn,
+  request, shortDate, adaptCourse, adaptTest
 } from './core.js';
-import { mountChrome, batchCard, icon, thumbTone, emptyState, toast } from './ui.js';
-import { COURSES } from './data.js';
+import {
+  mountChrome, batchCard, icon, thumbTone, emptyState, toast, wireRetry
+} from './ui.js';
 
 mountChrome('courses');
 
-/* ------------------------------------------------------------------ */
-/* Curriculum fixtures                                                */
-/* ------------------------------------------------------------------ */
-
-const CURRICULUM = {
-  Physics: [
-    { title: 'Units, dimensions and errors', lessons: 6, minutes: 214, free: true },
-    { title: 'Kinematics and relative motion', lessons: 9, minutes: 342, free: true },
-    { title: 'Laws of motion and friction', lessons: 8, minutes: 301 },
-    { title: 'Work, energy and power', lessons: 7, minutes: 268 },
-    { title: 'Rotational motion', lessons: 11, minutes: 412 },
-    { title: 'Thermodynamics and kinetic theory', lessons: 10, minutes: 366 }
-  ],
-  Chemistry: [
-    { title: 'Some basic concepts of chemistry', lessons: 5, minutes: 188, free: true },
-    { title: 'Atomic structure', lessons: 8, minutes: 296, free: true },
-    { title: 'Chemical bonding and molecular structure', lessons: 10, minutes: 372 },
-    { title: 'Thermodynamics', lessons: 7, minutes: 254 },
-    { title: 'Equilibrium and redox', lessons: 9, minutes: 331 },
-    { title: 'Organic chemistry — basic principles', lessons: 12, minutes: 448 }
-  ],
-  Biology: [
-    { title: 'The living world and classification', lessons: 5, minutes: 176, free: true },
-    { title: 'Cell — structure and function', lessons: 9, minutes: 318, free: true },
-    { title: 'Cell cycle and cell division', lessons: 6, minutes: 224 },
-    { title: 'Plant physiology', lessons: 11, minutes: 402 },
-    { title: 'Human physiology', lessons: 14, minutes: 512 },
-    { title: 'Genetics and evolution', lessons: 12, minutes: 436 }
-  ],
-  Mathematics: [
-    { title: 'Sets, relations and functions', lessons: 6, minutes: 208, free: true },
-    { title: 'Complex numbers and quadratic equations', lessons: 8, minutes: 288, free: true },
-    { title: 'Matrices and determinants', lessons: 7, minutes: 246 },
-    { title: 'Permutations and combinations', lessons: 6, minutes: 214 },
-    { title: 'Limits, continuity and differentiability', lessons: 10, minutes: 358 },
-    { title: 'Integral calculus', lessons: 9, minutes: 326 }
-  ],
-  Reasoning: [
-    { title: 'Number series and analogy', lessons: 5, minutes: 168, free: true },
-    { title: 'Coding–decoding and blood relations', lessons: 6, minutes: 204, free: true },
-    { title: 'Syllogism and seating arrangement', lessons: 8, minutes: 276 },
-    { title: 'Non-verbal reasoning', lessons: 6, minutes: 198 },
-    { title: 'Data interpretation', lessons: 7, minutes: 232 }
-  ]
-};
-
-const DEFAULT_CURRICULUM = [
-  { title: 'Foundations and orientation', lessons: 4, minutes: 142, free: true },
-  { title: 'Core concepts — part 1', lessons: 9, minutes: 312, free: true },
-  { title: 'Core concepts — part 2', lessons: 8, minutes: 288 },
-  { title: 'Applied problems', lessons: 7, minutes: 244 },
-  { title: 'Revision and previous year questions', lessons: 6, minutes: 216 }
-];
+const slug = qsParam('slug') || '';
+let current = null;
 
 /* ------------------------------------------------------------------ */
-/* Resolve the batch                                                  */
+/* Load                                                               */
 /* ------------------------------------------------------------------ */
-
-const slug = qsParam('slug') || qsParam('id');
-
-function matchFixture(raw) {
-  return (
-    COURSES.find((c) => c.slug === (raw.slug || slug)) ||
-    COURSES.find((c) => String(c.id) === String(raw.id ?? slug)) ||
-    COURSES[0]
-  );
-}
-
-/**
- * Merge an API row with the matching fixture.
- *
- * Fields the API owns (title, price, counts, description) always come from the
- * server. Fields it does not store yet (learners, rating, start date, language,
- * validity) come from the fixture for sample rows, and stay empty for live rows
- * rather than inventing social proof for a real batch.
- */
-function normalise(raw) {
-  const fixture = matchFixture(raw || {});
-  const subject = raw?.subject || fixture.subject;
-  const live = Boolean(raw?.id);
-  return {
-    ...fixture,
-    ...raw,
-    subject,
-    exam: fixture.exam || subject,
-    faculty: live ? [] : fixture.faculty || [],
-    rating: live ? Number(raw.rating ?? 0) : fixture.rating || 4.7,
-    ratingCount: live ? Number(raw.rating_count ?? 0) : fixture.ratingCount || 0,
-    learners: live ? Number(raw.learners ?? 0) : fixture.learners || 0,
-    lessons: raw?.lesson_count ?? fixture.lessons ?? 0,
-    tests: raw?.quiz_count ?? (live ? 0 : fixture.tests ?? 0),
-    language: live ? raw.language || null : fixture.language || 'Hinglish',
-    mrp: live ? Number(raw.mrp ?? 0) : fixture.mrp || (raw?.price ? Math.round(Number(raw.price) * 2.4) : 0),
-    durationMonths: live ? raw.duration_months ?? null : fixture.durationMonths || 12,
-    startsOn: live ? raw.starts_on ?? null : fixture.startsOn || null,
-    badge: fixture.badge || null,
-    withBooks: Boolean(raw?.with_books),
-    description: raw?.description || fixture.description,
-    title: raw?.title || fixture.title,
-    slug: raw?.slug || fixture.slug,
-    id: raw?.id ?? fixture.id
-  };
-}
 
 async function loadCourse() {
-  let course;
-  try {
-    // Two hops: the list endpoint resolves the slug to an id, then the detail
-    // endpoint returns the folders, lessons and lock state the page renders.
-    const { data: list } = await live(`/courses/?slug=${encodeURIComponent(slug || '')}`, null, { timeout: 2200 });
-    const rows = list ? (Array.isArray(list) ? list : list.results || []) : [];
-    const match = rows[0];
-    let detail = match;
-    if (match?.id) {
-      detail = await request(`/courses/${match.id}/`, { timeout: 2200 }).catch(() => match);
-    }
-    course = normalise(detail || {});
-  } catch {
-    course = normalise({});
+  if (!slug && !qsParam('id')) {
+    renderMissing('No batch selected', 'Open the catalogue and pick a batch.');
+    return;
   }
-  if (!course?.title) course = normalise({});
-  render(course);
-  return course;
+
+  try {
+    // A slug is resolved by the list endpoint; the id then addresses the detail.
+    const list = await getJson(`/courses/${apiQuery({ slug, page_size: 1 })}`);
+    const match = rows(list)[0];
+    if (!match) {
+      renderMissing('Batch not found', 'This batch does not exist or is no longer published.');
+      return;
+    }
+    const detail = await getJson(`/courses/${match.id}/`);
+    const tests = await getJson(`/quizzes/${apiQuery({ course: match.id, page_size: 50 })}`).catch(() => null);
+    render(detail, rows(tests || []));
+  } catch (err) {
+    renderMissing('Batch unavailable', err?.message || 'The batch could not be loaded.');
+  }
+}
+
+function renderMissing(title, body) {
+  const host = $('#course-headline');
+  if (host) host.textContent = title;
+  $('#purchase-slot').innerHTML = emptyState({
+    title,
+    body,
+    actionLabel: 'Back to batches',
+    actionHref: 'courses.html',
+    iconName: 'book'
+  });
+  ['#panel-overview', '#panel-curriculum', '#panel-tests', '#panel-faculty', '#panel-faq', '#course-aside', '#similar-grid'].forEach(
+    (selector) => {
+      const node = $(selector);
+      if (node) node.innerHTML = '';
+    }
+  );
 }
 
 /* ------------------------------------------------------------------ */
 /* Render                                                             */
 /* ------------------------------------------------------------------ */
 
-let current = null;
+function render(detail, testRows) {
+  current = adaptCourse(detail);
+  current.folders = detail.folders || [];
+  current.description = detail.description || '';
 
-function render(course) {
-  current = course;
-  document.title = `${course.title} — StudySpace`;
-  const crumb = $('#crumb-title');
-  if (crumb) crumb.textContent = course.title;
+  document.title = `${current.title} — StudySpace`;
+  $('#crumb-title').textContent = current.title;
 
-  renderHeadline(course);
-  renderPurchase(course);
-  renderOverview(course);
-  renderCurriculum(course);
-  renderTests(course);
-  renderFaculty(course);
-  renderFaq(course);
-  renderAside(course);
-  renderSimilar(course);
+  renderHeadline();
+  renderPurchase();
+  renderOverview();
+  renderCurriculum();
+  renderTests(testRows);
+  renderFaculty();
+  renderFaq();
+  renderAside();
   wireTabs();
-  wireRedeem(course);
+  wireRedeem();
+  loadSimilar();
 }
 
-function renderHeadline(course) {
+function renderHeadline() {
   const host = $('#course-headline');
-  const off = discountPercent(course.price, course.mrp);
-  const faculty = course.faculty || [];
+  const facts = [
+    ['play', `${current.lessons} ${current.lessons === 1 ? 'lesson' : 'lessons'}`],
+    ['file-text', `${current.tests} ${current.tests === 1 ? 'test' : 'tests'}`],
+    ['book', `${current.folders.length} ${current.folders.length === 1 ? 'section' : 'sections'}`]
+  ];
 
   host.innerHTML = `
     <span class="badges">
-      ${course.pricing_mode === 'free'
-        ? '<span class="badge badge-free">Free batch</span>'
-        : '<span class="badge badge-live">Live + recorded</span>'}
-      <span class="badge badge-dark">${esc(course.exam)}</span>
-      ${off ? `<span class="badge badge-hot">${off}% off</span>` : ''}
+      ${current.free ? '<span class="badge badge-free">Free batch</span>' : '<span class="badge badge-paid">Paid batch</span>'}
+      <span class="badge badge-dark">${esc(current.subject)}</span>
+      ${current.hasAccess ? '<span class="badge badge-live">Unlocked</span>' : ''}
     </span>
-    <span class="course-title">${esc(course.title)}${course.withBooks ? '<span class="with-books">with Hindi Books</span>' : ''}</span>
-    <p class="course-hero-lead">${esc(course.description || '')}</p>
+    <span class="course-title">${esc(current.title)}</span>
+    <p class="course-hero-lead">${esc(current.description)}</p>
     <div class="batch-facts-inline">
-      <span>${icon('calendar')} Starts ${course.startsOn ? shortDate(course.startsOn) : 'soon'}</span>
-      <span>${icon('play')} ${course.lessons} ${course.lessons === 1 ? 'lesson' : 'lessons'}</span>
-      <span>${icon('file-text')} ${course.tests} ${course.tests === 1 ? 'test' : 'tests'}</span>
-      ${course.learners ? `<span>${icon('users')} ${course.learners.toLocaleString('en-IN')} enrolled</span>` : ''}
-      ${course.rating ? `<span>${icon('star')} ${course.rating.toFixed(1)}${course.ratingCount ? ` · ${course.ratingCount.toLocaleString('en-IN')} ratings` : ''}</span>` : ''}
+      ${facts.map(([iconName, label]) => `<span>${icon(iconName)} ${esc(label)}</span>`).join('')}
+      ${current.telegram ? `<span>${icon('message')} <a class="link" href="${esc(current.telegram)}" rel="noopener">Batch channel</a></span>` : ''}
     </div>`;
 
   const cover = $('#course-cover');
   if (cover) {
-    cover.className = `batch-cover-lg ${thumbTone(course.subject)}`;
-    cover.innerHTML = `
-      ${course.withBooks ? '<span class="cover-pill">with Hindi Books</span>' : ''}
-      <span class="cover-faces">
-        ${faculty.length
-          ? faculty.slice(0, 6).map((f) => `<span class="cover-face">${esc(f.initials || initials(f.name))}</span>`).join('')
-          : `<span class="cover-face">${esc(initials(course.subject || 'SS'))}</span>`}
-      </span>`;
+    cover.className = `batch-cover-lg ${thumbTone(current.subject)}`;
+    cover.innerHTML = `<span class="cover-faces"><span class="cover-face">${esc(initials(current.subject || 'SS'))}</span></span>`;
   }
 }
 
-function renderPurchase(course) {
+function renderPurchase() {
   const host = $('#purchase-slot');
-  const off = discountPercent(course.price, course.mrp);
-  const isFree = course.pricing_mode === 'free' || Number(course.price) === 0;
+  const isFree = current.free;
+  const open = isFree || current.hasAccess;
+
   host.innerHTML = `
     <div class="batch-actions">
-      <a class="btn ${isFree ? 'btn-primary' : 'btn-accent'} btn-lg" href="dashboard.html" data-primary-cta>
-        ${isFree ? 'Start learning free' : 'Enroll Now'}
-      </a>
+      ${
+        open
+          ? `<a class="btn btn-primary btn-lg" href="#panel-curriculum" data-open-curriculum>Start learning</a>`
+          : `<button class="btn btn-accent btn-lg" type="button" data-redeem>Redeem access code</button>`
+      }
       <button class="btn btn-ghost btn-lg" data-share>${icon('share')} Share</button>
     </div>
     ${
       isFree
-        ? ''
-        : `<p class="tiny subtle" style="margin-top:12px">
-             ${money(course.price)}
-             ${course.mrp > course.price ? `<s>${money(course.mrp)}</s>` : ''}
-             ${off ? `· ${off}% off` : ''} · unlocks with an access code, no card payment
-           </p>`
+        ? '<p class="tiny subtle" style="margin-top:12px">Open to every account, including guests — no code needed.</p>'
+        : current.hasAccess
+          ? '<p class="tiny subtle" style="margin-top:12px">Unlocked on this account. No card payment is taken on this platform.</p>'
+          : `<p class="tiny subtle" style="margin-top:12px">${money(current.price)} · unlocks with an access code, no card payment</p>`
     }`;
 
-  // Sticky purchase bar for phones, mirroring the app screens.
   const mobile = $('#mobile-buy');
   if (mobile) {
     document.body.classList.add('has-mobile-buy');
     mobile.innerHTML = `
       <span class="mobile-buy-price">
-        ${isFree ? 'Free batch' : money(course.price)}
-        ${!isFree && off ? `<small>${off}% off</small>` : ''}
+        ${isFree ? 'Free batch' : current.hasAccess ? 'Unlocked' : money(current.price)}
       </span>
-      <a class="btn ${isFree ? 'btn-primary' : 'btn-accent'} btn-sm" href="dashboard.html">
-        ${isFree ? 'Start free' : 'Enroll Now'}
-      </a>`;
+      ${
+        open
+          ? `<a class="btn btn-primary btn-sm" href="#panel-curriculum">Start learning</a>`
+          : `<button class="btn btn-accent btn-sm" type="button" data-redeem>Redeem code</button>`
+      }`;
   }
 }
 
-function renderAside(course) {
-  const host = $('#course-aside');
-  host.innerHTML = `
-    <div class="facts-card">
-      <dl style="display:grid;gap:var(--sp-4);margin:0">
-        <div class="facts-row">
-          <dt>Batch Starts</dt>
-          <dd>${course.startsOn ? longDate(course.startsOn) : 'Anytime'}</dd>
-        </div>
-        <div class="facts-row">
-          <dt>Validity</dt>
-          <dd>Till exam ${esc(course.exam)}</dd>
-        </div>
-        <div class="facts-row">
-          <dt>Language</dt>
-          <dd>${esc(course.language)}</dd>
-        </div>
-        <div class="facts-row">
-          <dt>Applicable For</dt>
-          <dd>${esc(course.exam)} ${esc(course.subject)} — all levels</dd>
-        </div>
-        <div class="facts-row">
-          <dt>Included</dt>
-          <dd>${course.lessons} lessons · ${course.tests} tests</dd>
-        </div>
-      </dl>
-      <hr>
-      <div class="row" style="gap:8px">
-        <button class="btn btn-ghost btn-sm" style="flex:1" data-share>${icon('share')} Share</button>
-        <button class="btn btn-ghost btn-sm" style="flex:1" data-bookmark>${icon('bookmark')} Save</button>
-      </div>
-      <div class="purchase-note">${icon('shield-check')} No card payment · access codes only</div>
-    </div>
-
-    <div class="card card-pad" style="margin-top:16px;display:grid;gap:12px;background:rgba(91,91,246,0.1);border-color:var(--violet-600)">
-      <div class="row" style="gap:10px">
-        <span class="avatar avatar-teal">${icon('message')}</span>
-        <div>
-          <strong style="display:block;font-size:13px">Not sure if this batch fits?</strong>
-          <small class="tiny muted">Talk to a counsellor before you commit.</small>
-        </div>
-      </div>
-      <button class="btn btn-primary btn-sm" data-counsellor>Request a callback</button>
+function lessonRow(lesson) {
+  return `
+    <div class="lesson-item ${lesson.is_locked ? 'is-locked' : ''}">
+      <span class="lesson-num">${icon(lesson.is_locked ? 'lock' : 'play')}</span>
+      <span class="lesson-main">
+        <strong>${esc(lesson.title)}</strong>
+        <small>${lesson.duration_minutes || 0} min${lesson.is_locked ? ' · locked' : ''}</small>
+      </span>
+      ${
+        lesson.is_locked
+          ? '<span class="lesson-state" aria-hidden="true">' + icon('lock') + '</span>'
+          : `<a class="link" href="player.html?lesson=${lesson.id}">Open ${icon('arrow-right')}</a>`
+      }
     </div>`;
 }
 
-function renderOverview(course) {
+function pdfRow(pdf) {
+  const locked = pdf.is_locked || !pdf.file_url;
+  return `
+    <div class="dl-row">
+      <span class="dl-thumb">${icon('note')}</span>
+      <span class="dl-main">
+        <strong>${esc(pdf.title)}</strong>
+        <small>${esc(pdf.description || 'PDF notes')}${locked ? ' · locked' : ''}</small>
+      </span>
+      ${
+        locked
+          ? '<span class="badge badge-outline">Locked</span>'
+          : `<a class="dl-action" href="${esc(pdf.file_url)}" target="_blank" rel="noopener" aria-label="Open ${esc(pdf.title)}">${icon('download')}</a>`
+      }
+    </div>`;
+}
+
+function renderOverview() {
   const host = $('#panel-overview');
+  const lessonCount = current.folders.reduce((n, f) => n + (f.lessons || []).length, 0);
   host.innerHTML = `
-    <div class="card card-pad" style="display:grid;gap:18px">
-      <div class="prose">
-        <h3 style="margin-top:0">About this batch</h3>
-        <p>${esc(course.description || '')}</p>
-        <p>Classes run live five days a week and every session is recorded within two hours, so a missed class never becomes a gap. Each chapter closes with a timed test scored on the server, and a revision note you can keep.</p>
-        <h3>What you get</h3>
-        <ul>
-          <li>${icon('check')}<span><strong>Live classes</strong> with in-class polls and instant doubt windows.</span></li>
-          <li>${icon('check')}<span><strong>Recorded lectures</strong> available within two hours, downloadable on Wi-Fi.</span></li>
-          <li>${icon('check')}<span><strong>Daily practice problems</strong> with worked solutions released after the deadline.</span></li>
-          <li>${icon('check')}<span><strong>Full-length mocks</strong> in the real exam interface, with All-India rank.</span></li>
-          <li>${icon('check')}<span><strong>Chapter notes</strong> in the same place as your own notes and bookmarks.</span></li>
+    <p>${esc(current.description || 'This batch has no description yet.')}</p>
+    <div class="grid grid-2" style="gap:var(--sp-4);margin-top:var(--sp-4)">
+      <div class="card card-pad">
+        <strong style="display:block;margin-bottom:6px">What is inside</strong>
+        <ul class="feature-list" style="margin:0">
+          <li>${icon('play')}<span>${lessonCount} ${lessonCount === 1 ? 'lesson' : 'lessons'} across ${current.folders.length} ${current.folders.length === 1 ? 'section' : 'sections'}</span></li>
+          <li>${icon('file-text')}<span>${current.tests} ${current.tests === 1 ? 'test' : 'tests'} attached to this batch</span></li>
+          <li>${icon('note')}<span>PDF notes where the faculty uploaded them</span></li>
         </ul>
-        <h3>Who this is for</h3>
-        <p>Students preparing for ${esc(course.exam)} who want a fixed weekly rhythm rather than a pile of unlinked videos. If you are starting from scratch, begin with the free chapter tests before unlocking the full batch.</p>
       </div>
-
-      <div class="check-list">
-        <div class="check-item">${icon('play')} Live &amp; recorded classes</div>
-        <div class="check-item">${icon('note')} Study material (PDF)</div>
-        <div class="check-item">${icon('file-text')} Mock tests with rank</div>
-        <div class="check-item">${icon('message')} Doubt support</div>
-        <div class="check-item">${icon('download')} Downloadable lessons</div>
-        <div class="check-item">${icon('book')} ${course.withBooks ? 'Hindi books included' : 'Chapter notes included'}</div>
-      </div>
-
-      <div class="alert alert-warn">
-        <svg><use href="#i-info"/></svg>
-        <span><strong>Sample content.</strong> This is a demonstration build — batch names, faculty and statistics are illustrative, not a real offering.</span>
-      </div>
-    </div>`;
-}
-
-function renderCurriculum(course) {
-  const chapters = CURRICULUM[course.subject] || DEFAULT_CURRICULUM;
-  const host = $('#panel-curriculum');
-  const totalLessons = chapters.reduce((n, c) => n + c.lessons, 0);
-  const totalMinutes = chapters.reduce((n, c) => n + c.minutes, 0);
-
-  host.innerHTML = `
-    <div class="row-between" style="margin-bottom:14px;flex-wrap:wrap;gap:10px">
-      <p class="small muted">${chapters.length} chapters · ${totalLessons} lessons · ${(totalMinutes / 60).toFixed(1)} hours</p>
-      <span class="badge badge-outline">${icon('play')} 2 free chapters</span>
-    </div>
-    <div class="accordion">
-      ${chapters
-        .map(
-          (ch, i) => `
-        <div class="acc-item">
-          <button class="acc-head" aria-expanded="${i === 0}" aria-controls="ch-${i}">
-            <span class="acc-num">${String(i + 1).padStart(2, '0')}</span>
-            <span class="acc-title">${esc(ch.title)}</span>
-            <span class="acc-count">${ch.lessons} lessons</span>
-            <svg class="acc-chevron"><use href="#i-chevron-down"/></svg>
-          </button>
-          <div class="acc-panel" id="ch-${i}" ${i === 0 ? '' : 'hidden'}>
-            ${Array.from({ length: Math.min(ch.lessons, 4) })
-              .map(
-                (_, n) => `
-              <div class="lesson-row ${ch.free && n === 0 ? 'is-free' : ''}">
-                ${icon(ch.free && n === 0 ? 'play' : 'lock', ch.free && n === 0 ? '' : 'lr-lock')}
-                <span class="lr-title">${esc(ch.title)} — part ${n + 1}</span>
-                <span class="lr-dur">${Math.round(ch.minutes / Math.min(ch.lessons, 4))} min</span>
-              </div>`
-              )
-              .join('')}
-            ${
-              ch.lessons > 4
-                ? `<div class="lesson-row" style="color:var(--violet-700);font-weight:600">${icon('plus')} ${ch.lessons - 4} more lessons</div>`
-                : ''
-            }
-          </div>
-        </div>`
-        )
-        .join('')}
-    </div>`;
-}
-
-/**
- * The Tests tab lists the quizzes the API actually publishes for this batch.
- * Nothing is invented: a batch with no tests says so.
- */
-async function renderTests(course) {
-  const host = $('#panel-tests');
-  if (!host) return;
-
-  const note = `
-      <div class="alert alert-info" style="margin-top:6px">
-        <svg><use href="#i-info"/></svg>
-        <span>Answers are scored on the server. Rank is published only after the test window closes.</span>
-      </div>`;
-
-  let rows = [];
-  if (course.id) {
-    try {
-      const { data } = await live(`/quizzes/?course=${encodeURIComponent(course.id)}&page_size=20`, null, { timeout: 2200 });
-      rows = (data ? (Array.isArray(data) ? data : data.results || []) : []).map((quiz) => ({
-        id: quiz.id,
-        name: quiz.title,
-        questions: quiz.question_count ?? 0,
-        minutes: quiz.duration_minutes ?? 0,
-        marks: quiz.marks_per_question
-          ? Math.round(Number(quiz.marks_per_question) * (quiz.question_count ?? 0))
-          : null,
-        locked: quiz.has_access === false
-      }));
-    } catch {
-      rows = [];
-    }
-  }
-
-  if (!rows.length) {
-    host.innerHTML = `
-      <div class="stack">
-        ${emptyState({
-          title: 'No tests published for this batch yet',
-          body: 'Chapter tests and full-length mocks appear here as soon as they are released.',
-          actionLabel: 'Browse all test series',
-          actionHref: 'tests.html',
-          iconName: 'file-text'
-        })}
-        ${note}
-      </div>`;
-    return;
-  }
-
-  host.innerHTML = `
-    <div class="stack">
-      ${rows
-        .map(
-          (test) => `
-        <div class="card card-pad row-between" style="gap:14px;flex-wrap:wrap">
-          <div style="display:flex;gap:12px;align-items:center">
-            <span class="test-icon">${icon('target')}</span>
-            <div>
-              <strong style="display:block;font-size:14px">${esc(test.name)}</strong>
-              <small class="tiny muted">
-                ${test.questions} questions${test.marks ? ` · ${test.marks} marks` : ''}${test.minutes ? ` · ${test.minutes} minutes` : ''}
-              </small>
-            </div>
-          </div>
+      <div class="card card-pad">
+        <strong style="display:block;margin-bottom:6px">How access works</strong>
+        <p class="small muted" style="margin:0">
           ${
-            test.locked
-              ? '<span class="badge badge-outline">Enrol to unlock</span>'
-              : `<a class="btn btn-ghost btn-sm" href="test-player.html?test=${test.id}">Start test</a>`
+            current.free
+              ? 'Free batches are open to everyone, including guests. Everything here can be opened straight away.'
+              : current.hasAccess
+                ? 'This batch is unlocked on your account. Lessons and protected notes are available.'
+                : 'This is a paid batch. Enter an access code issued by your institute to unlock the lessons and protected notes.'
           }
-        </div>`
-        )
-        .join('')}
-      ${note}
+        </p>
+      </div>
     </div>`;
 }
 
-function renderFaculty(course) {
-  const host = $('#panel-faculty');
-  const rows = course.faculty || [];
-
-  // The API does not store faculty yet, so a live batch says so instead of
-  // showing a name, a tenure or a rating nobody supplied.
-  if (!rows.length) {
+function renderCurriculum() {
+  const host = $('#panel-curriculum');
+  if (!current.folders.length) {
     host.innerHTML = emptyState({
-      title: 'Faculty profiles are being added',
-      body: `This batch is taught by the ${course.subject} team. Names and profiles appear here once they are published.`,
-      actionLabel: 'Ask a doubt in the community',
-      actionHref: 'community.html',
-      iconName: 'user'
+      title: 'No lessons published yet',
+      body: 'Sections and lessons appear here as soon as the faculty publishes them.',
+      iconName: 'play'
     });
     return;
   }
-
-  host.innerHTML = `
-    <div class="faculty-list">
-      ${rows
-        .map(
-          (f) => `
-        <div class="faculty-row">
-          <span class="avatar avatar-lg">${esc(f.initials || initials(f.name))}</span>
-          <div style="flex:1">
-            <h4>${esc(f.name)}</h4>
-            <p>${esc(f.role || course.subject)}</p>
-          </div>
-        </div>`
-        )
-        .join('')}
-    </div>`;
+  host.innerHTML = current.folders
+    .map(
+      (folder) => `
+      <div class="card card-pad" style="margin-bottom:var(--sp-4)">
+        <div class="row-between" style="margin-bottom:10px">
+          <strong>${esc(folder.title)}</strong>
+          <span class="tiny subtle">${(folder.lessons || []).length} ${(folder.lessons || []).length === 1 ? 'lesson' : 'lessons'}</span>
+        </div>
+        ${folder.description ? `<p class="small muted" style="margin:0 0 10px">${esc(folder.description)}</p>` : ''}
+        <div class="lesson-list">
+          ${(folder.lessons || []).map(lessonRow).join('') || '<p class="tiny subtle" style="margin:0">No lessons in this section yet.</p>'}
+        </div>
+        ${
+          (folder.pdf_resources || []).length
+            ? `<div style="margin-top:12px"><p class="tiny strong" style="margin:0 0 6px">Notes</p>${folder.pdf_resources
+                .map(pdfRow)
+                .join('')}</div>`
+            : ''
+        }
+      </div>`
+    )
+    .join('');
 }
 
-function renderFaq(course) {
-  const host = $('#panel-faq');
-  if (!host) return;
-  const items = [
-    ['How do I unlock a paid batch?', 'Paid batches unlock with a 12-character access code issued by your institute. There is no checkout and no card payment on StudySpace.'],
-    ['Are the classes live or recorded?', 'Both. Classes run live to a timetable and the recording appears in the same chapter within a couple of hours, so a missed class never becomes a gap.'],
-    ['Is there negative marking in the tests?', 'Each test carries its own marking scheme, shown on the instructions screen before you start. Scores are calculated on the server and cannot be changed by the browser.'],
-    ['What is the validity of this batch?', `${course.title} stays available on your account until the ${course.exam} exam date shown in the batch facts.`],
-    ['Can I study offline?', 'Yes. Opened lessons, notes and downloads stay readable without a connection. Tests need a connection to submit because they are scored on the server.']
-  ];
-  host.innerHTML = `
-    <div class="accordion" role="list">
-      ${items
-        .map(
-          ([q, a], i) => `
-        <div class="acc-item" role="listitem">
-          <button class="acc-head" type="button" aria-expanded="${i === 0}" aria-controls="faq-panel-${i}">
-            <span class="acc-title">${esc(q)}</span>
-            <svg class="acc-chevron"><use href="#i-chevron-down"/></svg>
-          </button>
-          <div class="acc-panel" id="faq-panel-${i}" ${i === 0 ? '' : 'hidden'}>
-            <p class="acc-text">${esc(a)}</p>
-          </div>
-        </div>`
-        )
-        .join('')}
-    </div>`;
-  host.addEventListener('click', (e) => {
-    const head = e.target.closest('.acc-head');
-    if (!head) return;
-    const open = head.getAttribute('aria-expanded') === 'true';
-    host.querySelectorAll('.acc-head').forEach((other) => {
-      other.setAttribute('aria-expanded', 'false');
-      const panel = document.getElementById(other.getAttribute('aria-controls'));
-      if (panel) panel.hidden = true;
+function renderTests(testRows) {
+  const host = $('#panel-tests');
+  if (!testRows.length) {
+    host.innerHTML = emptyState({
+      title: 'No tests in this batch yet',
+      body: 'A published paper appears here with its duration and marking scheme.',
+      actionLabel: 'All tests',
+      actionHref: 'tests.html',
+      iconName: 'file-text'
     });
-    if (!open) {
-      head.setAttribute('aria-expanded', 'true');
-      const panel = document.getElementById(head.getAttribute('aria-controls'));
-      if (panel) panel.hidden = false;
-    }
+    return;
+  }
+  host.innerHTML = `<div class="test-grid">${testRows.map(adaptTest).map((t) => testCardFor(t)).join('')}</div>`;
+}
+
+/** A local copy so this module does not import the card twice. */
+function testCardFor(test) {
+  const locked = test.locked;
+  return `
+    <article class="test-card">
+      <div class="test-card-top">
+        <span class="test-eyebrow">${esc(test.subject)} · ${esc(test.kind)}</span>
+        <span class="badge ${locked ? 'badge-paid' : 'badge-free'}">${locked ? 'Enrol' : 'Open'}</span>
+      </div>
+      <h3 class="test-title">${esc(test.title)}</h3>
+      <p class="test-meta">${test.questions} Questions · ${test.marks} Marks</p>
+      <p class="test-meta">${test.duration} minutes</p>
+      <div class="test-card-foot">
+        <span class="tiny subtle">${test.opensAt ? shortDate(test.opensAt) : 'Always open'}</span>
+        ${
+          locked
+            ? '<span class="badge badge-outline">Enrol to unlock</span>'
+            : `<a class="btn btn-primary btn-sm" href="test-player.html?test=${test.id}">Start Test</a>`
+        }
+      </div>
+    </article>`;
+}
+
+function renderFaculty() {
+  $('#panel-faculty').innerHTML = emptyState({
+    title: 'Teacher profiles are being added',
+    body: 'This batch does not list its faculty yet. Lessons and notes are already available in the Class Schedule tab.',
+    iconName: 'users'
   });
 }
 
-function renderSimilar(course) {
+function renderFaq() {
+  const items = [
+    ['Is this batch free?', current.free ? 'Yes. Every lesson and note in this batch is open to any account, including guests.' : 'No — it unlocks with an access code from your institute. There is no card payment on this platform.'],
+    ['Do I need an account?', 'You can browse the batch and open free lessons without one. Signing in keeps your progress and notes attached to you.'],
+    ['Can I attempt the tests?', 'Any published test that is open can be started from the Subjects tab. Paid tests need the batch unlocked first.']
+  ];
+  $('#panel-faq').innerHTML = items
+    .map(
+      ([q, a]) => `
+      <div class="acc-item">
+        <div class="acc-head-static"><span class="acc-title">${esc(q)}</span></div>
+        <p class="acc-text">${esc(a)}</p>
+      </div>`
+    )
+    .join('');
+}
+
+function renderAside() {
+  const host = $('#course-aside');
+  const facts = [
+    ['Subject', current.subject],
+    ['Price', current.free ? 'Free' : money(current.price)],
+    ['Sections', String(current.folders.length)],
+    ['Tests', String(current.tests)],
+    ['Access', current.hasAccess ? 'Unlocked' : 'Locked']
+  ];
+  host.innerHTML = `
+    <div class="facts-card">
+      <dl style="display:grid;gap:var(--sp-4);margin:0">
+        ${facts
+          .map(
+            ([label, value]) => `
+          <div class="facts-row">
+            <dt>${esc(label)}</dt>
+            <dd>${esc(value)}</dd>
+          </div>`
+          )
+          .join('')}
+      </dl>
+      ${
+        current.free || current.hasAccess
+          ? `<a class="btn btn-primary btn-block" style="margin-top:var(--sp-4)" href="#panel-curriculum">Class schedule</a>`
+          : `<button class="btn btn-accent btn-block" style="margin-top:var(--sp-4)" type="button" data-redeem>Redeem code</button>`
+      }
+    </div>`;
+}
+
+async function loadSimilar() {
   const host = $('#similar-grid');
   if (!host) return;
-  const rows = COURSES.filter((c) => c.slug !== course.slug).slice(0, 3);
-  host.innerHTML = rows.map(batchCard).join('');
+  try {
+    const payload = await getJson('/courses/?page_size=6');
+    const list = rows(payload)
+      .map(adaptCourse)
+      .filter((course) => course.slug !== current.slug)
+      .slice(0, 3);
+    host.innerHTML = list.length
+      ? list.map(batchCard).join('')
+      : '<p class="small muted">This is the only published batch right now.</p>';
+  } catch {
+    host.innerHTML = '<p class="small muted">Other batches could not be loaded.</p>';
+  }
 }
 
 /* ------------------------------------------------------------------ */
-/* Interactions                                                       */
+/* Behaviour                                                          */
 /* ------------------------------------------------------------------ */
 
 function wireTabs() {
   const tabs = $$('.tabs .tab');
-  if (!tabs.length) return;
-  // Panels are whatever the tabs declare via aria-controls, so adding a tab
-  // to the markup never leaves an orphan panel behind.
-  const panels = tabs.map((tab) => document.getElementById(tab.getAttribute('aria-controls')));
-
-  tabs.forEach((tab) => {
-    tab.addEventListener('click', () => activate(tab.id));
-    tab.addEventListener('keydown', (e) => {
-      const idx = tabs.indexOf(tab);
-      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-        e.preventDefault();
-        const next = (idx + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-        tabs[next].focus();
-        activate(tabs[next].id);
-      }
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => selectTab(index));
+    tab.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      event.preventDefault();
+      const next = (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[next].focus();
+      selectTab(next);
     });
   });
-
-  const fromHash = location.hash.replace('#', '');
-  const hashTab = tabs.find((tab) => tab.id === `tab-${fromHash}`);
-  if (hashTab) activate(hashTab.id);
-
-  function activate(id) {
-    tabs.forEach((tab, i) => {
-      const selected = tab.id === id;
-      tab.setAttribute('aria-selected', String(selected));
-      if (panels[i]) panels[i].hidden = !selected;
-    });
-  }
 }
 
-function wireRedeem(course) {
-  const modal = $('#redeem-modal');
-  const errorNode = $('#redeem-error');
+function selectTab(index) {
+  $$('.tabs .tab').forEach((tab, i) => {
+    const selected = i === index;
+    tab.setAttribute('aria-selected', String(selected));
+    const panel = document.getElementById(tab.getAttribute('aria-controls'));
+    if (panel) panel.hidden = !selected;
+  });
+}
 
-  const setError = (message) => {
-    if (!errorNode) return;
-    errorNode.innerHTML = message;
-    errorNode.hidden = !message;
-  };
+function wireRedeem() {
+  const modal = $('#redeem-modal');
+  if (!modal) return;
 
   const open = () => {
-    setError('');
     modal.classList.add('is-open');
     document.body.classList.add('is-locked');
-    $('#code-input')?.focus();
+    setTimeout(() => $('#code-input')?.focus(), 60);
   };
   const close = () => {
     modal.classList.remove('is-open');
     document.body.classList.remove('is-locked');
   };
 
-  document.addEventListener('click', async (e) => {
-    if (e.target.closest('[data-redeem]')) {
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-redeem]')) {
+      if (!isSignedIn()) {
+        location.href = `login.html?next=${encodeURIComponent(`course.html?slug=${current.slug}`)}`;
+        return;
+      }
       open();
-      if (!isSignedIn()) {
-        setError(`Sign in to redeem a code. <a href="login.html?next=${encodeURIComponent(`course.html?slug=${course.slug}`)}" class="link">Sign in</a>`);
-      }
     }
-    if (e.target.closest('[data-close-modal]')) close();
-    if (e.target === modal) close();
-
-    if (e.target.closest('[data-share]')) {
+    if (event.target.closest('[data-close-modal]') || event.target === modal) close();
+    if (event.target.closest('[data-share]')) {
       const url = location.href;
-      try {
-        if (navigator.share) await navigator.share({ title: course.title, url });
-        else {
-          await navigator.clipboard.writeText(url);
-          toast('Link copied to clipboard.', 'success');
-        }
-      } catch {
-        /* dismissed */
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url).then(
+          () => toast('Batch link copied.', 'success'),
+          () => toast('Copy the address bar to share this batch.', 'info')
+        );
+      } else {
+        toast('Copy the address bar to share this batch.', 'info');
       }
     }
-
-    if (e.target.closest('[data-bookmark]')) {
-      toast(isSignedIn() ? 'Saved to your bookmarks.' : 'Sign in to save this batch.', isSignedIn() ? 'success' : 'info');
-    }
-
-    if (e.target.closest('[data-counsellor]')) {
-      toast('Callback requested. Our team will call between 10am and 7pm.', 'success');
-    }
-
-    if (e.target.closest('[data-primary-cta]')) {
-      if (!isSignedIn()) {
-        e.preventDefault();
-        location.href = 'login.html';
-      }
+    if (event.target.closest('[data-open-curriculum]')) {
+      const tabs = $$('.tabs .tab');
+      selectTab(tabs.findIndex((tab) => tab.getAttribute('aria-controls') === 'panel-curriculum'));
+      document.getElementById('panel-curriculum')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   });
 
-  $('#redeem-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    setError('');
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && modal.classList.contains('is-open')) close();
+  });
 
-    const code = $('#code-input').value.trim().toUpperCase();
-    if (!code) {
-      setError('Enter the access code printed on your receipt.');
-      return;
-    }
-    if (!isSignedIn()) {
-      setError(`Sign in to redeem a code. <a href="login.html?next=${encodeURIComponent(`course.html?slug=${course.slug}`)}" class="link">Sign in</a>`);
-      return;
-    }
-
-    const button = e.target.querySelector('button[type="submit"]');
-    const label = button.textContent;
+  $('#redeem-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const error = $('#redeem-error');
+    const button = form.querySelector('button[type="submit"]');
+    const code = String(new FormData(form).get('code') || '').trim();
+    error.hidden = true;
     button.disabled = true;
-    button.textContent = 'Checking code…';
-
+    button.textContent = 'Checking…';
     try {
-      await request('/access-codes/redeem/', {
-        method: 'POST',
-        body: { code, course_id: course.id }
-      });
-      toast('Batch unlocked. Opening your dashboard…', 'success');
-      setTimeout(() => (location.href = 'dashboard.html'), 900);
+      await request('/access-codes/redeem/', { method: 'POST', body: { code, course_id: current.id } });
+      toast('Batch unlocked. Loading your lessons…', 'success');
+      setTimeout(() => location.reload(), 700);
     } catch (err) {
-      if (err.status === 0) {
-        setError('Could not reach the server. Check your connection and try again.');
-      } else if (err.status === 404 || err.status === 400) {
-        setError(err.message || 'That code is not valid for this batch. Check the characters and try again.');
-      } else if (err.status === 401) {
-        setError(`Your session expired. <a href="login.html?next=${encodeURIComponent(`course.html?slug=${course.slug}`)}" class="link">Sign in again</a>`);
-      } else {
-        setError(err.message || 'That code did not work. Try again in a moment.');
-      }
-    } finally {
+      error.hidden = false;
+      error.textContent = err?.message || 'That code could not be redeemed.';
       button.disabled = false;
-      button.textContent = label;
+      button.textContent = 'Unlock batch';
     }
   });
 }
 
-loadCourse().then((course) => {
-  const cta = document.querySelector('[data-primary-cta]');
-  if (cta) cta.href = 'dashboard.html';
-});
+wireRetry();
+loadCourse();

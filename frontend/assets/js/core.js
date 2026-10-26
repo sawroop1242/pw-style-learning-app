@@ -1,9 +1,11 @@
 /**
  * StudySpace core — API client, storage, formatting and DOM helpers.
  *
- * The site is a static PWA. Every data read goes through `live()` which tries
- * the Django API first and silently falls back to the bundled fixtures so the
- * UI is fully explorable without a backend (GitHub Pages, offline preview).
+ * Every number, title and date on a page comes from the Django API. There is no
+ * fixture fallback any more: when a request fails the page says so and offers a
+ * retry, because a screen that shows invented rows is worse than an empty one.
+ * `content.js` holds only copy that is genuinely editorial (FAQ answers, menu
+ * labels, the how-it-works steps).
  */
 
 const META = document.querySelector('meta[name="api-base"]');
@@ -13,8 +15,8 @@ const K = {
   access: 'studyspace.access',
   refresh: 'studyspace.refresh',
   user: 'studyspace.user',
-  preview: 'studyspace.preview',
-  attempt: 'studyspace.attempt'
+  attempt: 'studyspace.attempt',
+  guest: 'studyspace.attempt-token'
 };
 
 /* ------------------------------------------------------------------ */
@@ -40,10 +42,21 @@ export const storage = {
     if (value) sessionStorage.setItem(K.attempt, value);
     else sessionStorage.removeItem(K.attempt);
   },
+  /**
+   * Token for a guest attempt. Lives in localStorage (not sessionStorage) so a
+   * resume survives closing the tab — the attempt is already scored on the
+   * server, and losing this would strand it.
+   */
+  get guestToken() { return localStorage.getItem(K.guest); },
+  set guestToken(value) {
+    if (value) localStorage.setItem(K.guest, value);
+    else localStorage.removeItem(K.guest);
+  },
   clear() {
     localStorage.removeItem(K.access);
     localStorage.removeItem(K.refresh);
     localStorage.removeItem(K.user);
+    localStorage.removeItem(K.guest);
     sessionStorage.removeItem(K.attempt);
   }
 };
@@ -54,24 +67,45 @@ export const isSignedIn = () => Boolean(storage.access);
  * True when the API cannot be reached at all, as opposed to answering with a
  * real error.
  *
- * A static preview has no API behind it: `POST /api/...` is answered by the
- * file server with 501 or 404, not with a network failure. Treating those as
- * "the server said no" used to surface `Request failed (501)` on the sign-in
- * form. 404/405/408 and 5xx all mean "there is no working API here", which is
- * exactly the case the offline demo exists for. 400/401/403/429 are real
- * answers and are never swallowed by this helper.
+ * A network failure, a timeout or a server error mean "the API is not usable
+ * right now"; 400/401/403/404/429 are real answers from the app and are never
+ * treated as an outage. Forms use this to choose between "service unavailable,
+ * try again" and the field error the server actually sent.
  */
 export const isUnreachable = (err) =>
   !err ||
   err.status === 0 ||
-  err.status === 404 ||
-  err.status === 405 ||
   err.status === 408 ||
   err.status >= 500;
 
-/** True once any read has fallen back to fixtures. */
-export const isPreview = () => sessionStorage.getItem(K.preview) === '1';
-const markPreview = () => sessionStorage.setItem(K.preview, '1');
+/**
+ * Read a collection. Throws on any failure — callers render an error state.
+ * `fallback` exists only for a value a page can sensibly degrade to (an empty
+ * list), never for invented rows.
+ */
+export async function getJson(path, { timeout = 8000, fallback } = {}) {
+  try {
+    return await request(path, { timeout });
+  } catch (err) {
+    if (fallback !== undefined && err.status === 404) return fallback;
+    throw err;
+  }
+}
+
+/** Unwrap a DRF page or a plain array into an array. */
+export const rows = (payload) =>
+  Array.isArray(payload) ? payload : (payload && Array.isArray(payload.results) ? payload.results : []);
+
+/** Build a query string, dropping empty values. */
+export function apiQuery(params = {}) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '' || value === false) continue;
+    search.set(key, String(value));
+  }
+  const text = search.toString();
+  return text ? `?${text}` : '';
+}
 
 /* ------------------------------------------------------------------ */
 /* HTTP                                                                */
@@ -117,10 +151,13 @@ async function refreshToken() {
   return data.access;
 }
 
-export async function request(path, { method = 'GET', body, retried = false, timeout = 12000 } = {}) {
+export async function request(path, { method = 'GET', body, retried = false, timeout = 12000, guestToken } = {}) {
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (storage.access) headers.Authorization = `Bearer ${storage.access}`;
+  // A guest attempt is addressed by the token it was issued, never by an id
+  // alone. Signed-in attempts use the bearer token instead.
+  if (guestToken) headers['X-Attempt-Token'] = guestToken;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -143,7 +180,7 @@ export async function request(path, { method = 'GET', body, retried = false, tim
   if (res.status === 401 && !retried && storage.refresh) {
     try {
       await refreshToken();
-      return request(path, { method, body, retried: true, timeout });
+      return request(path, { method, body, retried: true, timeout, guestToken });
     } catch {
       storage.clear();
       window.dispatchEvent(new CustomEvent('auth:expired'));
@@ -329,43 +366,50 @@ export function debounce(fn, wait = 220) {
 /* Row adapters: API payloads → card view models                      */
 /* ------------------------------------------------------------------ */
 
+/**
+ * API course row → the fields a card renders.
+ *
+ * Nothing is defaulted to a flattering number: if the server did not send a
+ * rating, a learner count or a discount, the card does not show one.
+ */
 export const adaptCourse = (row = {}) => ({
   id: row.id,
   slug: row.slug || `course-${row.id}`,
   title: row.title || 'Untitled batch',
   subject: row.subject || 'General',
-  exam: row.exam || row.subject || '',
-  durationMonths: row.duration_months ?? row.durationMonths ?? null,
-  faculty: row.faculty || [],
-  lessons: row.lessons ?? row.lesson_count ?? 0,
-  tests: row.tests ?? row.quiz_count ?? 0,
-  learners: row.learners ?? row.student_count ?? 0,
-  rating: Number(row.rating ?? 4.7),
-  ratingCount: row.ratingCount ?? row.rating_count ?? 0,
-  language: row.language || 'English',
+  description: row.description || '',
+  lessons: Number(row.lesson_count ?? 0),
+  tests: Number(row.quiz_count ?? 0),
+  folders: Number(row.folder_count ?? 0),
   price: Number(row.price ?? 0),
-  mrp: Number(row.mrp ?? 0),
+  currency: row.currency || 'INR',
   pricing_mode: row.pricing_mode || (Number(row.price) > 0 ? 'paid' : 'free'),
-  badge: row.badge || null
+  free: (row.pricing_mode || '') === 'free' || Number(row.price ?? 0) === 0,
+  hasAccess: row.has_access !== false,
+  telegram: row.telegram_url || '',
+  position: Number(row.position ?? 0)
 });
 
+/** API quiz row → the fields a test card renders. */
 export const adaptTest = (row = {}) => {
   const timed = row.timing_mode ? row.timing_mode !== 'untimed' : true;
+  const questions = Number(row.question_count ?? 0);
   return {
     id: row.id,
     title: row.title || 'Untitled test',
-    exam: row.exam || row.series_subject || row.course_subject || 'General',
-    kind: row.kind || (timed ? 'Timed mock' : 'Practice'),
-    questions: row.questions ?? row.question_count ?? 0,
-    marks: row.marks ?? (row.marks_per_question
-      ? Math.round(Number(row.marks_per_question) * (row.question_count ?? 0))
-      : undefined),
-    duration: row.duration ?? row.duration_minutes ?? 0,
-    attempts: row.attempts ?? row.attempt_count ?? 0,
-    startsAt: row.startsAt ?? row.starts_at ?? row.opens_at ?? null,
-    price: Number(row.price ?? 0),
-    badge: row.badge || null,
-    locked: row.has_access === false
+    subject: row.series_subject || row.course_subject || 'General',
+    series: row.series_title || null,
+    batch: row.course_title || null,
+    batchSlug: row.course_slug || null,
+    kind: timed ? 'Timed mock' : 'Practice',
+    questions,
+    marks: Math.round(Number(row.marks_per_question ?? 0) * questions),
+    duration: Number(row.duration_minutes ?? 0),
+    attempts: Number(row.attempt_count ?? 0),
+    opensAt: row.opens_at || null,
+    closesAt: row.closes_at || null,
+    locked: row.has_access === false,
+    paid: Boolean(row.course && row.course !== null && row.has_access === false)
   };
 };
 

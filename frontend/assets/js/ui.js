@@ -1,11 +1,11 @@
 /**
- * StudySpace UI — icon set, chrome (header / tabbar / footer) and the shared
+ * StudySpace UI — icon set, chrome (header / tabbar) and the shared
  * component builders used across pages.
  */
 
 import {
-  $, $$, esc, money, compact, discountPercent, shortDate, countdown,
-  initials, isSignedIn, isPreview, storage
+  $, $$, esc, money, compact, shortDate, countdown,
+  initials, isSignedIn, storage
 } from './core.js';
 
 /* ------------------------------------------------------------------ */
@@ -190,7 +190,6 @@ const NAV = [
   { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'book' },
   { href: 'tests.html', label: 'Test Series', id: 'tests', icon: 'file-text' },
   { href: 'community.html#announcements', label: 'Announcements', id: 'announcements', icon: 'megaphone' },
-  { href: 'community.html', label: 'Community', id: 'community', icon: 'users' },
   { href: 'downloads.html', label: 'Downloads', id: 'downloads', icon: 'download' },
   { href: 'dashboard.html#tools', label: 'Study Tools', id: 'tools', icon: 'sparkles' }
 ];
@@ -347,73 +346,6 @@ export function renderTabbar(active = '') {
     </nav>`;
 }
 
-export function renderFooter() {
-  const host = document.getElementById('site-footer');
-  if (!host) return;
-  const year = new Date().getFullYear();
-  host.innerHTML = `
-    <footer class="site-footer">
-      <div class="container">
-        <div class="footer-grid">
-          <div class="footer-brand">
-            <a class="brand" href="index.html">
-              <span class="brand-mark">${icon('zap')}</span>
-              <span class="brand-text">StudySpace<small>Learn · Practise · Rank</small></span>
-            </a>
-            <p>Structured courses, exam-pattern tests and revision tools for Indian students. Learn at your own pace, on any device.</p>
-            <p class="footer-contact">
-              <a href="mailto:support@studyspace.example">support@studyspace.example</a>
-            </p>
-          </div>
-          <div class="footer-col">
-            <h4>Learn</h4>
-            <ul>
-              <li><a href="courses.html?exam=JEE">JEE</a></li>
-              <li><a href="courses.html?exam=NEET">NEET</a></li>
-              <li><a href="courses.html?exam=UPSC">UPSC</a></li>
-              <li><a href="courses.html?exam=SSC">SSC &amp; Banking</a></li>
-              <li><a href="courses.html">All batches</a></li>
-            </ul>
-          </div>
-          <div class="footer-col">
-            <h4>Practise</h4>
-            <ul>
-              <li><a href="tests.html">Test series</a></li>
-              <li><a href="tests.html">Previous year papers</a></li>
-              <li><a href="tests.html">Daily practice</a></li>
-              <li><a href="dashboard.html">My results</a></li>
-            </ul>
-          </div>
-          <div class="footer-col">
-            <h4>Company</h4>
-            <ul>
-              <li><a href="legal.html#about">About us</a></li>
-              <li><a href="legal.html#accessibility">Accessibility</a></li>
-              <li><a href="legal.html#contact">Contact</a></li>
-              <li><a href="legal.html#privacy">Data &amp; privacy</a></li>
-            </ul>
-          </div>
-          <div class="footer-col">
-            <h4>Support</h4>
-            <ul>
-              <li><a href="legal.html#codes">Help centre</a></li>
-              <li><a href="legal.html#codes">Redeem a code</a></li>
-              <li><a href="legal.html#privacy">Privacy policy</a></li>
-              <li><a href="legal.html#terms">Terms of use</a></li>
-            </ul>
-          </div>
-        </div>
-        <div class="footer-bottom">
-          <span>© ${year} StudySpace. Built as a learning project.</span>
-          <span style="display:flex;align-items:center;gap:14px">
-            <span>Made for India</span>
-            ${isPreview() ? '<span class="preview-flag">Preview · sample data</span>' : ''}
-          </span>
-        </div>
-      </div>
-    </footer>`;
-}
-
 /* ------------------------------------------------------------------ */
 /* Cards                                                              */
 /* ------------------------------------------------------------------ */
@@ -441,29 +373,22 @@ const BADGE_LABEL = {
 };
 
 export function batchCard(course) {
-  const faculty = course.faculty || [];
-  const faces = faculty.slice(0, 4);
-  const extra = faculty.length - faces.length;
-  const badge = course.pricing_mode === 'free'
+  // Only server-supplied facts: subject, batch size, price and access. No
+  // invented rating, learner count, discount or language.
+  const badge = course.free
     ? '<span class="badge badge-free">Free</span>'
-    : course.badge === 'live'
-      ? '<span class="badge badge-live">Live</span>'
-      : course.badge === 'bestseller'
-        ? '<span class="badge badge-hot">Bestseller</span>'
-        : '';
+    : course.hasAccess
+      ? '<span class="badge badge-paid">Unlocked</span>'
+      : '<span class="badge badge-paid">Paid</span>';
 
   return `
     <article class="batch-card">
       <a class="batch-cover ${thumbTone(course.subject)}" href="course.html?slug=${encodeURIComponent(course.slug)}" aria-label="${esc(course.title)}">
         ${badge}
-        <span class="cover-tag">${esc(course.exam || course.subject || 'Batch')}</span>
+        <span class="cover-tag">${esc(course.subject || 'Batch')}</span>
         <span class="cover-faces">
-          ${faces.length
-            ? faces.map((f) => `<span class="cover-face">${esc(f.initials || initials(f.name))}</span>`).join('')
-            : `<span class="cover-face">${esc(initials(course.subject || 'StudySpace'))}</span>`}
-          ${extra > 0 ? `<span class="cover-more">+${extra}</span>` : ''}
+          <span class="cover-face">${esc(initials(course.subject || 'StudySpace'))}</span>
         </span>
-        ${course.withBooks ? '<span class="cover-pill">with Hindi Books</span>' : ''}
       </a>
       <div class="batch-body">
         <h3 class="batch-title">
@@ -471,67 +396,83 @@ export function batchCard(course) {
         </h3>
         <p class="batch-meta">
           <span>${esc(course.subject || 'General')}</span>
-          <span>${esc(course.language || 'Hinglish')}</span>
+          <span>${course.free ? 'Free' : money(course.price)}</span>
         </p>
         <p class="batch-start">
-          ${icon('calendar')}
-          <span>${course.startsOn ? `Starts on ${shortDate(course.startsOn)}` : 'Starts soon'}</span>
+          ${icon('play')}
+          <span>${course.lessons} ${course.lessons === 1 ? 'lesson' : 'lessons'} · ${course.tests} ${course.tests === 1 ? 'test' : 'tests'}</span>
         </p>
         <div class="batch-foot">
           <a class="btn btn-primary btn-sm batch-cta" href="course.html?slug=${encodeURIComponent(course.slug)}">
-            View Details ${icon('arrow-right')}
+            ${course.hasAccess ? 'Open batch' : 'View details'} ${icon('arrow-right')}
           </a>
         </div>
       </div>
     </article>`;
 }
 
-export function todayClassCard(item) {
-  const live = item.status === 'live';
+/** A lesson row — the honest replacement for the old "today's class" fixture. */
+export function lessonCard(lesson, course = null) {
   return `
     <article class="today-card">
-      <div class="today-video ${live ? 'is-live' : ''}">
-        <span class="today-face">${esc(initials(item.faculty))}</span>
-        ${live ? '<span class="today-live">LIVE NOW</span>' : `<span class="today-time">${esc(item.status)}</span>`}
+      <div class="today-video">
+        <span class="today-face">${icon(lesson.is_locked ? 'lock' : 'play')}</span>
+        <span class="today-time">${lesson.duration_minutes || 0} min</span>
       </div>
       <div class="today-body">
-        <h3>${esc(item.title)}</h3>
-        <p>${esc(item.faculty)} · ${esc(item.subject)}</p>
+        <h3>${esc(lesson.title)}</h3>
+        <p>${esc(course?.title || lesson.description || 'Recorded class')}</p>
         <div class="today-foot">
-          <span class="today-clock">${icon('clock')} ${esc(item.time)}</span>
-          <a class="link" href="${item.status === 'live' ? `player.html?lesson=${encodeURIComponent(item.slug || 'number-system-1')}` : 'courses.html'}">
-            ${live ? 'Join' : 'Remind me'} ${icon('arrow-right')}
-          </a>
+          <span class="today-clock">${icon('clock')} ${lesson.duration_minutes || 0} min</span>
+          ${
+            lesson.is_locked
+              ? '<span class="badge badge-outline">Locked</span>'
+              : `<a class="link" href="player.html?lesson=${lesson.id}">Open ${icon('arrow-right')}</a>`
+          }
         </div>
       </div>
     </article>`;
 }
 
 export function testCard(test) {
-  const free = !test.price;
-  const marks = test.marks || (test.questions ? test.questions * 2 : 0);
+  const locked = test.locked;
   return `
     <article class="test-card">
       <div class="test-card-top">
-        <span class="test-eyebrow">${esc(test.exam)} · ${esc(test.kind)}</span>
-        <span class="badge ${free ? 'badge-free' : 'badge-paid'}">${free ? 'Free' : money(test.price)}</span>
+        <span class="test-eyebrow">${esc(test.subject)} · ${esc(test.kind)}</span>
+        <span class="badge ${locked ? 'badge-paid' : 'badge-free'}">${locked ? 'Enrol' : 'Open'}</span>
       </div>
       <h3 class="test-title">${esc(test.title)}</h3>
-      <p class="test-meta">
-        ${test.questions} Questions · ${marks} Marks
-      </p>
-      <p class="test-meta">
-        ${test.duration} minutes · ${compact(test.attempts)} attempts
-      </p>
+      <p class="test-meta">${test.questions} ${test.questions === 1 ? 'Question' : 'Questions'} · ${test.marks} Marks</p>
+      <p class="test-meta">${test.duration} minutes · ${compact(test.attempts)} attempts</p>
+      ${test.series ? `<p class="tiny subtle" style="margin:0">${esc(test.series)}</p>` : ''}
       <div class="test-card-foot">
-        <span class="tiny subtle">${countdown(test.startsAt) || shortDate(test.startsAt) || 'Always open'}</span>
+        <span class="tiny subtle">${test.opensAt ? countdown(test.opensAt) || shortDate(test.opensAt) : 'Always open'}</span>
         ${
-          test.locked
+          locked
             ? '<span class="badge badge-outline">Enrol to unlock</span>'
             : `<a class="btn btn-primary btn-sm" href="test-player.html?test=${test.id}">Start Test</a>`
         }
       </div>
     </article>`;
+}
+
+/** An error the page could not recover from, with a retry that reloads. */
+export function errorState({ title = 'Could not load this page', body, retryLabel = 'Try again' } = {}) {
+  return `
+    <div class="empty-state is-error" role="alert">
+      ${icon('alert')}
+      <h3>${esc(title)}</h3>
+      <p>${esc(body || 'The server did not answer. Check your connection and try again.')}</p>
+      <button class="btn btn-primary" type="button" data-retry>${esc(retryLabel)}</button>
+    </div>`;
+}
+
+/** Wire any rendered error state's retry button to a full reload. */
+export function wireRetry(root = document) {
+  root.addEventListener('click', (event) => {
+    if (event.target.closest('[data-retry]')) location.reload();
+  });
 }
 
 export function skeletonBatchGrid(count = 6) {
@@ -566,8 +507,6 @@ export function mountChrome(active) {
   mountSprite();
   renderHeader(active);
   renderTabbar(active);
-  renderFooter();
-  highlightPreview();
   registerServiceWorker();
 }
 
@@ -610,8 +549,3 @@ function registerServiceWorker() {
   });
 }
 
-function highlightPreview() {
-  document.querySelectorAll('[data-preview-only]').forEach((node) => {
-    node.hidden = !isPreview();
-  });
-}
