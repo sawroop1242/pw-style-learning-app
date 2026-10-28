@@ -527,7 +527,7 @@
   background: var(--grad-brand);
   flex: 0 0 auto;
 }
-.profile-head h2 { font-size: var(--text-xl); margin-bottom: 2px; }
+.profile-head h2 { font-size: var(--text-xl); margin-bottom: 2px; text-align: start; }
 .profile-head p { font-size: var(--text-xs); color: var(--text-subtle); }
 .profile-stats {
   display: grid;
@@ -560,7 +560,9 @@
 .menu-row:hover { background: var(--surface-raised); }
 .menu-row .menu-icon { color: var(--text-muted); display: grid; place-items: center; }
 .menu-row .menu-icon svg { width: 19px; height: 19px; }
-.menu-row span { flex: 1 1 auto; font-size: var(--text-sm); font-weight: 600; }
+.menu-row > span:not(.menu-icon):not(.menu-chevron) { flex: 1 1 auto; text-align: start; font-size: var(--text-sm); font-weight: 600; }
+.menu-row .menu-icon { flex: 0 0 auto; }
+.menu-row .menu-chevron { flex: 0 0 auto; margin-left: auto; color: var(--text-subtle); }
 .menu-row .menu-chevron { color: var(--text-subtle); }
 .menu-row .menu-chevron svg { width: 16px; height: 16px; }
 
@@ -739,16 +741,20 @@
 
 .player-video { width: 100%; height: 100%; object-fit: contain; background: #05070f; }
 
+.player-stage.is-empty .stage-face { margin-bottom: 96px; opacity: 0.55; }
+
 .stage-empty {
   position: absolute;
   inset: auto 0 0 0;
-  padding: 18px 20px 20px;
+  padding: 18px 20px 22px;
   text-align: center;
-  background: linear-gradient(180deg, transparent, rgba(6, 6, 14, 0.9));
+  background: linear-gradient(180deg, transparent, rgba(6, 6, 14, 0.94) 42%);
 }
 .stage-empty[hidden] { display: none; }
 .stage-empty strong { display: block; font-size: var(--text-sm); color: var(--text-strong); }
 .stage-empty p { margin: 4px auto 0; max-width: 44ch; font-size: var(--text-xs); color: var(--text-subtle); }
+
+.player-shell .tabs .tab { font-size: var(--text-xs); }
 
 .player-brief {
   margin: var(--sp-4) 0 0;
@@ -765,6 +771,11 @@
 .batch-facts-inline > span { display: inline-flex; align-items: center; gap: 6px; }
 .batch-facts-inline svg { width: 15px; height: 15px; }
 .batch-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.batch-actions .btn { flex: 1 1 auto; min-width: 0; }
+@media (max-width: 560px) {
+  .batch-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .batch-actions .btn { width: 100%; }
+}
 
 .notice-row { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-1); }
 .notice-row + .notice-row { margin-top: 10px; }

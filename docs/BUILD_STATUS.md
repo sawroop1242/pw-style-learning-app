@@ -1827,3 +1827,68 @@ or was never real; the copy now says what the data supports.
 
 `tools/checks/stub.js` is new: a deterministic double of the serializers, so
 the DOM suites no longer depend on fixtures inside the app.
+
+---
+
+## Run 18 — the stylesheets actually load, and the API honours `page_size`
+
+Reported as "in dashboard not showing correctly may be css problem same as many
+things not working". Both halves were real, and both were invisible to the
+checks written so far: jsdom has no layout engine and the DOM suites assert on
+markup, not on painted output.
+
+### Why the dashboard (and the class player) had no styling
+
+`dashboard.html` and `player.html` linked **only** `assets/css/app.css`. Every
+token in the design system (`--paper`, `--text`, `--border`, `--sp-*`) is
+defined in `tokens.css`, which was never loaded, so every declaration that used
+a variable resolved to nothing: no colours, no spacing, no grid. The page
+rendered as unstyled HTML — exactly what the screenshot showed.
+
+Both pages now load the same six stylesheets as every other page, and the
+front-end checks fail if a page links a stylesheet without `tokens.css`.
+
+### Why the rails rendered everything
+
+DRF's stock `PageNumberPagination` **ignores `page_size`**. Every screen asks
+for the number of rows it can show (`?page_size=4` for the lesson rail, `9` for
+the catalogue grid, `60` for the paper list) and always received the default 50,
+so the home rail listed all seven lessons and the courses grid requested nine
+and got six. `config/pagination.py` adds `StandardPagination`:
+`page_size_query_param = "page_size"`, `max_page_size = 100`, default 20.
+`courses/tests/test_pagination.py` pins it (4 tests).
+
+### A stale token broke public pages
+
+`request()` retried once with a refreshed token, but when the refresh failed it
+cleared storage and then returned the original 401 — so a visitor with an
+expired session saw "could not load" on pages that need no account at all
+(catalogue, tests, home). It now replays the request anonymously after clearing
+a dead session; a route that genuinely needs the account still answers 401 and
+the page asks the visitor to sign in.
+
+### Layout defects found by looking, not by asserting
+
+Screenshots at 1440px and 390px, plus a DOM probe for horizontal overflow:
+
+| Defect | Fix |
+|---|---|
+| Home "Announcements + Community" panel kept a two-column grid at 390px, pushing the document to 479px | `.split-grid` collapses at 900px |
+| Legal page's data table widened the document on a phone | `.table-wrap` is contained; the table scrolls inside it |
+| "Redeem access code" clipped its own label on a phone | `.btn` wraps its label under 560px; `.batch-actions` stacks |
+| Five-tab strips lost their last tab off-screen, then wrapped 3+2 | tabs become an auto-fit grid under 640px |
+| Profile menu rows centred their labels | the label span is selected by `:not(.menu-icon):not(.menu-chevron)` |
+| Downloads listed every lesson with "No video" | only lessons with a `video_url` are listed; the empty state explains why |
+| Player showed an empty video stage when no lesson was selected | the stage is hidden until a lesson resolves |
+
+### Verification
+
+Real Chromium (headless, `@sparticuz/chromium` + a locally built NSS), not jsdom:
+
+- `tools/checks` DOM suites: `check.js` 30/30, `interact.js` 80/80, `live.js` 58/58,
+  `a11y.js` and `css.js` clean
+- a browser script driving every page at 1440px and 390px: 41/41 —
+  dashboard figures from the API, note saved through `POST /api/notes/`, search
+  and sort and price filters, batch tabs, tests tabs, and a **guest** attempt
+  answered and submitted end to end
+- Django: **254 tests OK** (250 + 4 pagination)

@@ -294,6 +294,13 @@
 .btn-sm { min-height: 34px; padding: 0 var(--sp-4); font-size: var(--text-xs); border-radius: var(--r-sm); }
 .btn-sm svg { width: 15px; height: 15px; }
 .btn-lg { min-height: 50px; padding: 0 var(--sp-7); font-size: var(--text-md); border-radius: var(--r-lg); }
+
+/* A long label must wrap inside its button rather than spill out of it: the
+   hero action on a phone ("Redeem access code") was clipping its own text. */
+@media (max-width: 560px) {
+  .btn { white-space: normal; text-align: center; line-height: 1.2; }
+  .btn-lg { padding-inline: var(--sp-4); font-size: var(--text-sm); }
+}
 .btn-block { width: 100%; }
 
 .link {

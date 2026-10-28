@@ -9,7 +9,8 @@
  * `live.js` is the counterpart that uses the real server.
  */
 
-const now = new Date('2026-10-27T09:00:00+05:30');
+/** Attempt timestamps are relative to the run, so a stub never looks expired. */
+const iso = (offsetMs = 0) => new Date(Date.now() + offsetMs).toISOString();
 
 const COURSES = [
   {
@@ -319,8 +320,8 @@ function makeStub({ signedIn = false, empty = false } = {}) {
           id: 1,
           quiz: 5,
           status: 'in_progress',
-          started_at: '2026-10-27T09:00:00Z',
-          deadline: '2026-10-27T09:30:00Z',
+          started_at: iso(),
+          deadline: iso(30 * 60 * 1000),
           question_order: [1, 2, 3],
           rules_snapshot: { duration_minutes: 30, marks_per_question: '4.00' },
           ...(authed ? {} : { guest_token: 'stub-guest-token' })
@@ -338,8 +339,8 @@ function makeStub({ signedIn = false, empty = false } = {}) {
         id: 1,
         quiz: 5,
         status: 'in_progress',
-        started_at: '2026-10-27T09:00:00Z',
-        deadline: '2026-10-27T09:30:00Z',
+        started_at: iso(),
+        deadline: iso(30 * 60 * 1000),
         question_order: [1, 2, 3],
         rules_snapshot: { duration_minutes: 30 }
       });
@@ -369,4 +370,4 @@ function makeStub({ signedIn = false, empty = false } = {}) {
   };
 }
 
-module.exports = { makeStub, COURSES, LESSONS, QUIZZES, COMMUNITY, PDFS, ATTEMPTS, RESULT, now };
+module.exports = { makeStub, COURSES, LESSONS, QUIZZES, COMMUNITY, PDFS, ATTEMPTS, RESULT, iso };
