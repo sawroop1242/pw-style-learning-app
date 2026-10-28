@@ -1377,3 +1377,29 @@ body.is-paused .exam-layout { visibility: hidden; }
 
 /* Wider dialog for the read-only question paper */
 .modal-panel-lg { width: min(720px, 100%); }
+
+/* A single submitted paper is a figure, not a trend line. */
+.chart-single {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-5) 0 var(--sp-4);
+}
+
+.chart-single-score {
+  display: inline-block;
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.chart-single-body { display: grid; gap: 4px; min-width: 0; }
+.chart-single-body strong { font-size: var(--text-sm); }
+.chart-single-body small { font-size: var(--text-xs); color: var(--text-subtle); max-width: 46ch; }
+
+@media (max-width: 560px) {
+  .chart-single { flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
+  .chart-single-score { font-size: 34px; }
+}

@@ -219,20 +219,52 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
 
     check('figures come from the API counts', [...doc.querySelectorAll('.dash-figure strong')].map((n) => n.textContent.trim()).join(',') === '2,1,1,1', [...doc.querySelectorAll('.dash-figure strong')].map((n) => n.textContent.trim()).join(','));
     check('continue card from progress', doc.querySelectorAll('#continue-list .continue-card').length === 1);
-    check('score trend plotted', doc.querySelectorAll('#chart-bars .chart-bar').length === 1);
+
+    // One graded paper is a figure, not a one-bar chart: a 0%-height bar in a
+    // 140px panel reads as a broken chart.
+    const single = doc.querySelector('#chart-bars .chart-single .chart-single-score');
+    check('single result shown as a figure', Boolean(single) && single.textContent.trim() === '67%', single ? single.textContent.trim() : 'no .chart-single');
+    check('a lone attempt does not draw an empty chart', doc.querySelectorAll('#chart-bars .chart-bar').length === 0);
+
     check('notes listed', doc.querySelectorAll('#notes-list .note-preview').length === 1);
     check('study task listed', doc.querySelectorAll('#task-list .row-between').length === 1);
 
     click(window, doc.querySelector('[data-new-note]'));
     await wait(120);
     check('note modal opens', doc.querySelector('#note-modal').classList.contains('is-open'));
-    doc.querySelector('#note-heading').value = 'Kinematics',
+    doc.querySelector('#note-heading').value = 'Kinematics';
     doc.querySelector('#note-body').value = 'v = u + at';
     doc.querySelector('#note-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     await wait(400);
     check('note saved through the API is added', doc.querySelectorAll('#notes-list .note-preview').length === 2, String(doc.querySelectorAll('#notes-list .note-preview').length));
     check('modal closes after saving', !doc.querySelector('#note-modal').classList.contains('is-open'));
     check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    // Two graded papers is a trend: one bar each, the better one marked.
+    console.log('\ndashboard.html (two graded papers)');
+    const base = makeStub({ signedIn: true });
+    const twice = async (url, init) => {
+      const response = await base(url, init);
+      if (!/\/quiz-attempts\//.test(String(url))) return response;
+      const body = await response.clone().json();
+      if (!Array.isArray(body.results)) return response;
+      const graded = body.results.filter((row) => row.status !== 'in_progress');
+      if (!graded.length) return response;
+      const older = { ...graded[0], id: 99, score: '4.00', submitted_at: '2026-10-25T09:00:00Z' };
+      return new Response(JSON.stringify({ ...body, results: [older, ...body.results] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    const { doc } = await boot('dashboard.html', ['core', 'content', 'ui', 'dashboard'], { fetcher: twice, seedStorage: SIGNED_IN });
+
+    const bars = [...doc.querySelectorAll('#chart-bars .chart-bar')];
+    check('two papers draw two bars', bars.length === 2, String(bars.length));
+    check('a two-paper trend has no single figure', !doc.querySelector('#chart-bars .chart-single'));
+    check('the better bar is highlighted', doc.querySelectorAll('#chart-bars .bar.is-best').length === 1);
+    check('the legend counts both papers', /2 submitted papers/.test(doc.querySelector('#trend-note').textContent), doc.querySelector('#trend-note').textContent);
   }
 
   /* ----------------------------- community ------------------------------ */

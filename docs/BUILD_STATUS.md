@@ -1892,3 +1892,12 @@ Real Chromium (headless, `@sparticuz/chromium` + a locally built NSS), not jsdom
   and sort and price filters, batch tabs, tests tabs, and a **guest** attempt
   answered and submitted end to end
 - Django: **254 tests OK** (250 + 4 pagination)
+
+### A single submitted paper is not a trend
+
+With one graded attempt the dashboard drew a 0%-height bar inside a 140 px
+chart panel: a stray dash in an otherwise empty card, which reads as a chart
+that failed to load. One result now renders as a figure — the percentage, the
+paper's name, and a line saying each further attempt adds a bar. Two or more
+attempts still draw bars, with the best one marked. `interact.js` covers both
+cases (85 checks).
