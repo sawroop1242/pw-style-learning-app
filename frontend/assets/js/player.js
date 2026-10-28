@@ -1,119 +1,260 @@
 /**
- * Class player — a static, honest playback shell.
+ * Class player.
  *
- * There is no video endpoint in the API yet, so the stage is a still frame with
- * a real transport control that only moves the timestamp between the chapters
- * we know about. Nothing pretends to stream.
+ * Reads one lesson from `/lessons/<id>/`, the other lessons in the same
+ * section, the notes (PDFs) of that section and the batch announcements. A
+ * lesson without a `video_url` shows an explicit "no recording published"
+ * stage instead of a fake timestamp — the API is the only source of truth
+ * about whether a recording exists.
  */
 
-import { $, $$, esc, toast } from './core.js';
-import { mountChrome, icon } from './ui.js';
-import { PLAYER } from './data.js';
+import { $, $$, esc, getJson, rows, apiQuery, qsParam, initials, shortDate } from './core.js';
+import { mountChrome, icon, toast, emptyState, thumbTone } from './ui.js';
 
 mountChrome('');
 
-const STATE_ICON = { done: 'check', current: 'play', open: 'play', locked: 'lock' };
+const lessonId = qsParam('lesson') || qsParam('id');
 
-function renderChapters() {
-  $('#chapter-list').innerHTML = PLAYER.chapters
-    .map(
-      (chapter, i) => `
-      <div class="lesson-item ${chapter.state === 'current' ? 'is-current' : ''} ${chapter.state === 'done' ? 'is-done' : ''} ${chapter.state === 'locked' ? 'is-locked' : ''}">
-        <span class="lesson-num">${chapter.state === 'done' ? icon('check') : i + 1}</span>
-        <span class="lesson-main">
-          <strong>${esc(chapter.title)}</strong>
-          <small>${esc(chapter.duration)}</small>
-        </span>
-        <span class="lesson-state" aria-hidden="true">${icon(STATE_ICON[chapter.state] || 'play')}</span>
-      </div>`
-    )
-    .join('');
-}
+const STATE = { lesson: null, siblings: [], files: [], notices: [] };
 
-function renderNotes() {
-  $('#note-list').innerHTML = PLAYER.notes
-    .map(
-      (note) => `
-      <div class="note-row">
-        <span class="row-icon">${icon('note')}</span>
-        <span class="row-main"><strong>${esc(note.title)}</strong><small>${esc(note.meta)}</small></span>
-        <button class="icon-btn" type="button" aria-label="Download ${esc(note.title)}" data-download="${esc(note.title)}">${icon('download')}</button>
-      </div>`
-    )
-    .join('');
-}
-
-function renderDoubts() {
-  $('#doubt-list').innerHTML = PLAYER.doubts
-    .map(
-      (doubt) => `
-      <div class="doubt-row">
-        <span class="row-icon">${icon('message')}</span>
-        <span class="row-main"><strong>${esc(doubt.title)}</strong><small>${esc(doubt.by)} · ${esc(doubt.meta)}</small></span>
-      </div>`
-    )
-    .join('');
-}
-
-/* Tabs */
-const tabs = $$('.tabs .tab');
-tabs.forEach((tab, index) => {
-  tab.addEventListener('click', () => selectTab(index));
-});
-function selectTab(index) {
-  tabs.forEach((tab, i) => {
-    const selected = i === index;
-    tab.setAttribute('aria-selected', String(selected));
-    const panel = document.getElementById(tab.getAttribute('aria-controls'));
-    if (panel) panel.hidden = !selected;
+function renderTabs() {
+  const tabs = $$('.tabs .tab');
+  const select = (index) => {
+    tabs.forEach((tab, i) => {
+      const selected = i === index;
+      tab.setAttribute('aria-selected', String(selected));
+      const panel = document.getElementById(tab.getAttribute('aria-controls'));
+      if (panel) panel.hidden = !selected;
+    });
+  };
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => select(index));
+    tab.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      event.preventDefault();
+      const next = (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[next].focus();
+      select(next);
+    });
   });
 }
-$$('.tabs [role="tab"]').forEach((tab, i) => {
-  tab.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    e.preventDefault();
-    const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-    tabs[next].focus();
-    selectTab(next);
-  });
-});
 
-/* Transport — moves between chapters, nothing more */
-let cursor = PLAYER.chapters.findIndex((c) => c.state === 'current');
-const track = document.querySelector('[data-track]');
-const position = document.querySelector('[data-position]');
+function setStage(lesson) {
+  const stage = $('#player-stage');
+  const face = $('#stage-face');
+  const video = $('#player-video');
+  const empty = $('#stage-empty');
 
-function move(delta) {
-  const next = Math.min(PLAYER.chapters.length - 1, Math.max(0, cursor + delta));
-  if (next === cursor) {
-    toast(delta > 0 ? 'That is the last chapter in this class.' : 'This is the first chapter.', 'info');
+  if (lesson.video_url) {
+    video.src = lesson.video_url;
+    video.hidden = false;
+    empty.hidden = true;
+    stage.removeAttribute('role');
+    face.hidden = true;
+    video.addEventListener('error', () => {
+      video.hidden = true;
+      face.hidden = false;
+      empty.hidden = false;
+      empty.querySelector('strong').textContent = 'The recording could not be opened';
+      empty.querySelector('p').textContent = 'The video URL is set but the file did not load in this browser.';
+    });
     return;
   }
-  cursor = next;
-  const chapter = PLAYER.chapters[cursor];
-  position.textContent = ['12:34', '58:04', '1:00:15', '1:00:15'][cursor] || '00:00';
-  track.style.width = `${((cursor + 1) / PLAYER.chapters.length) * 100}%`;
-  if (chapter.state === 'locked') {
-    toast('This chapter unlocks when your institute releases it.', 'info', 5000);
+
+  video.hidden = true;
+  empty.hidden = false;
+  empty.querySelector('strong').textContent = lesson.is_locked
+    ? 'This lesson is locked'
+    : 'No recording published';
+  empty.querySelector('p').textContent = lesson.is_locked
+    ? 'Unlock the batch to watch the recording for this lesson.'
+    : 'This class has no video URL yet. The description and the section notes are still available.';
+  face.textContent = initials(lesson.course_title || 'SS');
+  face.hidden = false;
+}
+
+function renderHead(lesson) {
+  document.title = `${lesson.title} — StudySpace`;
+  $('#player-title').textContent = lesson.title;
+  $('#player-sub').textContent = [lesson.folder_title, lesson.course_title].filter(Boolean).join(' · ');
+  const brief = $('#player-brief');
+  brief.textContent = lesson.description || '';
+  brief.hidden = !lesson.description;
+
+  const stage = $('#player-stage');
+  stage.classList.add(thumbTone(lesson.course_title || ''));
+}
+
+function renderChapters(lesson) {
+  const host = $('#chapter-list');
+  const siblings = STATE.siblings;
+  if (!siblings.length) {
+    host.innerHTML = emptyState({
+      title: 'No other lessons in this section',
+      body: 'This is the only published lesson here right now.',
+      iconName: 'play'
+    });
+    return;
+  }
+
+  host.innerHTML = siblings
+    .map((row) => {
+      const current = String(row.id) === String(lesson.id);
+      const locked = row.is_locked || !row.video_url;
+      return `
+        <a class="lesson-item ${current ? 'is-current' : ''} ${locked && !current ? 'is-locked' : ''}"
+           href="player.html?lesson=${row.id}" ${current ? 'aria-current="page"' : ''}>
+          <span class="lesson-num">${current ? icon('play') : locked ? icon('lock') : icon('play')}</span>
+          <span class="lesson-main">
+            <strong>${esc(row.title)}</strong>
+            <small>${row.duration_minutes || 0} min${current ? ' · now playing' : ''}${locked && !current ? ' · no recording' : ''}</small>
+          </span>
+          <span class="lesson-state" aria-hidden="true">${icon(current ? 'check' : 'arrow-right')}</span>
+        </a>`;
+    })
+    .join('');
+
+  // Prev / next within the section, following the API order.
+  const index = siblings.findIndex((row) => String(row.id) === String(lesson.id));
+  const prev = siblings[index - 1];
+  const next = siblings[index + 1];
+  const prevLink = $('#prev-link');
+  const nextLink = $('#next-link');
+  if (prev) {
+    prevLink.hidden = false;
+    prevLink.href = `player.html?lesson=${prev.id}`;
+  }
+  if (next) {
+    nextLink.hidden = false;
+    nextLink.href = `player.html?lesson=${next.id}`;
   }
 }
 
-document.querySelector('[data-next]')?.addEventListener('click', () => move(1));
-document.querySelector('[data-prev]')?.addEventListener('click', () => move(-1));
-document.querySelector('[data-play]')?.addEventListener('click', (e) => {
-  e.currentTarget.innerHTML = icon('play');
-  toast('Streaming is not wired up in this build — the class list and notes are.', 'info', 5000);
-});
-document.querySelector('[data-bookmark]')?.addEventListener('click', (e) => {
-  const on = e.currentTarget.classList.toggle('is-on');
-  toast(on ? 'Saved to your bookmarks.' : 'Removed from your bookmarks.', 'success');
-});
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-download]');
-  if (!btn) return;
-  toast(`“${btn.dataset.download}” is available inside the batch downloads page.`, 'info', 4500);
+function renderNotes(lesson) {
+  const host = $('#note-list');
+  const files = STATE.files.filter((file) => !lesson.folder || String(file.folder) === String(lesson.folder));
+  if (!files.length) {
+    host.innerHTML = emptyState({
+      title: 'No notes for this section',
+      body: 'The faculty has not uploaded notes to this section yet.',
+      actionLabel: 'All downloads',
+      actionHref: 'downloads.html',
+      iconName: 'note'
+    });
+    return;
+  }
+  host.innerHTML = files
+    .map(
+      (file) => `
+      <div class="dl-row">
+        <span class="dl-thumb">${icon('note')}</span>
+        <span class="dl-main">
+          <strong>${esc(file.title)}</strong>
+          <small>${esc(file.description || 'PDF notes')}</small>
+        </span>
+        ${
+          file.file_url
+            ? `<a class="dl-action" href="${esc(file.file_url)}" target="_blank" rel="noopener" aria-label="Open ${esc(file.title)}">${icon('download')}</a>`
+            : '<span class="badge badge-outline">Locked</span>'
+        }
+      </div>`
+    )
+    .join('');
+}
+
+function renderNotices() {
+  const host = $('#notice-list');
+  if (!STATE.notices.length) {
+    host.innerHTML = emptyState({
+      title: 'No announcements yet',
+      body: 'Announcements from the faculty for this batch appear here.',
+      iconName: 'message'
+    });
+    return;
+  }
+  host.innerHTML = STATE.notices
+    .map(
+      (post) => `
+      <article class="notice-row">
+        <div class="row-between">
+          <strong>${esc(post.title)}</strong>
+          ${post.pinned ? '<span class="badge badge-live">Pinned</span>' : ''}
+        </div>
+        <p class="small muted" style="margin:6px 0 8px">${esc(post.body || '')}</p>
+        <span class="tiny subtle">${esc(post.author_name || 'Faculty')} · ${esc(shortDate(post.created_at))}</span>
+      </article>`
+    )
+    .join('');
+}
+
+async function load() {
+  if (!lessonId) {
+    $('#player-title').textContent = 'No lesson selected';
+    $('#player-sub').textContent = '';
+    $('#chapter-list').innerHTML = emptyState({
+      title: 'Pick a lesson',
+      body: 'Open a batch, choose a section and pick a lesson from there.',
+      actionLabel: 'Browse batches',
+      actionHref: 'courses.html',
+      iconName: 'play'
+    });
+    $('#stage-empty').hidden = false;
+    return;
+  }
+
+  let lesson;
+  try {
+    lesson = await getJson(`/lessons/${lessonId}/`);
+  } catch (err) {
+    $('#player-title').textContent = err.status === 404 ? 'Lesson not found' : 'This lesson could not be loaded';
+    $('#player-sub').textContent = '';
+    $('#stage-empty').hidden = false;
+    $('#chapter-list').innerHTML = emptyState({
+      title: err.status === 404 ? 'Lesson not found' : 'Lesson unavailable',
+      body: err.status === 404
+        ? 'It may have been unpublished, or it belongs to a batch you cannot open.'
+        : err.message || 'The server did not answer.',
+      actionLabel: 'Browse batches',
+      actionHref: 'courses.html',
+      iconName: 'alert'
+    });
+    return;
+  }
+
+  STATE.lesson = lesson;
+  renderHead(lesson);
+  setStage(lesson);
+
+  // The section's other lessons: same batch, then keep the section's own rows.
+  try {
+    const payload = await getJson(`/lessons/${apiQuery({ course: lesson.course, page_size: 60 })}`);
+    const all = rows(payload);
+    STATE.siblings = lesson.folder ? all.filter((row) => String(row.folder) === String(lesson.folder)) : all;
+  } catch {
+    STATE.siblings = [];
+  }
+  renderChapters(lesson);
+
+  try {
+    STATE.files = rows(await getJson(`/pdfs/${apiQuery({ course: lesson.course, page_size: 60 })}`));
+  } catch {
+    STATE.files = [];
+  }
+  renderNotes(lesson);
+
+  try {
+    STATE.notices = rows(await getJson(`/community/${apiQuery({ course: lesson.course, page_size: 10 })}`));
+  } catch {
+    STATE.notices = [];
+  }
+  renderNotices();
+}
+
+$('#player-video')?.addEventListener('play', () => {
+  // Nothing to fake: the element either has a source or it does not.
+  const video = $('#player-video');
+  if (!video.src) toast('No recording is attached to this lesson.', 'info');
 });
 
-renderChapters();
-renderNotes();
-renderDoubts();
+renderTabs();
+load();

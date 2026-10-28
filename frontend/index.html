@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0b16">
   <meta name="api-base" content="/api">
   <title>StudySpace — live batches, printed notes and exam-pattern tests</title>
-  <meta name="description" content="Structured live batches, chapter notes and exam-pattern mock tests with All-India rank feedback. JEE, NEET, UPSC, SSC and school boards.">
+  <meta name="description" content="Structured batches, chapter notes and exam-pattern mock tests scored on the server. JEE, NEET, UPSC, SSC and school boards.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -34,7 +34,7 @@
       <section class="welcome" aria-labelledby="welcome-title">
         <div>
           <h1 id="welcome-title">Hello, Student! <span aria-hidden="true">👋</span></h1>
-          <p>Let’s learn something new today. Your batch is two classes ahead of schedule.</p>
+          <p data-welcome-sub>Pick up a lesson, sit a mock test, or start a new batch.</p>
         </div>
         <a class="welcome-avatar" href="profile.html" aria-label="Open your profile" data-welcome-avatar>ST</a>
       </section>
@@ -67,7 +67,7 @@
           <a class="quick-tile" href="courses.html"><span class="quick-icon"><svg><use href="#i-book"/></svg></span><strong>Batches</strong></a>
           <a class="quick-tile" href="tests.html"><span class="quick-icon"><svg><use href="#i-file-text"/></svg></span><strong>Test Series</strong></a>
           <a class="quick-tile" href="downloads.html"><span class="quick-icon"><svg><use href="#i-download"/></svg></span><strong>Downloads</strong></a>
-          <a class="quick-tile" href="community.html"><span class="quick-icon"><svg><use href="#i-users"/></svg></span><strong>Community</strong></a>
+          <a class="quick-tile" href="community.html"><span class="quick-icon"><svg><use href="#i-users"/></svg></span><strong>Announcements</strong></a>
         </div>
       </section>
 
@@ -75,10 +75,10 @@
       <section class="section-tight" aria-labelledby="today-title">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Live schedule · IST</p>
-            <h2 class="section-title" id="today-title">Today’s Classes</h2>
+            <p class="eyebrow">Straight from the batch</p>
+            <h2 class="section-title" id="today-title">Latest lessons</h2>
           </div>
-          <a class="link" href="courses.html">View All <svg><use href="#i-arrow-right"/></svg></a>
+          <a class="link" href="courses.html">All batches <svg><use href="#i-arrow-right"/></svg></a>
         </div>
         <div class="today-grid" id="today-grid" aria-live="polite"></div>
       </section>
@@ -87,10 +87,10 @@
       <section class="section-tight" aria-labelledby="rec-title">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Most enrolled this week</p>
-            <h2 class="section-title" id="rec-title">Recommended Batches</h2>
+            <p class="eyebrow">Published right now</p>
+            <h2 class="section-title" id="rec-title">Batches to start with</h2>
           </div>
-          <a class="link" href="courses.html?sort=popular">See all <svg><use href="#i-arrow-right"/></svg></a>
+          <a class="link" href="courses.html">See all <svg><use href="#i-arrow-right"/></svg></a>
         </div>
         <div class="batch-grid" id="trending-grid" aria-live="polite"></div>
       </section>
@@ -99,8 +99,8 @@
       <section class="section-tight" aria-labelledby="tests-title">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Exam pattern · scored on submit</p>
-            <h2 class="section-title" id="tests-title">Free mock tests</h2>
+            <p class="eyebrow">Exam pattern · scored on the server</p>
+            <h2 class="section-title" id="tests-title">Mock tests</h2>
           </div>
           <a class="link" href="tests.html">All tests <svg><use href="#i-arrow-right"/></svg></a>
         </div>
@@ -121,16 +121,16 @@
           <div class="panel" id="community">
             <div class="panel-head">
               <h2 class="panel-title">Community</h2>
-              <span class="badge badge-paid">Inside every batch</span>
+              <span class="badge badge-paid">From your faculty</span>
             </div>
             <p class="panel-lead">
-              Ask a doubt under the exact lesson that raised it. Faculty replies land in the same
-              thread, so the answer stays next to the chapter for everyone who follows.
+              Announcements from your faculty live here — schedule changes, new papers and
+              batch notices, published straight from the admin.
             </p>
             <ul class="feature-list">
-              <li><svg><use href="#i-message"/></svg><span>Threaded doubts on any lesson or question</span></li>
-              <li><svg><use href="#i-users"/></svg><span>Batch announcements from your faculty</span></li>
-              <li><svg><use href="#i-trophy"/></svg><span>Rank, percentile and accuracy after every test</span></li>
+              <li><svg><use href="#i-bell"/></svg><span>Batch announcements, pinned notices first</span></li>
+              <li><svg><use href="#i-book"/></svg><span>Lessons and notes in the same account</span></li>
+              <li><svg><use href="#i-target"/></svg><span>Every test scored on the server, with a full review</span></li>
             </ul>
             <a class="btn btn-primary" href="community.html">Open community <svg><use href="#i-arrow-right"/></svg></a>
           </div>
@@ -163,8 +163,6 @@
       </section>
     </div>
   </main>
-
-  <div id="site-footer"></div>
   <div id="site-tabbar"></div>
 
   <script type="module" src="assets/js/home.js"></script>

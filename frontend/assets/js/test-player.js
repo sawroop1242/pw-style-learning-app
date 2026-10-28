@@ -1,16 +1,18 @@
 /**
  * Exam window.
  *
- * Flow: instructions → test window → answer sheet. It speaks to the Django
- * test-series API when one is reachable (`/quizzes/start/`, autosave, submit,
- * result) and falls back to the bundled sample paper when it is not, so the
- * page is demonstrable without a backend. Every attempt is also mirrored to
- * sessionStorage, so a refresh never loses answers.
+ * Flow: instructions → test window → answer sheet. The paper comes from the
+ * API and the attempt is created on the server, so this page has no sample
+ * paper to fall back to — if the paper cannot be loaded it says so.
+ *
+ * An anonymous visitor can sit an open paper: `/quizzes/start/` returns a
+ * `guest_token` once, which is kept on this device and sent back as
+ * `X-Attempt-Token` for autosave, submit and the result. Signing in is never
+ * required to attempt a test.
  */
 
-import { $, $$, esc, mmss, qsParam, clamp, storage, request, isSignedIn } from './core.js';
+import { $, $$, esc, qsParam, clamp, storage, request, isSignedIn } from './core.js';
 import { mountSprite, icon, toast } from './ui.js';
-import { EXAM_QUESTIONS, TESTS } from './data.js';
 
 mountSprite();
 
@@ -22,12 +24,12 @@ const SAVE_KEY_NOTE = 'Saved just now';
 /* ------------------------------------------------------------------ */
 
 const requestedTest = qsParam('test');
-const fixtureTest = TESTS.find((t) => String(t.id) === String(requestedTest)) || TESTS[0] || null;
+const requestedAttempt = qsParam('attempt');
 
 const state = {
   mode: 'intro',            // intro | exam | result
-  live: false,              // true when the API supplied the paper
-  testId: requestedTest || fixtureTest?.id || null,   // identity for saved attempts and reloads
+  ready: false,             // true once the API supplied the paper
+  testId: requestedTest || null,          // identity for saved attempts and reloads
   apiId: /^\d+$/.test(requestedTest || '') ? requestedTest : null,   // only a numeric id can be a live quiz
   test: null,               // { id, title, exam, kind, duration, instructions }
   questions: [],            // normalised questions
@@ -37,11 +39,13 @@ const state = {
   visited: new Set(),
   current: 0,
   attemptId: null,
+  guestToken: null,         // issued once by /quizzes/start/ for a guest attempt
   deadline: null,           // epoch ms
   startedAt: null,
   durationMinutes: 180,
   submitted: false,
   result: null,
+  loadError: null,
   released: true,
   paused: false,
   pauseStartedAt: null,
@@ -96,44 +100,20 @@ function minDuration(value) {
 /* Paper sources                                                      */
 /* ------------------------------------------------------------------ */
 
-function fixturePaper() {
-  const rows = EXAM_QUESTIONS.map((q) => ({
-    id: q.id,
-    section: q.section || 'Questions',
-    prompt: q.prompt,
-    options: q.options.map((text, i) => ({ id: i, text })),
-    marks: Number(q.marks ?? 4),
-    negative: Number(q.negative ?? 1),
-    type: q.type || 'single',
-    answerIndex: q.answer,
-    explanation: q.explanation || '',
-    comprehension: q.comprehension || null
-  }));
-
+function apiQuestion(question, quiz) {
+  // A paper sets marks per question as a default; a single question may
+  // override it. Both arrive as decimal strings, so parse before formatting.
+  const marks = question.marks ?? quiz.marks_per_question ?? 0;
+  const negative = question.negative_marks ?? quiz.negative_marks_per_wrong ?? 0;
   return {
-    test: {
-      id: fixtureTest?.id ?? 1,
-      title: fixtureTest?.title || 'Practice question paper',
-      exam: fixtureTest?.exam || 'StudySpace',
-      kind: fixtureTest?.kind || 'Practice',
-      duration: minDuration(fixtureTest?.duration),
-      instructions: ''
-    },
-    questions: rows
-  };
-}
-
-function apiQuestion(q) {
-  return {
-    id: q.id,
-    section: q.topic || 'All questions',
-    prompt: q.prompt,
-    options: (q.choices || []).map((c) => ({ id: c.id, text: c.text })),
-    marks: Number(q.marks ?? 4),
-    negative: Number(q.negative_marks ?? 1),
-    type: q.question_type || 'single',
-    answerIndex: null,
-    explanation: ''
+    id: question.id,
+    section: question.topic || 'All questions',
+    prompt: question.prompt,
+    options: (question.choices || []).map((choice) => ({ id: choice.id, text: choice.text })),
+    marks: Number(marks),
+    negative: Number(negative),
+    type: question.question_type || 'single_choice',
+    explanation: question.explanation || ''
   };
 }
 
@@ -222,49 +202,139 @@ function applySaved(saved) {
 /* ------------------------------------------------------------------ */
 
 async function loadPaper() {
-  const fallback = fixturePaper();
-  state.test = fallback.test;
-  state.questions = fallback.questions;
-  state.durationMinutes = fallback.test.duration;
-  state.live = false;
+  const intro = $('#intro-view');
 
-  if (!state.apiId) return;
+  if (!requestedTest) {
+    showPaperProblem({
+      title: 'No test selected',
+      body: 'Open the test series and pick a paper to attempt.',
+      actionLabel: 'Browse tests',
+      actionHref: 'tests.html'
+    });
+    return;
+  }
 
   try {
-    const quiz = await request(`/quizzes/${state.apiId}/`, { timeout: 2500 });
-    if (!quiz || !Array.isArray(quiz.questions) || !quiz.questions.length) return;
-
-    // Labels come from the payload; the fixture paper is only the shape.
-    const examLabel = quiz.series_subject || quiz.course_subject || fallback.test.exam;
-    const seriesLabel = quiz.series_title || (quiz.timing_mode === 'untimed' ? 'Practice' : 'Timed mock');
+    const quiz = await request(`/quizzes/${requestedTest}/`);
 
     if (quiz.has_access === false) {
-      state.test = {
-        ...fallback.test,
-        title: quiz.title || fallback.test.title,
-        exam: examLabel,
-        kind: 'Locked',
-        duration: minDuration(quiz.duration_minutes || fallback.test.duration)
-      };
-      state.questions = [];
-      state.locked = true;
+      showPaperProblem({
+        title: 'This paper is part of a paid batch',
+        body: 'Redeem an access code on the batch page to unlock it. Nothing is charged here.',
+        actionLabel: 'Open the batch',
+        actionHref: quiz.course_slug ? `course.html?slug=${encodeURIComponent(quiz.course_slug)}` : 'courses.html'
+      });
       return;
     }
 
-    state.live = true;
+    if (!Array.isArray(quiz.questions) || !quiz.questions.length) {
+      showPaperProblem({
+        title: 'This paper has no published questions',
+        body: 'The paper exists but its questions are not published yet.',
+        actionLabel: 'Other tests',
+        actionHref: 'tests.html'
+      });
+      return;
+    }
+
+    state.ready = true;
     state.test = {
       id: quiz.id,
-      title: quiz.title || fallback.test.title,
-      exam: examLabel,
-      kind: seriesLabel,
-      duration: minDuration(quiz.duration_minutes || fallback.test.duration),
+      title: quiz.title || 'Untitled paper',
+      exam: quiz.series_subject || quiz.course_subject || 'General',
+      kind: quiz.timing_mode === 'untimed' ? 'Practice' : 'Timed mock',
+      duration: minDuration(quiz.duration_minutes),
       instructions: quiz.instructions || ''
     };
     state.durationMinutes = state.test.duration;
-    state.questions = quiz.questions.map(apiQuestion);
-  } catch {
-    /* no API, or no access token — the sample paper stands in */
+    state.questions = quiz.questions.map((question) => apiQuestion(question, quiz));
+    state.marksPerQuestion = Number(quiz.marks_per_question ?? 0);
+    state.negativeMarks = Number(quiz.negative_marks_per_wrong ?? 0);
+    state.test.exam = quiz.series_subject || quiz.course_subject || 'General';
+
+    if (requestedAttempt) await resumeAttempt(requestedAttempt);
+    else renderIntro();
+  } catch (err) {
+    showPaperProblem({
+      title: err.status === 404 ? 'Paper not found' : 'The paper could not be loaded',
+      body:
+        err.status === 404
+          ? 'This test does not exist or is no longer published.'
+          : err.message || 'The server did not answer.',
+      actionLabel: 'All tests',
+      actionHref: 'tests.html'
+    });
   }
+}
+
+/** Deep link from "My attempts": continue an in-progress attempt. */
+async function resumeAttempt(attemptId) {
+  try {
+    const attempt = await request(`/quiz-attempts/${attemptId}/`, {
+      guestToken: storage.guestToken
+    });
+    if (attempt.status !== 'in_progress') {
+      await showReleasedResult(attemptId);
+      return;
+    }
+    state.attemptId = attempt.id;
+    state.deadline = attempt.deadline ? Date.parse(attempt.deadline) : null;
+    state.startedAt = attempt.started_at ? Date.parse(attempt.started_at) : Date.now();
+    if (Array.isArray(attempt.question_order) && attempt.question_order.length) {
+      state.questions = orderQuestions(state.questions, attempt.question_order);
+    }
+    if (attempt.rules_snapshot?.duration_minutes) {
+      state.durationMinutes = minDuration(attempt.rules_snapshot.duration_minutes);
+    }
+    renderIntro();
+    toast('Resumed your attempt.', 'info');
+  } catch {
+    renderIntro();
+  }
+}
+
+/** A released result can be reopened from the attempts list. */
+async function showReleasedResult(attemptId) {
+  try {
+    const result = await request(`/quiz-attempts/${attemptId}/result/`, {
+      guestToken: storage.guestToken
+    });
+    state.submitted = true;
+    state.result = normaliseServerResult(result);
+    renderResult(false);
+  } catch (err) {
+    showPaperProblem({
+      title: 'Result not available',
+      body: err.status === 403 ? 'The result for this paper has not been released yet.' : err.message,
+      actionLabel: 'My attempts',
+      actionHref: 'tests.html#attempted'
+    });
+  }
+}
+
+function showPaperProblem({ title, body, actionLabel, actionHref }) {
+  const host = $('#intro-view');
+  host.hidden = false;
+  const target = $('#intro-note') || host;
+  target.hidden = false;
+  target.className = 'intro-note is-warning';
+  target.innerHTML = `
+    <div class="empty-state is-error" role="alert">
+      ${icon('alert')}
+      <h3>${esc(title)}</h3>
+      <p>${esc(body || '')}</p>
+      ${actionHref ? `<a class="btn btn-primary" href="${esc(actionHref)}">${esc(actionLabel || 'Continue')}</a>` : ''}
+    </div>`;
+  const start = $('#start-btn');
+  if (start) {
+    start.disabled = true;
+    start.hidden = true;
+  }
+  setText('#intro-title', title);
+  setText('#intro-sub', '');
+  setText('#intro-count', '—');
+  setText('#intro-time', '—');
+  setText('#intro-marks', '—');
 }
 
 /* ------------------------------------------------------------------ */
@@ -283,19 +353,31 @@ function renderIntro() {
   setText('#intro-marks', total);
   setText('#intro-marking', negatives.length ? `+${marks} · −${negatives[0]}` : `+${marks} · no negative marking`);
 
+  // Faculty instructions replace the generic list when the paper carries any.
+  const list = $('#intro-list');
+  if (list && state.test.instructions) {
+    list.innerHTML = String(state.test.instructions)
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => `<li>${esc(line.replace(/^[-*\d.\s]+/, ''))}</li>`)
+      .join('');
+  }
+
   const note = $('#intro-note');
-  if (state.locked) {
+  if (state.attemptId && state.deadline) {
+    const left = Math.max(0, Math.round((state.deadline - Date.now()) / 60000));
     note.hidden = false;
-    note.className = 'intro-note is-warning';
-    note.innerHTML = `${icon('lock')}<span>This test is part of a paid batch. <a class="link" href="courses.html">Browse batches</a> or redeem an access code on the batch page.</span>`;
-  } else if (state.live && !isSignedIn()) {
-    note.hidden = false;
-    note.className = 'intro-note is-warning';
-    note.innerHTML = `${icon('info')}<span>Sign in to start the test so the attempt is scored on the server. <a class="link" href="login.html?next=test-player.html%3Ftest%3D${state.testId}">Sign in</a></span>`;
+    note.className = 'intro-note';
+    note.innerHTML = `${icon('clock')}<span>This attempt is already running on the server — about ${left} minute${left === 1 ? '' : 's'} left. Starting continues where you stopped.</span>`;
   } else if (readSaved()) {
     note.hidden = false;
     note.className = 'intro-note';
     note.innerHTML = `${icon('refresh')}<span>You have an attempt in progress on this device. Starting resumes it with the time you have left.</span>`;
+  } else if (!isSignedIn()) {
+    note.hidden = false;
+    note.className = 'intro-note';
+    note.innerHTML = `${icon('info')}<span>You can attempt this paper without an account. Signing in keeps the attempt in your history. <a class="link" href="login.html?next=test-player.html%3Ftest%3D${state.testId}">Sign in</a></span>`;
   } else {
     note.hidden = true;
   }
@@ -307,9 +389,9 @@ function updateStartState() {
   const start = $('#start-btn');
   if (!start) return;
   const agree = $('#agree')?.checked ?? false;
-  const mustSignIn = state.live && !isSignedIn();
-  start.disabled = !agree || Boolean(state.locked) || mustSignIn;
-  start.textContent = readSaved() ? 'Resume test' : 'Start test';
+  start.disabled = !agree || !state.ready;
+  start.hidden = !state.ready;
+  start.textContent = readSaved() || state.attemptId ? 'Resume test' : 'Start test';
 }
 
 $('#agree').addEventListener('change', updateStartState);
@@ -319,37 +401,48 @@ $('#agree').addEventListener('change', updateStartState);
 /* ------------------------------------------------------------------ */
 
 async function startTest() {
+  // The attempt exists on the server or it does not exist at all: starting
+  // means asking the API to create (or resume) it and taking the deadline and
+  // question order the server hands back.
   const saved = readSaved();
 
-  if (saved) {
+  if (saved && state.attemptId) {
     applySaved(saved);
     enterExam();
     toast('Resumed your attempt.', 'info');
     return;
   }
 
-  state.startedAt = Date.now();
-  state.deadline = state.startedAt + state.durationMinutes * 60000;
+  try {
+    const attempt = await request('/quizzes/start/', {
+      method: 'POST',
+      body: { quiz_id: state.test.id },
+      // A token from an earlier visit resumes that attempt instead of opening
+      // a second one, and is how a guest keeps ownership of the paper.
+      guestToken: isSignedIn() ? undefined : storage.guestToken
+    });
 
-  if (state.live && isSignedIn()) {
-    try {
-      const attempt = await request('/quizzes/start/', {
-        method: 'POST',
-        body: { quiz_id: state.test.id }
-      });
-      state.attemptId = attempt.id;
-      if (attempt.deadline) state.deadline = Date.parse(attempt.deadline);
-      if (Array.isArray(attempt.question_order)) {
-        state.questions = orderQuestions(state.questions, attempt.question_order);
-      }
-    } catch (err) {
-      if (err.status === 401 || err.status === 403) {
-        toast('Sign in again to start a server-scored attempt.', 'error');
-        updateStartState();
-        return;
-      }
-      toast('The server did not answer; this attempt is scored on this device.', 'info', 5000);
+    state.attemptId = attempt.id;
+    if (!isSignedIn() && attempt.guest_token) storage.guestToken = attempt.guest_token;
+    state.guestToken = isSignedIn() ? null : storage.guestToken;
+
+    state.startedAt = attempt.started_at ? Date.parse(attempt.started_at) : Date.now();
+    state.deadline = attempt.deadline
+      ? Date.parse(attempt.deadline)
+      : state.startedAt + state.durationMinutes * 60000;
+    if (Array.isArray(attempt.question_order) && attempt.question_order.length) {
+      state.questions = orderQuestions(state.questions, attempt.question_order);
     }
+  } catch (err) {
+    if (err.status === 403) {
+      toast('This paper is part of a paid batch. Redeem an access code on the batch page.', 'error', 6000);
+    } else if (err.status === 400) {
+      toast(err.message || 'This paper cannot be started right now.', 'error', 6000);
+    } else {
+      toast('The server did not answer. Nothing was started — try again.', 'error', 6000);
+    }
+    updateStartState();
+    return;
   }
 
   enterExam();
@@ -370,9 +463,9 @@ function enterExam() {
 
   setText('#exam-name', state.test.title);
   setText('#exam-sub', `${state.test.exam} · ${state.test.kind}`);
-  $('#attempt-badge').textContent = state.live ? 'Server-scored' : 'Sample paper';
+  $('#attempt-badge').textContent = 'Server-scored';
 
-  const name = storage.user?.username || 'Guest candidate';
+  const name = storage.user?.username || 'Guest';
   setText('#candidate-name', name);
   setText('#candidate-avatar', name.slice(0, 2).toUpperCase());
 
@@ -764,8 +857,8 @@ function saveAnswer(questionId) {
     if (!q) return;
     const choice = state.answers.get(q.id);
 
-    if (!state.live || !state.attemptId) {
-      setSaveState(state.live ? SAVE_KEY_NOTE : 'Saved on this device');
+    if (!state.attemptId) {
+      setSaveState('Not started');
       return;
     }
 
@@ -777,13 +870,14 @@ function saveAnswer(questionId) {
             question_id: q.id,
             choice_ids: choice === undefined ? [] : [choice],
             marked_for_review: state.marked.has(q.id)
-          }
+          },
+          guestToken: state.guestToken || undefined
         })
       )
       .then(() => setSaveState(SAVE_KEY_NOTE))
       .catch((err) => {
         setSaveState('Saved on this device', 'warn');
-        if (err.status === 401) toast('Your session expired. Answers are kept on this device.', 'error', 5000);
+        if (err.status === 404) toast('This attempt is no longer available on the server.', 'error', 5000);
       });
   }, 450);
 }
@@ -1056,26 +1150,35 @@ async function submitAttempt(auto) {
   }));
 
   let serverResult = null;
-  let releaseNote = false;
 
-  if (state.live && state.attemptId && isSignedIn()) {
+  if (state.attemptId) {
     try {
       serverResult = await request(`/quiz-attempts/${state.attemptId}/submit/`, {
         method: 'POST',
-        body: { answers }
+        body: { answers },
+        guestToken: state.guestToken || undefined
       });
       state.released = Boolean(serverResult?.answers_detail);
     } catch (err) {
-      if (err.status === 403) {
-        releaseNote = true;
-      } else {
-        toast('Could not submit to the server. This result is scored on this device.', 'error', 6000);
-      }
+      toast(
+        err.status === 404
+          ? 'This attempt is no longer on the server. Nothing was saved — reload the paper.'
+          : 'The submission did not reach the server. Your answers are still on this device.',
+        'error',
+        6000
+      );
+      state.submitted = false;
+      setSaveState('Not submitted', 'warn');
+      return;
     }
+  } else {
+    toast('There is no server attempt for this paper, so it cannot be scored.', 'error', 6000);
+    state.submitted = false;
+    return;
   }
 
-  state.result = serverResult ? normaliseServerResult(serverResult) : gradeLocally();
-  state.result.releaseNote = releaseNote || (state.live && !state.released);
+  state.result = normaliseServerResult(serverResult);
+  state.result.releaseNote = !state.released;
 
   renderResult(auto);
 }
@@ -1115,66 +1218,6 @@ function normaliseServerResult(payload) {
   };
 }
 
-function gradeLocally() {
-  let score = 0;
-  let correct = 0;
-  let incorrect = 0;
-  let unattempted = 0;
-
-  const buckets = new Map(state.sections.map((s) => [s.name, { correct: 0, incorrect: 0, unanswered: 0, scored: 0, max: 0 }]));
-  const solutions = [];
-
-  for (const q of state.questions) {
-    const bucket = buckets.get(q.section);
-    bucket.max += q.marks;
-
-    const chosen = state.answers.get(q.id);
-    const isCorrect = chosen !== undefined && chosen === q.answerIndex;
-
-    if (chosen === undefined) {
-      unattempted += 1;
-      bucket.unanswered += 1;
-    } else if (isCorrect) {
-      correct += 1;
-      score += q.marks;
-      bucket.correct += 1;
-      bucket.scored += q.marks;
-    } else {
-      incorrect += 1;
-      score -= q.negative;
-      bucket.incorrect += 1;
-      bucket.scored -= q.negative;
-    }
-
-    solutions.push({
-      question: q,
-      selected: chosen === undefined ? [] : [chosen],
-      correctChoices: [q.answerIndex],
-      correct: isCorrect,
-      answered: chosen !== undefined,
-      explanation: q.explanation
-    });
-  }
-
-  const max = [...buckets.values()].reduce((sum, b) => sum + b.max, 0);
-  const attempted = correct + incorrect;
-
-  return {
-    score: Math.round(Math.max(0, score) * 100) / 100,
-    max,
-    percentage: max ? Math.round((Math.max(0, score) / max) * 1000) / 10 : 0,
-    correct,
-    incorrect,
-    unattempted,
-    marked: state.marked.size,
-    timeTaken: Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000)),
-    passed: null,
-    bySection: [...buckets.entries()].map(([name, b]) => ({ name, ...b })),
-    solutions,
-    accuracy: attempted ? Math.round((correct / attempted) * 100) : 0
-  };
-}
-
 /* ------------------------------------------------------------------ */
 /* Result                                                             */
 /* ------------------------------------------------------------------ */
@@ -1193,9 +1236,13 @@ function renderResult(auto) {
   const accuracy = r.accuracy ?? (r.correct + r.incorrect ? Math.round((r.correct / (r.correct + r.incorrect)) * 100) : 0);
   const attempted = r.correct + r.incorrect;
 
-  $('#result-sub').textContent = auto
-    ? 'Time ran out, so the test was submitted automatically. Review every question below.'
-    : 'Every question is reviewed below, with the correct option and a worked explanation.';
+  $('#result-sub').textContent = !state.released
+    ? auto
+      ? 'Time ran out, so the paper was submitted automatically. The score above is final; solutions appear when the paper is released.'
+      : 'Your paper was scored on the server. Solutions appear here once the paper is released.'
+    : auto
+      ? 'Time ran out, so the paper was submitted automatically. Every question is reviewed below.'
+      : 'Every question is reviewed below, with the correct option and the explanation from the paper.';
 
   $('#result-hero').innerHTML = `
     <div class="result-score">
@@ -1221,7 +1268,9 @@ function renderResult(auto) {
     )
     .join('');
 
-  $('#section-breakdown').innerHTML = r.bySection
+  $('#section-breakdown').innerHTML = !r.bySection.length
+    ? `<p class="small muted" style="margin:0">Section-wise detail is published with the solutions.</p>`
+    : r.bySection
     .map((row) => {
       const pct = row.max ? clamp((row.scored / row.max) * 100, 0, 100) : 0;
       return `
@@ -1235,13 +1284,6 @@ function renderResult(auto) {
         </div>`;
     })
     .join('');
-
-  if (r.releaseNote) {
-    const note = document.createElement('p');
-    note.className = 'result-note';
-    note.innerHTML = `${icon('info')} Detailed solutions for this test are released after the window closes.`;
-    $('#solutions').before(note);
-  }
 
   renderSolutions();
   $('#result-view').scrollIntoView({ block: 'start' });
@@ -1258,10 +1300,16 @@ function renderSolutions() {
   });
 
   if (!rows.length) {
-    host.innerHTML = `<div class="empty-state" style="padding:24px">
+    host.innerHTML = state.released
+      ? `<div class="empty-state" style="padding:24px">
       ${icon('check-circle')}
       <h3>Nothing to review here</h3>
       <p>Choose another filter to see the rest of the paper.</p>
+    </div>`
+      : `<div class="empty-state" style="padding:24px">
+      ${icon('lock')}
+      <h3>Solutions are not released yet</h3>
+      <p>The paper owner publishes the correct options after the window closes.</p>
     </div>`;
     return;
   }
@@ -1353,12 +1401,11 @@ $('#paper-list')?.addEventListener('click', (e) => {
 
 (async function boot() {
   await loadPaper();
+  if (!state.ready) return;      // loadPaper already rendered the reason
 
-  if (state.questions.length) {
-    const saved = readSaved();
-    if (saved) state.questions = orderQuestions(state.questions, saved.questionIds);
-    state.sections = groupSections(state.questions);
-  }
+  const saved = readSaved();
+  if (saved) state.questions = orderQuestions(state.questions, saved.questionIds);
+  state.sections = groupSections(state.questions);
 
   renderIntro();
 })();

@@ -1,17 +1,16 @@
 /**
  * Account entry: sign in, create an account, and the email-code password reset.
  *
- * Every request matches the Django API contract exactly. When the API is not
- * running (the static preview) a clearly-labelled local demo session is used
- * instead, so the page is still demonstrable without pretending to be live.
+ * Every request matches the Django API contract exactly, and there is no local
+ * fallback: a session only exists once the API has issued a token. When the API
+ * cannot be reached the form says so and leaves the visitor signed out, because
+ * a fake session would make every later page fail with a 401 anyway.
  */
 
 import { $, esc, auth, storage, request, isUnreachable } from './core.js';
 import { mountSprite, toast } from './ui.js';
 
 mountSprite();
-
-const DEMO_USER = 'aarav.gupta';
 
 /* ------------------------------------------------------------------ */
 /* Views                                                              */
@@ -237,14 +236,6 @@ function goNext() {
   location.href = safe ? next : 'dashboard.html';
 }
 
-function demoSession(name) {
-  storage.session = {
-    access: 'demo-access-token',
-    refresh: 'demo-refresh-token',
-    user: { username: name, email: `${name}@example.com`, demo: true }
-  };
-}
-
 /* ------------------------------------------------------------------ */
 /* Sign in                                                            */
 /* ------------------------------------------------------------------ */
@@ -278,10 +269,7 @@ $('#form-signin').addEventListener('submit', async (e) => {
     setTimeout(goNext, 350);
   } catch (err) {
     if (isUnreachable(err)) {
-      demoSession(identifier);
-      renderAccount();
-      toast('Preview mode: no API behind this page, so you are signed in with a local demo session.', 'info', 6000);
-      setTimeout(goNext, 700);
+      formAlert(form, 'The server did not answer. Check your connection and try again.');
     } else if (err.status === 400 || err.status === 401) {
       formAlert(form, 'That username or password did not match an account.');
       fieldError('signin-password', 'Check your password and try again.');
@@ -369,10 +357,7 @@ $('#form-signup').addEventListener('submit', async (e) => {
     setTimeout(goNext, 400);
   } catch (err) {
     if (isUnreachable(err)) {
-      demoSession(username);
-      renderAccount();
-      toast('Preview mode: no API behind this page, so a local demo account was created.', 'info', 6000);
-      setTimeout(goNext, 700);
+      formAlert(form, 'The server did not answer. Your account was not created — try again.');
     } else {
       applyServerErrors(form, err, {
         username: 'signup-username',
@@ -558,21 +543,18 @@ document.addEventListener('click', async (e) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Demo & signed-in account panel                                     */
+/* Signed-in account panel                                            */
 /* ------------------------------------------------------------------ */
 
 function renderAccount() {
   const signedIn = Boolean(storage.access);
-  const demo = Boolean(storage.user?.demo);
   const panel = $('#account-panel');
-  const banner = $('#session-banner');
   const tabs = $('#auth-tabs');
   const passwordForm = $('#form-change-password');
   const passwordToggle = $('#toggle-password-form');
 
   if (!signedIn) {
     panel.hidden = true;
-    if (banner) banner.hidden = true;
     passwordForm?.reset();
     passwordForm.hidden = true;
     passwordToggle.hidden = false;
@@ -591,32 +573,15 @@ function renderAccount() {
   tabs.hidden = true;
   panel.hidden = false;
   passwordForm.hidden = true;
-  passwordToggle.hidden = demo;
+  passwordToggle.hidden = false;
   passwordToggle.setAttribute('aria-expanded', 'false');
 
   $('#auth-title').textContent = 'Your account';
-  $('#auth-sub').textContent = demo
-    ? 'Preview demo session — nothing is stored on a server.'
-    : 'Signed in on this device.';
+  $('#auth-sub').textContent = 'Signed in on this device.';
   $('#account-name').textContent = storage.user?.username || 'Student';
   $('#account-email').textContent = storage.user?.email || '—';
-  $('#account-demo-note').hidden = !demo;
   document.title = 'Your account — StudySpace';
-
-  if (banner) {
-    banner.hidden = !demo;
-    if (demo) {
-      banner.innerHTML = '<span>Demo session: sign-in worked locally, not on the API.</span>';
-    }
-  }
 }
-
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('[data-demo-login]')) return;
-  demoSession(DEMO_USER);
-  renderAccount();
-  toast('Signed in with the demo account.', 'success');
-});
 
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#toggle-password-form')) return;

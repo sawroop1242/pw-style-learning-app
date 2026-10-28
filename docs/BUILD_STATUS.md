@@ -1779,3 +1779,51 @@ probed paths.
 `all_except_custom_domains`. Per-deployment URLs and the branch alias are behind
 Vercel Authentication and show a Vercel login to anonymous browsers. Share the
 production alias, not a deployment URL.
+
+---
+
+## Run 17 — the front end reads the database
+
+The site shipped as fourteen pages of markup plus a 961-line fixture module
+(`frontend/assets/js/data.js`). Every screen rendered those fixtures; when the
+API answered, the fixtures were still what the visitor saw. That is now gone.
+
+### What changed
+
+| Area | Change |
+|---|---|
+| `data.js` | **deleted.** Copy that is genuinely editorial (FAQ answers, profile menu, how-it-works steps) moved to `assets/js/content.js` |
+| `core.js` | no fixture fallback: `getJson()` throws, callers render an error state with a retry. New `rows()`/`apiQuery()` helpers; `storage.guestToken` for anonymous attempts; `request()` sends `X-Attempt-Token` |
+| `home.js` | lessons `/lessons/`, batches `/courses/`, papers `/quizzes/`, notices `/community/` |
+| `courses.html` | server filters (`search`, `subject`, `pricing_mode`, `mine`, `ordering`, `page`), facets built from the returned rows, `My batches` = `?mine=1` |
+| `course.js` | `?slug=` resolves the batch, detail brings folders/lessons/PDFs, tests come from `/quizzes/?course=` |
+| `tests.html` | `/quizzes/` + `/quiz-attempts/`; tabs All / Attempted / Open for you |
+| `test-player.js` | paper from `/quizzes/<id>/`, attempt from `/quizzes/start/`, autosave and submit with `X-Attempt-Token` for guests. **No client answer key, so no local scoring** |
+| `dashboard.js` | `/courses/?mine=1`, `/progress/`, `/quiz-attempts/`, `/quizzes/`, `/notes/`, `/study-tasks/`; a guest is asked to sign in instead of shown someone else's numbers |
+| `downloads.js` | lessons, `/pdfs/` and papers the account can open |
+| `community.html` | announcements only — `/community/` is read-only, so the like/reply/compose controls are gone |
+| `profile.js` | `/auth/me/`, with counts from the API |
+| `player.js` | `/lessons/<id>/`; a lesson with no `video_url` says "no recording published" instead of showing a fake timestamp |
+| `ui.js` | removed the footer renderer (the footer stays deleted) and the "Preview · sample data" badge |
+| `auth.js` | removed the local "demo session": a session now exists only once the API issues a token, and an unreachable server leaves the form with an error instead of a fake sign-in |
+| `sw.js` | `CACHE_VERSION` → `studyspace-v13`; shell list no longer names `data.js` |
+
+### Removed UI that had no backing field
+
+"All-India rank" and percentile claims, "Free mock tests", "Highest rated /
+Most popular", "Bookmarked" batches, the Language facet, "Today's Classes",
+the day-streak card and "This week" figures. Each is either absent from the API
+or was never real; the copy now says what the data supports.
+
+### Verification
+
+| Suite | Result |
+|---|---|
+| `tools/checks/check.js` | 25/25 — rows with a stubbed API, an honest state with the network off, empty catalogue per page |
+| `tools/checks/interact.js` | 80/80 — shell, FAQ, filters, tabs, exam window (start → answer → autosave → pause → report → submit → result), note composer |
+| `tools/checks/live.js` | 55/55 — the same pages against a running Django with `seed_demo`, including a **guest** attempt submitted end to end |
+| `tools/checks/a11y.js`, `css.js` | clean (381 classes used, all defined) |
+| Django suite | 250 tests OK (unchanged by this run) |
+
+`tools/checks/stub.js` is new: a deterministic double of the serializers, so
+the DOM suites no longer depend on fixtures inside the app.

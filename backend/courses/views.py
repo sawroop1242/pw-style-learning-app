@@ -1,8 +1,10 @@
+import hashlib
+import secrets
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import filters, permissions, serializers, status, viewsets
@@ -23,6 +25,7 @@ from .models import (
     AttemptAnswer,
     Bookmark,
     Choice,
+    CommunityPost,
     Course,
     CourseAccessGrant,
     CourseFolder,
@@ -47,6 +50,7 @@ from .models.access import (
 from .serializers import (
     AttemptAnswerSerializer,
     BookmarkSerializer,
+    CommunityPostSerializer,
     CourseDetailSerializer,
     CourseFolderSerializer,
     CourseListSerializer,
@@ -70,6 +74,31 @@ class RedeemThrottle(UserRateThrottle):
     """Stops automated guessing of access codes from a compromised account."""
 
     rate = "20/hour"
+
+
+GUEST_TOKEN_HEADER = "X-Attempt-Token"
+
+
+def _guest_token_hash(token):
+    """Store only the hash: a leaked database row must not buy an attempt."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _attempt_token(request):
+    return (request.headers.get(GUEST_TOKEN_HEADER) or "").strip()
+
+
+def _may_read_attempt(request, attempt):
+    """Owner or the holder of this attempt's guest token, and nobody else."""
+    if attempt.user_id is not None:
+        return bool(
+            getattr(request.user, "is_authenticated", False)
+            and attempt.user_id == request.user.id
+        )
+    token = _attempt_token(request)
+    if not token or not attempt.guest_token_hash:
+        return False
+    return secrets.compare_digest(attempt.guest_token_hash, _guest_token_hash(token))
 
 
 class StartAttemptThrottle(UserRateThrottle):
@@ -449,6 +478,65 @@ def redeem_access_code(request):
     )
 
 
+class CommunityPostViewSet(viewsets.ReadOnlyModelViewSet):
+    """Public announcements feed.
+
+    Only published posts are listed; staff drafts stay in the admin. Pinning is
+    an editorial decision, so pinned posts lead and the rest run newest-first.
+    """
+
+    serializer_class = CommunityPostSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ["created_at", "is_pinned"]
+    ordering = ["-is_pinned", "-created_at"]
+
+    def get_queryset(self):
+        qs = CommunityPost.objects.filter(is_published=True).select_related(
+            "author", "course"
+        )
+        course = self.request.query_params.get("course")
+        if course:
+            # A batch page shows the platform-wide posts plus its own.
+            if str(course).isdigit():
+                qs = qs.filter(Q(course_id=course) | Q(course__isnull=True))
+            else:
+                qs = qs.filter(Q(course__slug=course) | Q(course__isnull=True))
+        platform_only = self.request.query_params.get("platform_only")
+        if platform_only is not None and platform_only.lower() in {"1", "true"}:
+            qs = qs.filter(course__isnull=True)
+        return qs
+
+
+class PdfResourceViewSet(viewsets.ReadOnlyModelViewSet):
+    """PDF notes for the download library.
+
+    Metadata is public; ``file_url`` is withheld by the serializer unless the
+    caller may read the course, so a protected chapter cannot be pulled from a
+    public payload. A locked row still renders — with ``is_locked`` — rather
+    than vanishing, because "there is a PDF you cannot open yet" is the truth.
+    """
+
+    serializer_class = PdfResourceSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ["position", "title", "created_at"]
+    ordering = ["position", "id"]
+
+    def get_queryset(self):
+        qs = PdfResource.objects.filter(
+            is_published=True,
+            folder__course__is_published=True,
+        ).select_related("folder", "folder__course")
+        course = self.request.query_params.get("course")
+        if course:
+            if str(course).isdigit():
+                qs = qs.filter(folder__course_id=course)
+            else:
+                qs = qs.filter(folder__course__slug=course)
+        return qs
+
+
 class CourseViewSet(viewsets.ReadOnlyModelViewSet):
     """Course catalogue with search, filter, and ordering."""
     
@@ -492,6 +580,14 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
                 qs = qs.filter(pricing_mode=Course.PricingMode.FREE)
             else:
                 qs = qs.filter(pricing_mode=Course.PricingMode.PAID)
+        # "mine" = the batches this caller can actually open: every published
+        # free batch plus every paid batch they hold an active grant for.
+        mine = self.request.query_params.get("mine")
+        if mine is not None and mine.lower() in {"1", "true", "yes"}:
+            qs = qs.filter(
+                Q(pricing_mode=Course.PricingMode.FREE)
+                | Q(id__in=policy.granted_course_ids(self.request.user))
+            )
         return qs
 
 
@@ -717,13 +813,30 @@ class QuizAttemptViewSet(viewsets.GenericViewSet, viewsets.mixins.ListModelMixin
     """
 
     serializer_class = QuizAttemptSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    # An attempt is addressed by its id and read through a per-object check, so
+    # a guest holding a token can resume, autosave and submit without an
+    # account while a stranger still gets a 404.
+    permission_classes = [permissions.AllowAny]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["started_at", "status"]
     ordering = ["-started_at"]
 
     def get_queryset(self):
-        return QuizAttempt.objects.filter(user=self.request.user).select_related("quiz")
+        user = self.request.user
+        if not getattr(user, "is_authenticated", False):
+            # A guest has no list: their history lives on this device.
+            return QuizAttempt.objects.none()
+        return QuizAttempt.objects.filter(user=user).select_related("quiz")
+
+    def get_object(self):
+        attempt = get_object_or_404(
+            QuizAttempt.objects.select_related("quiz"), pk=self.kwargs.get("pk")
+        )
+        if not _may_read_attempt(self.request, attempt):
+            # 404, not 403: an id that is not yours must not be confirmable.
+            raise Http404
+        self.check_object_permissions(self.request, attempt)
+        return attempt
 
     def get_serializer_class(self):
         if self.action == "submit":
@@ -1272,13 +1385,19 @@ class StaffTestSeriesViewSet(viewsets.ModelViewSet):
 
 
 @api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
 @throttle_classes([StartAttemptThrottle])
+@permission_classes([permissions.AllowAny])
 def start_quiz_attempt(request):
     """Start (or resume) an attempt for an accessible, published quiz.
 
     Resuming is the default: a learner with an open attempt gets that attempt
     back rather than a second one, so a refresh never burns an attempt.
+
+    Anonymous visitors may sit a public paper: the attempt is created without a
+    user and keyed by an opaque token that is returned exactly once, here. The
+    client sends it back as ``X-Attempt-Token`` for autosave, submit and the
+    result. Nothing about the paper is trusted from the client either way —
+    scoring stays server-side.
     """
     quiz_id = request.data.get("quiz_id")
     if not quiz_id:
@@ -1302,20 +1421,34 @@ def start_quiz_attempt(request):
     if quiz.closes_at and now > quiz.closes_at:
         return Response({"detail": "Test has closed."}, status=status.HTTP_400_BAD_REQUEST)
 
+    signed_in = bool(getattr(request.user, "is_authenticated", False))
+    # A returning guest presents the token for the paper in progress; without
+    # it there is nothing to resume, because a token is never discoverable.
+    presented = _attempt_token(request) if not signed_in else ""
+
     with transaction.atomic():
         # Serialise concurrent starts for this learner+quiz pair.
-        in_progress = (
-            QuizAttempt.objects.select_for_update()
-            .filter(user=request.user, quiz=quiz, status=QuizAttempt.Status.IN_PROGRESS)
-            .first()
-        )
+        if signed_in:
+            scope = {"user": request.user, "quiz": quiz}
+        elif presented:
+            scope = {"guest_token_hash": _guest_token_hash(presented), "quiz": quiz}
+        else:
+            scope = None
+
+        in_progress = None
+        if scope is not None:
+            in_progress = (
+                QuizAttempt.objects.select_for_update()
+                .filter(status=QuizAttempt.Status.IN_PROGRESS, **scope)
+                .first()
+            )
         if in_progress is not None:
             return Response(
                 QuizAttemptSerializer(in_progress, context={"request": request}).data
             )
 
-        if quiz.attempt_limit is not None:
-            used = QuizAttempt.objects.filter(user=request.user, quiz=quiz).count()
+        if quiz.attempt_limit is not None and scope is not None:
+            used = QuizAttempt.objects.filter(**scope).count()
             if used >= quiz.attempt_limit:
                 return Response(
                     {"detail": f"Attempt limit ({quiz.attempt_limit}) reached."},
@@ -1343,8 +1476,15 @@ def start_quiz_attempt(request):
         ):
             deadline = now + timedelta(minutes=quiz.duration_minutes)
 
+        # A guest either keeps the token they presented (resume path above) or
+        # is issued a fresh one. Only its hash is stored.
+        token = None
+        if not signed_in:
+            token = presented or secrets.token_urlsafe(32)
+
         attempt = QuizAttempt.objects.create(
-            user=request.user,
+            user=request.user if signed_in else None,
+            guest_token_hash="" if signed_in else _guest_token_hash(token),
             quiz=quiz,
             deadline=deadline,
             question_order=question_ids,
@@ -1352,10 +1492,11 @@ def start_quiz_attempt(request):
         )
         grading.ensure_answer_rows(attempt, questions)
 
-    return Response(
-        QuizAttemptSerializer(attempt, context={"request": request}).data,
-        status=status.HTTP_201_CREATED,
-    )
+    payload = QuizAttemptSerializer(attempt, context={"request": request}).data
+    if token is not None:
+        # Returned exactly once: the client keeps it, the server keeps the hash.
+        payload["guest_token"] = token
+    return Response(payload, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
@@ -1371,4 +1512,6 @@ def api_root(request):
         "token": "/api/token/",
         "quiz_attempts": "/api/quiz-attempts/",
         "start_quiz": "/api/quizzes/start/",
+        "pdfs": "/api/pdfs/",
+        "community": "/api/community/",
     })

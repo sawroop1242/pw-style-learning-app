@@ -1,68 +1,147 @@
-/** Catalogue: filtering, sorting, search and pagination over the batch list. */
+/**
+ * Catalogue: search, subject/price filters, sorting and pagination.
+ *
+ * Every control is a server query — `search`, `subject`, `pricing_mode`,
+ * `mine`, `ordering`, `page` — so the grid can only ever show rows the API
+ * returned. Facets are built from those rows, and the result count is the
+ * server's `count`, not the number of cards on screen.
+ */
 
-import { $, $$, esc, live, qsParam, debounce, initials, storage } from './core.js';
 import {
-  mountChrome, batchCard, emptyState, skeletonBatchGrid, icon, thumbTone
+  $, $$, esc, getJson, rows, apiQuery, qsParam, debounce, initials, storage,
+  isSignedIn, adaptCourse
+} from './core.js';
+import {
+  mountChrome, batchCard, emptyState, errorState, skeletonBatchGrid, icon, wireRetry
 } from './ui.js';
-import { COURSES } from './data.js';
 
 mountChrome('courses');
 
 const avatar = document.querySelector('[data-welcome-avatar]');
-if (avatar) avatar.textContent = initials(storage.user?.username || 'Student');
+if (avatar) avatar.textContent = initials(storage.user?.username || 'Student').slice(0, 1);
 
 const PAGE_SIZE = 9;
 
+/** Sort keys the API advertises in `CourseViewSet.ordering_fields`. */
+const SORTS = {
+  position: 'position',
+  newest: '-created_at',
+  title: 'title',
+  price: 'price'
+};
+
 const state = {
   query: qsParam('q') || '',
-  exams: new Set(qsParam('exam') ? [qsParam('exam')] : []),
-  subjects: new Set(qsParam('subject') ? [qsParam('subject')] : []),
-  languages: new Set(qsParam('language') ? [qsParam('language')] : []),
+  subjects: new Set(),
   price: 'all',
-  sort: qsParam('sort') || 'popular',
+  mine: qsParam('mine') === '1',
+  sort: SORTS[qsParam('sort')] ? qsParam('sort') : 'position',
   page: 1,
+  count: 0,
   all: []
 };
 
 /* ------------------------------------------------------------------ */
-/* Data                                                               */
+/* Queries                                                            */
 /* ------------------------------------------------------------------ */
 
-function normalise(raw, index) {
-  const fixture =
-    COURSES.find((c) => c.id === raw.id) ||
-    COURSES.find((c) => c.slug === raw.slug) ||
-    {};
-  const subject = raw.subject || fixture.subject || 'General';
-  return {
-    ...fixture,
-    ...raw,
-    slug: raw.slug || fixture.slug || `course-${raw.id}`,
-    subject,
-    exam: fixture.exam || subject,
-    faculty: fixture.faculty || [],
-    rating: fixture.rating || 4.6,
-    ratingCount: fixture.ratingCount || 0,
-    learners: fixture.learners || 0,
-    lessons: raw.lesson_count ?? fixture.lessons ?? 0,
-    tests: fixture.tests ?? 0,
-    language: fixture.language || raw.language || 'Hinglish',
-    mrp: fixture.mrp || (raw.price ? Math.round(Number(raw.price) * 2.4) : 0),
-    badge: fixture.badge || null,
-    durationMonths: fixture.durationMonths || null,
-    startsOn: fixture.startsOn || null,
-    order: index
+function listQuery() {
+  const params = {
+    page: state.page,
+    page_size: PAGE_SIZE,
+    ordering: SORTS[state.sort],
+    search: state.query || undefined,
+    subject: [...state.subjects][0] || undefined,
+    mine: state.mine ? 1 : undefined
   };
+  if (state.price === 'free') params.pricing_mode = 'free';
+  if (state.price === 'paid') params.pricing_mode = 'paid';
+  return apiQuery(params);
 }
+
+async function fetchCourses(params) {
+  const payload = await getJson(`/courses/${params}`);
+  return { list: rows(payload).map(adaptCourse), count: payload.count ?? rows(payload).length };
+}
+
+/* ------------------------------------------------------------------ */
+/* The main grid                                                      */
+/* ------------------------------------------------------------------ */
 
 async function loadCourses() {
   const grid = $('#course-grid');
+  const empty = $('#course-empty');
   grid.innerHTML = skeletonBatchGrid(PAGE_SIZE);
-  const { data } = await live('/courses/?page_size=60', COURSES);
-  const rows = Array.isArray(data) ? data : data.results || [];
-  state.all = rows.map(normalise);
+  empty.hidden = true;
+  $('#result-count').textContent = 'Loading batches…';
+
+  try {
+    const { list, count } = await fetchCourses(listQuery());
+    state.all = list;
+    state.count = count;
+  } catch (err) {
+    grid.innerHTML = '';
+    $('#result-count').textContent = '';
+    empty.hidden = false;
+    empty.innerHTML = errorState({
+      title: 'Catalogue unavailable',
+      body: err?.message || 'The batch list could not be loaded.'
+    });
+    return;
+  }
+
+  $('#result-count').textContent = `${state.count} ${state.count === 1 ? 'batch' : 'batches'}`;
   buildFacets();
   render();
+}
+
+function render() {
+  const grid = $('#course-grid');
+  const empty = $('#course-empty');
+  const filtered = Boolean(state.query || state.subjects.size || state.price !== 'all' || state.mine);
+
+  if (!state.all.length) {
+    grid.innerHTML = '';
+    empty.hidden = false;
+    empty.innerHTML = filtered
+      ? emptyState({
+          title: 'No batches match these filters',
+          body: 'Clear a filter, or search for a different subject.',
+          actionLabel: 'Reset filters',
+          actionHref: 'courses.html',
+          iconName: 'search'
+        })
+      : emptyState({
+          title: 'No batches published yet',
+          body: 'The catalogue is empty. A published batch appears here immediately.',
+          iconName: 'book'
+        });
+    renderPager();
+    return;
+  }
+
+  empty.hidden = true;
+  grid.innerHTML = state.all.map(batchCard).join('');
+  renderPager();
+}
+
+function renderPager() {
+  const pager = $('#course-pager');
+  if (!pager) return;
+  const pages = Math.max(1, Math.ceil(state.count / PAGE_SIZE));
+  pager.innerHTML =
+    pages < 2
+      ? ''
+      : `
+    <div class="row" style="gap:10px;justify-content:center;align-items:center">
+      <button class="btn btn-ghost btn-sm" type="button" data-page="prev" ${state.page === 1 ? 'disabled' : ''}>
+        ${icon('chevron-left')} Previous
+      </button>
+      <span class="small muted">Page ${state.page} of ${pages}</span>
+      <button class="btn btn-ghost btn-sm" type="button" data-page="next" ${state.page >= pages ? 'disabled' : ''}>
+        Next ${icon('chevron-right')}
+      </button>
+    </div>`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -70,314 +149,173 @@ async function loadCourses() {
 /* ------------------------------------------------------------------ */
 
 function buildFacets() {
-  const count = (key) =>
-    state.all.reduce((acc, course) => {
-      const value = course[key];
-      if (value) acc.set(value, (acc.get(value) || 0) + 1);
-      return acc;
-    }, new Map());
+  const host = $('#filter-subject');
+  const counts = state.all.reduce((acc, course) => {
+    if (course.subject) acc.set(course.subject, (acc.get(course.subject) || 0) + 1);
+    return acc;
+  }, new Map());
 
-  renderFacet($('#filter-exam'), 'exams', count('exam'), state.exams);
-  renderFacet($('#filter-subject'), 'subjects', count('subject'), state.subjects);
-  renderFacet($('#filter-language'), 'languages', count('language'), state.languages);
+  if (!counts.size) {
+    host.innerHTML = '<p class="tiny subtle" style="margin:0">No subjects on this page.</p>';
+    return;
+  }
 
-  // Header quick chips (only present when a page head renders them)
-  const chips = $('#exam-chips');
-  if (!chips) return;
-  const exams = [...count('exam').keys()];
-  chips.innerHTML = exams
+  host.innerHTML = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(
-      (exam) =>
-        `<button class="chip" data-chip-exam="${esc(exam)}" aria-pressed="${state.exams.has(exam)}">
-           ${esc(exam)}
-         </button>`
-    )
-    .join('');
-}
-
-function renderFacet(host, group, counts, selected) {
-  if (!host) return;
-  const entries = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  host.innerHTML = entries
-    .map(
-      ([value, n]) => `
+      ([subject, n]) => `
       <label>
-        <span>${esc(value)}</span>
+        <span>${esc(subject)}</span>
         <span style="display:flex;align-items:center;gap:8px">
           <span class="filter-count">${n}</span>
-          <input type="checkbox" value="${esc(value)}" data-facet="${group}" ${selected.has(value) ? 'checked' : ''}>
+          <input type="checkbox" value="${esc(subject)}" data-subject ${state.subjects.has(subject) ? 'checked' : ''}>
         </span>
       </label>`
     )
     .join('');
-
-  host.addEventListener('change', (e) => {
-    const input = e.target.closest('input[data-facet]');
-    if (!input) return;
-    const set = state[group];
-    input.checked ? set.add(input.value) : set.delete(input.value);
-    state.page = 1;
-    render();
-    syncChips();
-  });
 }
 
 /* ------------------------------------------------------------------ */
-/* Filtering                                                          */
+/* Controls                                                           */
 /* ------------------------------------------------------------------ */
 
-function matches(course) {
-  if (state.query) {
-    const haystack = `${course.title} ${course.subject} ${course.exam} ${course.description || ''}`.toLowerCase();
-    if (!haystack.includes(state.query.toLowerCase())) return false;
-  }
-  if (state.exams.size && !state.exams.has(course.exam)) return false;
-  if (state.subjects.size && !state.subjects.has(course.subject)) return false;
-  if (state.languages.size && !state.languages.has(course.language)) return false;
-  if (state.price === 'free' && Number(course.price) > 0) return false;
-  if (state.price === 'paid' && Number(course.price) <= 0) return false;
-  return true;
-}
-
-function sorted(list) {
-  const copy = [...list];
-  switch (state.sort) {
-    case 'price-asc':
-      return copy.sort((a, b) => Number(a.price) - Number(b.price));
-    case 'price-desc':
-      return copy.sort((a, b) => Number(b.price) - Number(a.price));
-    case 'rating':
-      return copy.sort((a, b) => b.rating - a.rating);
-    case 'newest':
-      return copy.sort((a, b) => new Date(b.startsOn || 0) - new Date(a.startsOn || 0));
-    default:
-      return copy.sort((a, b) => (b.learners || 0) - (a.learners || 0));
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* Render                                                             */
-/* ------------------------------------------------------------------ */
-
-function render() {
-  const grid = $('#course-grid');
-  const empty = $('#results-empty');
-  const list = sorted(state.all.filter(matches));
-
-  $('#result-count').innerHTML = `<strong>${list.length}</strong> batch${list.length === 1 ? '' : 'es'} found`;
-
-  if (!list.length) {
-    grid.innerHTML = '';
-    empty.hidden = false;
-    empty.innerHTML = emptyState({
-      title: 'No batches match those filters',
-      body: 'Try removing a filter or searching for a different exam.',
-      actionLabel: 'Clear filters',
-      actionHref: 'courses.html',
-      iconName: 'filter'
-    });
-    $('#pagination').innerHTML = '';
-    renderActiveFilters();
-    return;
-  }
-
-  empty.hidden = true;
-  const pages = Math.ceil(list.length / PAGE_SIZE);
-  state.page = Math.min(state.page, pages);
-  const start = (state.page - 1) * PAGE_SIZE;
-  const pageItems = list.slice(start, start + PAGE_SIZE);
-
-  grid.innerHTML = pageItems.map(batchCard).join('');
-  renderPagination(pages);
-  renderActiveFilters();
-}
-
-function renderPagination(pages) {
-  const host = $('#pagination');
-  if (!host) return;
-  if (pages <= 1) {
-    host.innerHTML = '';
-    return;
-  }
-  const buttons = [];
-  buttons.push(
-    `<button class="page-btn" data-page="${state.page - 1}" ${state.page === 1 ? 'disabled' : ''} aria-label="Previous page">
-       <svg style="width:15px;height:15px"><use href="#i-chevron-left"/></svg>
-     </button>`
+const search = $('#course-search');
+if (search) {
+  search.value = state.query;
+  search.addEventListener(
+    'input',
+    debounce(() => {
+      state.query = search.value.trim();
+      state.page = 1;
+      loadCourses();
+    }, 320)
   );
-  for (let i = 1; i <= pages; i += 1) {
-    buttons.push(
-      `<button class="page-btn" data-page="${i}" ${i === state.page ? 'aria-current="page"' : ''}>${i}</button>`
-    );
-  }
-  buttons.push(
-    `<button class="page-btn" data-page="${state.page + 1}" ${state.page === pages ? 'disabled' : ''} aria-label="Next page">
-       <svg style="width:15px;height:15px"><use href="#i-chevron-right"/></svg>
-     </button>`
-  );
-  host.innerHTML = buttons.join('');
 }
 
-function renderActiveFilters() {
-  const host = $('#active-filters');
-  if (!host) return;
-  const chips = [];
-  const add = (label, type, value) =>
-    chips.push(
-      `<button class="chip is-active" data-remove="${type}" data-value="${esc(value)}">
-         ${esc(label)} ${icon('x')}
-       </button>`
-    );
+$('#course-sort')?.addEventListener('change', (event) => {
+  state.sort = event.target.value;
+  state.page = 1;
+  loadCourses();
+});
 
-  if (state.query) add(`“${state.query}”`, 'query', state.query);
-  state.exams.forEach((v) => add(v, 'exams', v));
-  state.subjects.forEach((v) => add(v, 'subjects', v));
-  state.languages.forEach((v) => add(v, 'languages', v));
-  if (state.price !== 'all') add(state.price === 'free' ? 'Free only' : 'Paid only', 'price', state.price);
+$('#filter-subject')?.addEventListener('change', (event) => {
+  const input = event.target.closest('input[data-subject]');
+  if (!input) return;
+  // One subject per request: the API filters on a single value.
+  state.subjects.clear();
+  if (input.checked) state.subjects.add(input.value);
+  state.page = 1;
+  loadCourses();
+});
 
-  host.innerHTML = chips.join('');
-}
+$('#filter-price')?.addEventListener('change', (event) => {
+  const input = event.target.closest('input[data-price]');
+  if (!input) return;
+  state.price = input.value;
+  state.page = 1;
+  loadCourses();
+});
 
-function syncChips() {
-  $$('[data-chip-exam]').forEach((chip) => {
-    chip.setAttribute('aria-pressed', String(state.exams.has(chip.dataset.chipExam)));
+$('#clear-filters')?.addEventListener('click', () => {
+  state.query = '';
+  state.subjects.clear();
+  state.price = 'all';
+  state.mine = false;
+  state.page = 1;
+  if (search) search.value = '';
+  $$('#filter-price input').forEach((input) => {
+    input.checked = input.value === 'all';
   });
-}
+  selectTab(0);
+  loadCourses();
+});
+
+document.addEventListener('click', (event) => {
+  const page = event.target.closest('[data-page]');
+  if (!page) return;
+  state.page += page.dataset.page === 'next' ? 1 : -1;
+  loadCourses();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 /* ------------------------------------------------------------------ */
-/* All / My / Favorite tabs                                           */
+/* Tabs: all batches / my batches                                     */
 /* ------------------------------------------------------------------ */
 
-const TAB_PANELS = ['panel-all', 'panel-mine', 'panel-fav'];
+const TABS = [
+  ['panel-all', 'all'],
+  ['panel-mine', 'mine']
+];
 
 function selectTab(index) {
-  const tabs = $$('.tabs .tab');
-  tabs.forEach((tab, i) => {
+  $$('.tabs .tab').forEach((tab, i) => {
     const selected = i === index;
     tab.setAttribute('aria-selected', String(selected));
-    const panel = document.getElementById(TAB_PANELS[i]);
+    const panel = document.getElementById(TABS[i][0]);
     if (panel) panel.hidden = !selected;
   });
-  if (index === 1) renderMine();
-  if (index === 2) renderFavorites();
-}
-
-function renderMine() {
-  const host = $('#my-grid');
-  if (!host) return;
-  // "My batches" needs an enrolment endpoint; until then show the same
-  // catalogue with a plain explanation rather than inventing enrolments.
-  host.innerHTML = state.all.slice(0, 3).map(batchCard).join('');
-}
-
-function renderFavorites() {
-  const host = $('#fav-empty');
-  if (!host) return;
-  host.innerHTML = emptyState({
-    title: 'No favourite batches yet',
-    body: 'Open any batch and tap Save. Favourites are stored against your account, not this browser, so they follow you to another device.',
-    actionLabel: 'Browse all batches',
-    actionHref: 'courses.html',
-    iconName: 'bookmark'
-  });
+  if (TABS[index][1] === 'mine') loadMine();
 }
 
 $$('.tabs .tab').forEach((tab, i) => {
   tab.addEventListener('click', () => selectTab(i));
-  tab.addEventListener('keydown', (e) => {
+  tab.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    event.preventDefault();
     const tabs = $$('.tabs .tab');
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    e.preventDefault();
-    const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    const next = (i + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
     tabs[next].focus();
     selectTab(next);
   });
 });
 
-/* ------------------------------------------------------------------ */
-/* Events                                                             */
-/* ------------------------------------------------------------------ */
+/**
+ * My batches = published free batches plus paid batches this account holds an
+ * active grant for. Signed out, there is no "mine", so the tab says so instead
+ * of showing everything twice.
+ */
+async function loadMine() {
+  const grid = $('#my-grid');
+  const empty = $('#my-empty');
+  if (!grid) return;
 
-$('#sort-select')?.addEventListener('change', (e) => {
-  state.sort = e.target.value;
-  state.page = 1;
-  render();
-});
+  if (!isSignedIn()) {
+    grid.innerHTML = '';
+    empty.hidden = false;
+    empty.innerHTML = emptyState({
+      title: 'Sign in to see your batches',
+      body: 'Every free batch is open to you without an account. Signing in also shows the paid batches you have unlocked.',
+      actionLabel: 'Sign in',
+      actionHref: 'login.html?next=courses.html',
+      iconName: 'user'
+    });
+    return;
+  }
 
-$('#clear-filters')?.addEventListener('click', () => {
-  state.query = '';
-  state.exams.clear();
-  state.subjects.clear();
-  state.languages.clear();
-  state.price = 'all';
-  state.page = 1;
-  $$('#filter-panel input[type="checkbox"]').forEach((i) => (i.checked = false));
-  const all = document.querySelector('input[name="price"][value="all"]');
-  if (all) all.checked = true;
-  history.replaceState(null, '', 'courses.html');
-  render();
-  syncChips();
-});
+  grid.innerHTML = skeletonBatchGrid(3);
+  empty.hidden = true;
+  try {
+    const { list } = await fetchCourses(apiQuery({ page_size: 60, mine: 1 }));
+    if (!list.length) {
+      grid.innerHTML = '';
+      empty.hidden = false;
+      empty.innerHTML = emptyState({
+        title: 'No batches yet',
+        body: 'Redeem an access code on a batch page to unlock it, or start with any free batch.',
+        actionLabel: 'Browse the catalogue',
+        actionHref: 'courses.html',
+        iconName: 'book'
+      });
+      return;
+    }
+    grid.innerHTML = list.map(batchCard).join('');
+  } catch (err) {
+    grid.innerHTML = '';
+    empty.hidden = false;
+    empty.innerHTML = errorState({ title: 'Your batches could not be loaded', body: err?.message });
+  }
+}
 
-$('#open-filters')?.addEventListener('click', () => {
-  $('#filter-panel')?.classList.toggle('is-open');
-});
-
-$('#exam-chips')?.addEventListener('click', (e) => {
-  const chip = e.target.closest('[data-chip-exam]');
-  if (!chip) return;
-  const exam = chip.dataset.chipExam;
-  state.exams.has(exam) ? state.exams.delete(exam) : state.exams.add(exam);
-  state.page = 1;
-  $$('#filter-exam input').forEach((input) => {
-    if (input.value === exam) input.checked = state.exams.has(exam);
-  });
-  syncChips();
-  render();
-});
-
-$('#active-filters')?.addEventListener('click', (e) => {
-  const chip = e.target.closest('[data-remove]');
-  if (!chip) return;
-  const { remove, value } = chip.dataset;
-  if (remove === 'query') state.query = '';
-  else if (remove === 'price') {
-    state.price = 'all';
-    const all = document.querySelector('input[name="price"][value="all"]');
-    if (all) all.checked = true;
-  } else state[remove].delete(value);
-  state.page = 1;
-  $$('#filter-panel input[type="checkbox"]').forEach((input) => {
-    const group = input.dataset.facet;
-    if (group && state[group]) input.checked = state[group].has(input.value);
-  });
-  syncChips();
-  render();
-});
-
-$('#pagination')?.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-page]');
-  if (!btn || btn.disabled) return;
-  state.page = Number(btn.dataset.page);
-  render();
-  document.querySelector('.catalog-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-});
-
-document.querySelectorAll('input[name="price"]').forEach((input) => {
-  input.addEventListener('change', (e) => {
-    state.price = e.target.value;
-    state.page = 1;
-    render();
-  });
-});
-
-// Live search from the header on desktop.
-const headerSearch = document.querySelector('[data-global-search]');
-if (headerSearch && state.query) headerSearch.value = state.query;
-headerSearch?.addEventListener('input', debounce((e) => {
-  state.query = e.target.value.trim();
-  state.page = 1;
-  render();
-}, 260));
-
+wireRetry();
+if (state.mine) selectTab(1);
 loadCourses();

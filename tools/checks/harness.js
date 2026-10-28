@@ -53,7 +53,7 @@ function transform(src, name) {
  *   fetcher  — (url, init) => Promise<Response>; omitted means the network is
  *              unreachable, which is how the fixture fallback is exercised
  */
-async function boot(page, mods, { query = '', fetcher = null } = {}) {
+async function boot(page, mods, { query = '', fetcher = null, seedStorage = null } = {}) {
   const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
   const errors = [];
   const vc = new VirtualConsole();
@@ -70,6 +70,12 @@ async function boot(page, mods, { query = '', fetcher = null } = {}) {
     virtualConsole: vc
   });
   const { window } = dom;
+
+  // Some pages only render account data when a session exists; seed it before
+  // any module runs so the boot path is the same as a returning visitor.
+  if (seedStorage) {
+    for (const [key, value] of Object.entries(seedStorage)) window.localStorage.setItem(key, value);
+  }
 
   window.fetch = fetcher
     ? (input, init = {}) => {

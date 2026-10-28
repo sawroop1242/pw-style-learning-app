@@ -2,8 +2,8 @@ from rest_framework import serializers
 from django.contrib.contenttypes.models import ContentType
 from . import grading, policy
 from .models import (
-    Course, CourseFolder, Lesson, PdfResource, Quiz, Question, Choice, Note, Progress,
-    QuizAttempt, AttemptAnswer, Bookmark, RevisionItem, StudyTask
+    CommunityPost, Course, CourseFolder, Lesson, PdfResource, Quiz, Question, Choice,
+    Note, Progress, QuizAttempt, AttemptAnswer, Bookmark, RevisionItem, StudyTask
 )
 
 ALLOWED_VIDEO_SCHEMES = {"https"}
@@ -146,6 +146,7 @@ class CourseListSerializer(serializers.ModelSerializer):
     lesson_count = serializers.IntegerField(source="lessons.count", read_only=True)
     folder_count = serializers.IntegerField(source="folders.count", read_only=True)
     quiz_count = serializers.SerializerMethodField()
+    has_access = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -153,7 +154,7 @@ class CourseListSerializer(serializers.ModelSerializer):
             "id", "title", "slug", "description", "subject", "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",
-            "created_at", "updated_at"
+            "has_access", "created_at", "updated_at"
         ]
 
     def get_quiz_count(self, course):
@@ -161,6 +162,10 @@ class CourseListSerializer(serializers.ModelSerializer):
         if annotated is not None:
             return annotated
         return course.quizzes.filter(is_published=True).count()
+
+    def get_has_access(self, course):
+        """Whether the caller may consume the batch, not merely see it."""
+        return policy.can_access_course(_request_user(self), course)
 
 
 class CourseDetailSerializer(serializers.ModelSerializer):
@@ -413,6 +418,32 @@ class AttemptAnswerDetailSerializer(serializers.ModelSerializer):
 
     def get_is_correct(self, answer):
         return grading.answer_is_correct(answer.question, grading.selected_ids(answer))
+
+
+class CommunityPostSerializer(serializers.ModelSerializer):
+    """Announcement payload for the public community feed.
+
+    Deliberately read-only and narrow: an announcement is staff-authored, so
+    the feed exposes the author's username but no email or profile data.
+    """
+
+    author = serializers.CharField(source="author.username", read_only=True)
+    author_name = serializers.SerializerMethodField()
+    course_title = serializers.CharField(source="course.title", read_only=True, default=None)
+    course_slug = serializers.CharField(source="course.slug", read_only=True, default=None)
+    pinned = serializers.BooleanField(source="is_pinned", read_only=True)
+
+    class Meta:
+        model = CommunityPost
+        fields = [
+            "id", "title", "body", "author", "author_name", "course", "course_title",
+            "course_slug", "pinned", "created_at", "updated_at"
+        ]
+        read_only_fields = fields
+
+    def get_author_name(self, post):
+        full = (post.author.get_full_name() or "").strip()
+        return full or post.author.username
 
 
 class NoteSerializer(serializers.ModelSerializer):

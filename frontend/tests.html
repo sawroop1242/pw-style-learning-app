@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0b16">
   <meta name="api-base" content="/api">
   <title>Test series &amp; free mocks — StudySpace</title>
-  <meta name="description" content="Exam-pattern mock tests with All-India rank, percentile, sectional timing and a time-per-question breakdown.">
+  <meta name="description" content="Exam-pattern mock tests with a server deadline, exam palette, autosave and a question-by-question review.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -32,7 +32,7 @@
       <section class="welcome">
         <div>
           <h1>Test Series</h1>
-          <p>Sectional timers, the real palette and a server-scored result with rank.</p>
+          <p>Exam palette, a server deadline and a result computed from your saved answers.</p>
         </div>
         <a class="welcome-avatar" href="profile.html" aria-label="Open your profile" data-welcome-avatar>ST</a>
       </section>
@@ -41,14 +41,14 @@
         <div class="tabs" role="tablist" aria-label="Test lists">
           <button class="tab" role="tab" aria-selected="true" aria-controls="panel-alltests" id="tab-alltests">All</button>
           <button class="tab" role="tab" aria-selected="false" aria-controls="panel-attempted" id="tab-attempted">Attempted</button>
-          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-bookmarked" id="tab-bookmarked">Bookmarked</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-open" id="tab-open">Open for you</button>
         </div>
 
         <section class="tab-panel" id="panel-alltests" role="tabpanel" aria-labelledby="tab-alltests">
           <div class="row-between" style="margin-bottom:16px;flex-wrap:wrap;gap:12px">
             <div class="row wrap" style="gap:8px" id="test-filters"></div>
-            <a class="btn btn-accent btn-sm" href="test-player.html?test=1">
-              <svg><use href="#i-play"/></svg> Try a live mock
+            <a class="btn btn-accent btn-sm" href="#test-grid">
+              <svg><use href="#i-play"/></svg> Pick a paper
             </a>
           </div>
           <div class="test-grid" id="test-grid" aria-live="polite"></div>
@@ -59,41 +59,39 @@
           <div id="attempted-empty"></div>
         </section>
 
-        <section class="tab-panel" id="panel-bookmarked" role="tabpanel" aria-labelledby="tab-bookmarked" hidden>
-          <div id="bookmarked-empty"></div>
+        <section class="tab-panel" id="panel-open" role="tabpanel" aria-labelledby="tab-open" hidden>
+          <div id="open-list"></div>
         </section>
       </section>
 
       <section class="section-tight">
         <div class="assurance">
           <div>
-            <strong>All-India rank</strong>
-            <span>Percentile and rank against everyone who attempted the same paper in the same window.</span>
+            <strong>Server-scored</strong>
+            <span>Answers are stored and graded on the server. A result cannot be edited in the browser.</span>
           </div>
           <div>
-            <strong>Sectional timing</strong>
-            <span>Per-section clocks that behave the way the real interface does.</span>
+            <strong>Server deadline</strong>
+            <span>The clock is the attempt's deadline in the database, not a browser countdown.</span>
           </div>
           <div>
-            <strong>Time per question</strong>
-            <span>See exactly which questions cost you minutes, slowest first.</span>
+            <strong>Autosave</strong>
+            <span>Each answer is saved as you move on, so a dropped connection never costs the paper.</span>
           </div>
           <div>
-            <strong>Unlimited reattempts</strong>
-            <span>Each attempt is stored separately, so an old score never changes.</span>
+            <strong>Frozen paper</strong>
+            <span>Question order, marks and duration are fixed when you start; a later edit cannot rewrite an old attempt.</span>
           </div>
         </div>
       </section>
 
       <section class="section-tight">
         <p class="eyebrow">How it works</p>
-        <h2 class="section-title" style="margin-bottom:18px">From start to rank in four steps</h2>
+        <h2 class="section-title" style="margin-bottom:18px">From start to review in four steps</h2>
         <div class="stack" style="gap:10px" id="how-steps"></div>
       </section>
     </div>
   </main>
-
-  <div id="site-footer"></div>
   <div id="site-tabbar"></div>
 
   <script type="module" src="assets/js/tests.js"></script>

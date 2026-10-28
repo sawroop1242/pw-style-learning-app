@@ -39,37 +39,29 @@
 
       <section class="section-tight">
         <div class="tabs" role="tablist" aria-label="Batch lists">
-          <button class="tab" role="tab" aria-selected="true" aria-controls="panel-all" id="tab-all">All Batches</button>
-          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-mine" id="tab-mine">My Batches</button>
-          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-fav" id="tab-fav">Favorite Batches</button>
+          <button class="tab" role="tab" aria-selected="true" aria-controls="panel-all" id="tab-all">All batches</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-mine" id="tab-mine">My batches</button>
         </div>
 
         <section class="tab-panel" id="panel-all" role="tabpanel" aria-labelledby="tab-all">
           <div class="catalog-toolbar">
             <p class="result-count" id="result-count">Loading batches…</p>
             <div class="toolbar-actions">
-              <button class="btn btn-ghost btn-sm mobile-filter-btn" id="open-filters">
-                <svg><use href="#i-filter"/></svg> Filters
-              </button>
-              <label class="visually-hidden" for="sort-select">Sort by</label>
-              <select class="select" id="sort-select" style="min-height:38px;font-size:13px;padding-block:6px;width:auto">
-                <option value="popular">Most popular</option>
+              <label class="visually-hidden" for="course-search">Search batches</label>
+              <input class="input" id="course-search" type="search" placeholder="Search a batch or subject"
+                     style="min-height:38px;font-size:13px;padding-block:6px;width:220px">
+              <label class="visually-hidden" for="course-sort">Sort by</label>
+              <select class="select" id="course-sort" style="min-height:38px;font-size:13px;padding-block:6px;width:auto">
+                <option value="position">Catalogue order</option>
                 <option value="newest">Newest first</option>
-                <option value="price-asc">Price: low to high</option>
-                <option value="price-desc">Price: high to low</option>
-                <option value="rating">Highest rated</option>
+                <option value="title">Title A–Z</option>
+                <option value="price">Price: low to high</option>
               </select>
             </div>
           </div>
 
-          <div class="row wrap" id="active-filters" style="margin-bottom:16px"></div>
-
           <div class="catalog-layout">
             <aside class="filter-panel" id="filter-panel" aria-label="Filters">
-              <div class="filter-group">
-                <h2>Exam</h2>
-                <div class="filter-list" id="filter-exam"></div>
-              </div>
               <div class="filter-group">
                 <h2>Subject</h2>
                 <div class="filter-list" id="filter-subject"></div>
@@ -77,38 +69,29 @@
               <div class="filter-group">
                 <h2>Price</h2>
                 <div class="filter-list" id="filter-price">
-                  <label><span>All batches</span><input type="radio" name="price" value="all" checked></label>
-                  <label><span>Free only</span><input type="radio" name="price" value="free"></label>
-                  <label><span>Paid</span><input type="radio" name="price" value="paid"></label>
+                  <label><span>All batches</span><input type="radio" name="price" value="all" data-price="all" checked></label>
+                  <label><span>Free only</span><input type="radio" name="price" value="free" data-price="free"></label>
+                  <label><span>Paid</span><input type="radio" name="price" value="paid" data-price="paid"></label>
                 </div>
-              </div>
-              <div class="filter-group">
-                <h2>Language</h2>
-                <div class="filter-list" id="filter-language"></div>
               </div>
               <button class="btn btn-ghost btn-block btn-sm" id="clear-filters">Clear all filters</button>
             </aside>
 
             <div>
               <div class="batch-grid" id="course-grid" aria-live="polite"></div>
-              <div id="results-empty" hidden></div>
-              <nav class="pagination" id="pagination" aria-label="Pagination"></nav>
+              <div id="course-empty" hidden></div>
+              <nav class="pagination" id="course-pager" aria-label="Pagination"></nav>
             </div>
           </div>
         </section>
 
         <section class="tab-panel" id="panel-mine" role="tabpanel" aria-labelledby="tab-mine" hidden>
           <div class="batch-grid" id="my-grid" aria-live="polite"></div>
-        </section>
-
-        <section class="tab-panel" id="panel-fav" role="tabpanel" aria-labelledby="tab-fav" hidden>
-          <div id="fav-empty"></div>
+          <div id="my-empty" hidden></div>
         </section>
       </section>
     </div>
   </main>
-
-  <div id="site-footer"></div>
   <div id="site-tabbar"></div>
 
   <script type="module" src="assets/js/courses.js"></script>

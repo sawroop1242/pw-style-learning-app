@@ -179,9 +179,18 @@ class QuizAttempt(TimeStampedModel):
         SUBMITTED = "submitted"
         EXPIRED = "expired"
 
+    #`` None`` means the paper was sat without an account. Those attempts carry
+    # an opaque token instead (only its SHA-256 is stored), so a guest can
+    # autosave, submit and read the result of their own attempt and nothing
+    # else. Signing in is never required to sit a test.
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="quiz_attempts"
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="quiz_attempts",
     )
+    guest_token_hash = models.CharField(max_length=64, blank=True, default="", db_index=True)
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="attempts")
     started_at = models.DateTimeField(auto_now_add=True)
     deadline = models.DateTimeField(null=True, blank=True)
@@ -203,8 +212,13 @@ class QuizAttempt(TimeStampedModel):
     def is_released(self):
         return self.result_released_at is not None
 
+    @property
+    def is_guest(self):
+        return self.user_id is None
+
     def __str__(self):
-        return f"Attempt(user={self.user_id}, quiz={self.quiz_id}, {self.status})"
+        who = f"user={self.user_id}" if self.user_id else "guest"
+        return f"Attempt({who}, quiz={self.quiz_id}, {self.status})"
 
 
 class AttemptAnswer(TimeStampedModel):

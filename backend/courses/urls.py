@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
+    CommunityPostViewSet, PdfResourceViewSet,
     CourseViewSet, LessonViewSet, QuizViewSet, NoteViewSet, ProgressViewSet,
     QuizAttemptViewSet, BookmarkViewSet, RevisionItemViewSet, StudyTaskViewSet,
     StaffCourseViewSet, StaffCourseFolderViewSet, StaffLessonViewSet,
@@ -12,6 +13,8 @@ from .views import (
 
 router = DefaultRouter()
 router.register("courses", CourseViewSet, basename="course")
+router.register("pdfs", PdfResourceViewSet, basename="pdf")
+router.register("community", CommunityPostViewSet, basename="community")
 router.register("lessons", LessonViewSet, basename="lesson")
 router.register("quizzes", QuizViewSet, basename="quiz")
 router.register("notes", NoteViewSet, basename="note")

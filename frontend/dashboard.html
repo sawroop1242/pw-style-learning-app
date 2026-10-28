@@ -1,29 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-IN" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0b16">
-  <meta name="api-base" content="/api">
-  <title>My learning — StudySpace</title>
-  <meta name="description" content="Continue your batch, track your streak, review mock performance and pick up your notes.">
+  <title>My learning | StudySpace</title>
+  <meta name="description" content="Your batches, your attempts, your notes and the papers opening next.">
+  <meta name="theme-color" content="#0b0f1a">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/css/tokens.css">
-  <link rel="stylesheet" href="assets/css/base.css">
-  <link rel="stylesheet" href="assets/css/components.css">
-  <link rel="stylesheet" href="assets/css/pages.css">
-  <link rel="stylesheet" href="assets/css/screens.css">
+  <link rel="icon" href="assets/img/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body>
-  <noscript>
-    <div class="noscript-bar" role="note">
-      Your dashboard needs JavaScript. Please enable it, or write to
-      <a href="mailto:support@studyspace.example">support@studyspace.example</a>.
-    </div>
-  </noscript>
   <a class="skip-link" href="#main">Skip to content</a>
   <div id="site-header"></div>
 
@@ -32,8 +19,8 @@
       <div class="container dash-head-inner">
         <div>
           <p class="eyebrow">My learning</p>
-          <h1 id="greeting">Good evening, Aarav</h1>
-          <p id="greeting-sub">Three lessons away from finishing Mechanics. Keep the streak going.</p>
+          <h1 id="greeting">Welcome back</h1>
+          <p id="greeting-sub">Loading your account…</p>
         </div>
         <div class="dash-figures" id="dash-figures"></div>
       </div>
@@ -47,24 +34,24 @@
             <div>
               <h2 class="section-title" style="font-size:var(--text-lg)">Continue learning</h2>
             </div>
-            <a class="link" href="courses.html">My batches <svg><use href="#i-arrow-right"/></svg></a>
+            <a class="link" href="courses.html?mine=1">My batches <svg><use href="#i-arrow-right"/></svg></a>
           </div>
           <div class="stack" style="gap:var(--sp-3)" id="continue-list"></div>
         </section>
 
-        <!-- Performance -->
+        <!-- Score trend -->
         <section class="card chart-card">
           <div class="row-between" style="margin-bottom:6px;gap:14px">
             <div>
-              <h2 class="section-title" style="font-size:var(--text-lg)">Mock performance</h2>
-              <p class="tiny muted" style="margin-top:3px">Percentage score across your last six full-length mocks</p>
+              <h2 class="section-title" style="font-size:var(--text-lg)">Recent score trend</h2>
+              <p class="tiny muted" style="margin-top:3px">Percentage from your submitted papers, oldest to newest</p>
             </div>
-            <span class="badge badge-new">+32% in six mocks</span>
+            <span class="badge badge-new" id="trend-badge" hidden></span>
           </div>
           <div class="chart-bars" id="chart-bars"></div>
           <div class="chart-legend">
-            <span>Weakest section: <strong class="strong">Organic Chemistry</strong></span>
-            <a class="link" href="tests.html" style="font-size:var(--text-xs)">Take a sectional</a>
+            <span id="trend-note" class="tiny muted">Scores come from the server once a paper is submitted.</span>
+            <a class="link" href="tests.html" style="font-size:var(--text-xs)">Take a paper</a>
           </div>
         </section>
 
@@ -79,7 +66,7 @@
           <div class="upcoming-list" id="upcoming-list"></div>
         </section>
 
-        <!-- Notes / study tools -->
+        <!-- Notes -->
         <section id="tools">
           <div class="section-head">
             <div>
@@ -94,49 +81,30 @@
       </div>
 
       <aside class="stack" style="gap:var(--sp-4)">
-        <section class="card streak-card">
-          <div class="streak-head">
-            <div>
-              <p class="eyebrow" style="margin-bottom:4px">Daily streak</p>
-              <div class="streak-count"><span id="streak-value">12</span><small>days</small></div>
-            </div>
-            <span class="streak-flame"><svg><use href="#i-flame"/></svg></span>
-          </div>
-          <div class="streak-days" id="streak-days"></div>
-          <p class="tiny muted">Practise today to keep it alive. Longest streak: <strong class="strong">21 days</strong>.</p>
-          <a class="btn btn-primary btn-sm btn-block" href="tests.html">
-            <svg><use href="#i-zap"/></svg> Start today’s practice
-          </a>
-        </section>
-
         <section class="card card-pad" style="display:grid;gap:var(--sp-4)">
           <h2 class="section-title" style="font-size:var(--text-md)">Your batches</h2>
           <div class="stack" style="gap:var(--sp-4)" id="batch-progress"></div>
         </section>
 
         <section class="card card-pad" style="display:grid;gap:var(--sp-3)">
-          <h2 class="section-title" style="font-size:var(--text-md)">This week</h2>
-          <div class="row-between tiny"><span class="muted">Lessons watched</span><strong class="strong">9</strong></div>
-          <div class="row-between tiny"><span class="muted">Questions attempted</span><strong class="strong">184</strong></div>
-          <div class="row-between tiny"><span class="muted">Accuracy</span><strong class="strong">74%</strong></div>
-          <div class="row-between tiny"><span class="muted">Time studied</span><strong class="strong">6h 12m</strong></div>
+          <h2 class="section-title" style="font-size:var(--text-md)">Study plan</h2>
+          <div class="stack" style="gap:10px" id="task-list"></div>
+          <a class="link tiny" href="dashboard.html#task-list">Refresh</a>
         </section>
 
         <section class="card card-pad" style="display:grid;gap:var(--sp-3)">
           <div class="row" style="gap:10px">
             <span class="avatar avatar-teal"><svg><use href="#i-message"/></svg></span>
             <div>
-              <strong style="display:block;font-size:var(--text-sm)">Doubt not answered?</strong>
-              <small class="tiny muted">Median reply is 18 minutes during class hours.</small>
+              <strong style="display:block;font-size:var(--text-sm)">Batch announcements</strong>
+              <small class="tiny muted">Notices from your faculty, newest first.</small>
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm" type="button" data-ask-doubt>Ask a doubt</button>
+          <a class="btn btn-ghost btn-sm" href="community.html">Open announcements</a>
         </section>
       </aside>
     </div>
   </main>
-
-  <div id="site-footer"></div>
   <div id="site-tabbar"></div>
 
   <!-- Note composer -->
@@ -158,6 +126,7 @@
           <label for="note-body">Note</label>
           <textarea class="textarea" id="note-body" name="body" placeholder="Write what you want to remember…" required></textarea>
         </div>
+        <p class="field-error" id="note-error" role="alert" hidden></p>
         <button class="btn btn-primary btn-block" type="submit">Save note</button>
       </form>
     </div>

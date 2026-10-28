@@ -732,3 +732,56 @@
   .mobile-buy-price small { font-size: 10px; font-weight: 700; color: var(--success-600); }
   .mobile-buy .btn { min-width: 150px; min-height: 42px; }
 }
+
+/* ===================== API-DRIVEN DETAIL SCREENS ====================== */
+/* The class player and batch detail render live rows, so they need a few
+   small pieces that the fixture-era markup did not use. */
+
+.player-video { width: 100%; height: 100%; object-fit: contain; background: #05070f; }
+
+.stage-empty {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 18px 20px 20px;
+  text-align: center;
+  background: linear-gradient(180deg, transparent, rgba(6, 6, 14, 0.9));
+}
+.stage-empty[hidden] { display: none; }
+.stage-empty strong { display: block; font-size: var(--text-sm); color: var(--text-strong); }
+.stage-empty p { margin: 4px auto 0; max-width: 44ch; font-size: var(--text-xs); color: var(--text-subtle); }
+
+.player-brief {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.65;
+  color: var(--text-muted);
+  max-width: 72ch;
+}
+.player-brief[hidden] { display: none; }
+
+.course-title { display: block; font-family: var(--font-display); font-size: clamp(26px, 3.4vw, 38px); font-weight: 800; line-height: 1.12; letter-spacing: -0.02em; color: var(--text-strong); margin: 10px 0 12px; }
+.course-hero-lead { margin: 0 0 14px; max-width: 62ch; font-size: var(--text-sm); line-height: 1.6; color: var(--text-muted); }
+.batch-facts-inline { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: var(--text-xs); color: var(--text-subtle); }
+.batch-facts-inline > span { display: inline-flex; align-items: center; gap: 6px; }
+.batch-facts-inline svg { width: 15px; height: 15px; }
+.batch-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+
+.notice-row { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-1); }
+.notice-row + .notice-row { margin-top: 10px; }
+.notice-row strong { font-size: var(--text-sm); color: var(--text-strong); }
+
+.acc-item { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-1); }
+.acc-item + .acc-item { margin-top: 10px; }
+.acc-head-static { display: flex; align-items: center; }
+.acc-title { font-size: var(--text-sm); font-weight: 700; color: var(--text-strong); }
+.acc-text { margin: 6px 0 0; font-size: var(--text-xs); line-height: 1.65; color: var(--text-muted); }
+
+.lesson-list { display: grid; gap: 8px; }
+.test-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+/* Two-column block used by the batch overview; single column on narrow
+   screens, and the error variant of `.empty-state` gets a warning accent. */
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+.empty-state.is-error svg { color: var(--danger-600, #f87171); }
+.empty-state.is-error h3 { color: var(--text-strong); }

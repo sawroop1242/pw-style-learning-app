@@ -1,12 +1,17 @@
 /**
- * Home page — welcome, hero, today's classes, recommended batches, free
- * mocks, announcements and FAQ. Catalogue reads go through `live()` so the
- * page works against the API or the bundled fixtures.
+ * Home page.
+ *
+ * Four API reads, four renders: latest lessons, the published catalogue, the
+ * published tests and the announcement feed. Nothing is pre-filled — an empty
+ * catalogue renders an empty state, and a failed request renders an error with
+ * a retry, because both are more useful than invented rows.
  */
 
-import { $, $$, esc, live, initials, storage, adaptCourse, adaptTest } from './core.js';
-import { mountChrome, batchCard, testCard, todayClassCard, icon, toast } from './ui.js';
-import { COURSES, TESTS, FAQS, TODAY_CLASSES, COMMUNITY } from './data.js';
+import { $, $$, esc, getJson, rows, initials, storage, adaptCourse, adaptTest } from './core.js';
+import {
+  mountChrome, batchCard, testCard, lessonCard, icon, toast, errorState, emptyState, wireRetry
+} from './ui.js';
+import { FAQS } from './content.js';
 
 mountChrome('home');
 
@@ -18,70 +23,109 @@ function renderWelcome() {
   const user = storage.user;
   const name = user?.username || 'Student';
   const avatar = document.querySelector('[data-welcome-avatar]');
-  if (avatar) avatar.textContent = initials(name);
+  if (avatar) avatar.textContent = initials(name).slice(0, 1);
   const title = $('#welcome-title');
   if (title) {
-    const first = name.split(/[\s._-]/)[0];
+    const first = name.split(/[\s._-]/)[0] || 'Student';
     title.innerHTML = `Hello, ${esc(first.charAt(0).toUpperCase() + first.slice(1))}! <span aria-hidden="true">👋</span>`;
+  }
+  const sub = document.querySelector('[data-welcome-sub]');
+  if (sub && user) sub.textContent = 'Your batches, tests and notes are on your dashboard.';
+}
+
+/* ------------------------------------------------------------------ */
+/* Sections                                                           */
+/* ------------------------------------------------------------------ */
+
+function fill(host, html, { empty, emptyBody, actionLabel, actionHref, iconName = 'book' }) {
+  if (!host) return;
+  host.innerHTML = html || emptyState({ title: empty, body: emptyBody, actionLabel, actionHref, iconName });
+}
+
+async function loadLessons() {
+  const host = $('#today-grid');
+  if (!host) return;
+  try {
+    const payload = await getJson('/lessons/?page_size=4&ordering=position');
+    const list = rows(payload);
+    fill(host, list.map((lesson) => lessonCard(lesson)).join(''), {
+      empty: 'No lessons published yet',
+      emptyBody: 'Lessons appear here as soon as your faculty publishes them.',
+      actionLabel: 'Browse batches',
+      actionHref: 'courses.html',
+      iconName: 'play'
+    });
+  } catch {
+    host.innerHTML = errorState({ title: 'Lessons unavailable' });
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Today's classes                                                    */
-/* ------------------------------------------------------------------ */
-
-function renderToday() {
-  const host = $('#today-grid');
+async function loadBatches() {
+  const host = $('#trending-grid');
   if (!host) return;
-  host.innerHTML = TODAY_CLASSES.map(todayClassCard).join('');
+  try {
+    const payload = await getJson('/courses/?page_size=3');
+    const list = rows(payload).map(adaptCourse);
+    fill(host, list.map(batchCard).join(''), {
+      empty: 'No batches published yet',
+      emptyBody: 'The catalogue is empty. Once a batch is published it shows up here.',
+      actionLabel: 'Open the catalogue',
+      actionHref: 'courses.html'
+    });
+  } catch {
+    host.innerHTML = errorState({ title: 'Catalogue unavailable' });
+  }
 }
 
-/* ------------------------------------------------------------------ */
-/* Announcements                                                      */
-/* ------------------------------------------------------------------ */
+async function loadTests() {
+  const host = $('#home-tests');
+  if (!host) return;
+  try {
+    const payload = await getJson('/quizzes/?page_size=3');
+    const list = rows(payload).map(adaptTest);
+    fill(host, list.map(testCard).join(''), {
+      empty: 'No tests published yet',
+      emptyBody: 'Timed mocks appear here once a paper is published.',
+      actionLabel: 'All tests',
+      actionHref: 'tests.html',
+      iconName: 'file-text'
+    });
+  } catch {
+    host.innerHTML = errorState({ title: 'Tests unavailable' });
+  }
+}
 
-function renderNotices() {
+async function loadNotices() {
   const host = $('#home-notices');
   if (!host) return;
-  const ICON = ['megaphone', 'calendar', 'sparkles'];
-  host.innerHTML = COMMUNITY.announcements
-    .map(
-      (item, i) => `
+  try {
+    const payload = await getJson('/community/?page_size=3');
+    const list = rows(payload);
+    if (!list.length) {
+      host.innerHTML = `<li class="notice-item"><span class="notice-icon">${icon('bell')}</span>
+        <div><strong>No announcements yet</strong><p>Batch notices from your faculty will appear here.</p></div></li>`;
+      return;
+    }
+    host.innerHTML = list
+      .map(
+        (item) => `
       <li class="notice-item">
-        <span class="notice-icon">${icon(ICON[i % ICON.length])}</span>
+        <span class="notice-icon">${icon(item.pinned ? 'bell' : 'megaphone')}</span>
         <div>
           <strong>${esc(item.title)}</strong>
           <p>${esc(item.body)}</p>
         </div>
       </li>`
-    )
-    .join('');
+      )
+      .join('');
+  } catch {
+    host.innerHTML = `<li class="notice-item"><span class="notice-icon">${icon('alert')}</span>
+      <div><strong>Announcements unavailable</strong><p>The feed could not be loaded right now.</p></div></li>`;
+  }
 }
 
 /* ------------------------------------------------------------------ */
-/* Trending batches & free mocks                                      */
-/* ------------------------------------------------------------------ */
-
-async function renderTrending() {
-  const host = $('#trending-grid');
-  if (!host) return;
-
-  const { data } = await live('/courses/?page_size=3&sort=position', COURSES);
-  const rows = (Array.isArray(data) ? data : data.results || []).slice(0, 3);
-  host.innerHTML = rows.map((course) => batchCard(adaptCourse(course))).join('');
-}
-
-async function renderTests() {
-  const host = $('#home-tests');
-  if (!host) return;
-
-  const { data } = await live('/quizzes/?page_size=3&sort=-created_at', TESTS);
-  const rows = (Array.isArray(data) ? data : data.results || []).slice(0, 3);
-  host.innerHTML = rows.map((test) => testCard(adaptTest(test))).join('');
-}
-
-/* ------------------------------------------------------------------ */
-/* FAQ                                                                */
+/* FAQ (editorial copy, not data)                                     */
 /* ------------------------------------------------------------------ */
 
 function renderFaq() {
@@ -105,7 +149,6 @@ function renderFaq() {
     const head = e.target.closest('.acc-head');
     if (!head) return;
     const isOpen = head.getAttribute('aria-expanded') === 'true';
-    // Single-open accordion keeps the page calm.
     $$('.acc-head', host).forEach((other) => {
       const panel = document.getElementById(other.getAttribute('aria-controls'));
       other.setAttribute('aria-expanded', 'false');
@@ -142,23 +185,13 @@ document.addEventListener('click', async (e) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Search                                                             */
-/* ------------------------------------------------------------------ */
-
-const searchForm = $('#hero-search');
-searchForm?.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const q = new FormData(searchForm).get('q')?.toString().trim();
-  location.href = q ? `courses.html?q=${encodeURIComponent(q)}` : 'courses.html';
-});
-
-/* ------------------------------------------------------------------ */
 /* Boot                                                               */
 /* ------------------------------------------------------------------ */
 
 renderWelcome();
-renderToday();
-renderNotices();
-renderTrending();
-renderTests();
 renderFaq();
+wireRetry();
+loadLessons();
+loadBatches();
+loadTests();
+loadNotices();
