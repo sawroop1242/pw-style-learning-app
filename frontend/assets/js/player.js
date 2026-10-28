@@ -9,7 +9,7 @@
  */
 
 import { $, $$, esc, getJson, rows, apiQuery, qsParam, initials, shortDate } from './core.js';
-import { mountChrome, icon, toast, emptyState, thumbTone } from './ui.js';
+import { mountChrome, icon, toast, emptyState } from './ui.js';
 
 mountChrome('');
 
@@ -46,6 +46,7 @@ function setStage(lesson) {
   const empty = $('#stage-empty');
 
   if (lesson.video_url) {
+    stage.classList.remove('is-empty');
     video.src = lesson.video_url;
     video.hidden = false;
     empty.hidden = true;
@@ -62,6 +63,7 @@ function setStage(lesson) {
   }
 
   video.hidden = true;
+  stage.classList.add('is-empty');
   empty.hidden = false;
   empty.querySelector('strong').textContent = lesson.is_locked
     ? 'This lesson is locked'
@@ -82,7 +84,9 @@ function renderHead(lesson) {
   brief.hidden = !lesson.description;
 
   const stage = $('#player-stage');
-  stage.classList.add(thumbTone(lesson.course_title || ''));
+  // The tone classes carry a background of their own, so they are not applied
+  // here: the stage keeps the player gradient and only marks itself empty.
+  stage.dataset.course = lesson.course_title || '';
 }
 
 function renderChapters(lesson) {
@@ -189,6 +193,11 @@ function renderNotices() {
 
 async function load() {
   if (!lessonId) {
+    // Nothing is selected, so the video stage would be an empty rectangle.
+    const stage = $('#player-stage');
+    if (stage) stage.hidden = true;
+    const meta = $('.player-meta .icon-btn');
+    if (meta) meta.hidden = true;
     $('#player-title').textContent = 'No lesson selected';
     $('#player-sub').textContent = '';
     $('#chapter-list').innerHTML = emptyState({

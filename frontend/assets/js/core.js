@@ -177,13 +177,25 @@ export async function request(path, { method = 'GET', body, retried = false, tim
   }
   clearTimeout(timer);
 
-  if (res.status === 401 && !retried && storage.refresh) {
-    try {
-      await refreshToken();
-      return request(path, { method, body, retried: true, timeout, guestToken });
-    } catch {
+  // A stale token is not a reason to fail a public page. Try the refresh once;
+  // if that fails the session is dead, so drop it and replay the request as an
+  // anonymous visitor. A route that genuinely needs the account then answers
+  // 401 and the page can ask the visitor to sign in, which is the honest state.
+  if (res.status === 401 && !retried) {
+    if (storage.refresh) {
+      try {
+        await refreshToken();
+        return request(path, { method, body, retried: true, timeout, guestToken });
+      } catch {
+        storage.clear();
+        window.dispatchEvent(new CustomEvent('auth:expired'));
+      }
+    } else if (storage.access) {
       storage.clear();
       window.dispatchEvent(new CustomEvent('auth:expired'));
+    }
+    if (!storage.access) {
+      return request(path, { method, body, retried: true, timeout, guestToken });
     }
   }
 
@@ -194,25 +206,6 @@ export async function request(path, { method = 'GET', body, retried = false, tim
   return data;
 }
 
-/**
- * Read a collection with fixture fallback.
- * `path` is the API route; `fixture` is used when the API is unreachable.
- */
-export async function live(path, fixture, { timeout = 2500 } = {}) {
-  try {
-    const data = await request(path, { timeout });
-    return { data, live: true };
-  } catch (err) {
-    if (err.status === 401 && path.startsWith('/courses')) {
-      // Fall through to fixtures for public pages.
-    }
-    if (err.status === 0 || err.status === 404 || err.status === 408 || err.status >= 500) {
-      markPreview();
-      return { data: fixture, live: false };
-    }
-    throw err;
-  }
-}
 
 /* ------------------------------------------------------------------ */
 /* Auth                                                               */

@@ -72,6 +72,24 @@ async function inspect(page, mods, query, opts, label) {
 (async () => {
   let failed = 0;
 
+  // A page that links a stylesheet without tokens.css has no design tokens at
+  // all, so every variable resolves to nothing and the page paints unstyled.
+  console.log('\nStylesheet stack');
+  {
+    const fs = require('fs');
+    const path = require('path');
+    const { ROOT } = require('./harness');
+    for (const file of fs.readdirSync(ROOT).filter((f) => f.endsWith('.html')).sort()) {
+      const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      const links = [...html.matchAll(/assets\/css\/([\w-]+\.css)/g)].map((m) => m[1]);
+      const problems = [];
+      if (links.length && !links.includes('tokens.css')) problems.push('tokens.css missing');
+      if (links.length && !links.includes('base.css')) problems.push('base.css missing');
+      if (problems.length) failed += 1;
+      console.log(`${problems.length ? '✗' : '✓'} ${file.padEnd(18)} ${problems.join(' | ') || links.length + ' stylesheets'}`);
+    }
+  }
+
   console.log('\nWith the API answering');
   for (const [page, mods, query = ''] of PAGES) {
     const ok = await inspect(

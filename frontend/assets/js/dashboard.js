@@ -146,6 +146,29 @@ function renderTrend(attemptRows, quizMap) {
     percent: Math.round((Number(row.score) / Number(row.max_score)) * 100)
   }));
 
+  const last = points[points.length - 1];
+
+  // One paper is not a trend. A lone bar of height 0% reads as a broken chart,
+  // so show the single result as a figure and say what it will become.
+  if (points.length === 1) {
+    host.innerHTML = `
+      <div class="chart-single">
+        <span class="chart-single-score">${last.percent}%</span>
+        <span class="chart-single-body">
+          <strong>${esc(last.label)}</strong>
+          <small>Your first submitted paper. Take another and each attempt gets its own bar here.</small>
+        </span>
+      </div>`;
+    const singleBadge = $('#trend-badge');
+    if (singleBadge) {
+      singleBadge.hidden = false;
+      singleBadge.textContent = `Latest ${last.percent}%`;
+    }
+    const singleNote = $('#trend-note');
+    if (singleNote) singleNote.textContent = 'Across 1 submitted paper.';
+    return;
+  }
+
   const best = Math.max(...points.map((point) => point.percent));
   host.innerHTML = points
     .map(
@@ -160,7 +183,6 @@ function renderTrend(attemptRows, quizMap) {
     )
     .join('');
 
-  const last = points[points.length - 1];
   const badge = $('#trend-badge');
   if (badge) {
     badge.hidden = false;

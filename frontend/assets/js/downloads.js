@@ -77,13 +77,15 @@ async function load() {
       getJson(`/quizzes/${apiQuery({ page_size: 60 })}`)
     ]);
 
+    // Only recordings are useful here; a lesson without a video URL cannot be
+    // played, and a wall of "No video" rows is noise rather than information.
     paint(
       document.getElementById('list-lectures'),
-      rows(lessons),
+      rows(lessons).filter((lesson) => lesson.video_url),
       lessonRow,
       {
-        title: 'No recordings available',
-        body: 'Nothing in your batches has a video URL yet. Free and unlocked batches appear here as soon as faculty publish a class.',
+        title: 'No recordings published yet',
+        body: 'Faculty have not attached a video to any lesson in your batches. Notes and papers are still available in the other tabs.',
         actionLabel: 'Browse batches',
         actionHref: 'courses.html',
         iconName: 'play'

@@ -367,7 +367,14 @@
 }
 .catalog-toolbar .result-count { font-size: var(--text-sm); color: var(--text-muted); }
 .catalog-toolbar .result-count strong { color: var(--text-strong); }
-.toolbar-actions { display: flex; align-items: center; gap: var(--sp-2); }
+.toolbar-actions { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
+.toolbar-actions .input,
+.toolbar-actions .select { min-width: 0; }
+@media (max-width: 720px) {
+  .toolbar-actions { width: 100%; }
+  .toolbar-actions .input,
+  .toolbar-actions .select { flex: 1 1 100%; width: 100%; }
+}
 .mobile-filter-btn { display: none; }
 
 .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: var(--sp-7); }
@@ -415,6 +422,19 @@
   margin-bottom: var(--sp-5);
 }
 .tabs::-webkit-scrollbar { display: none; }
+/* A tab strip is a primary control, so on a phone it wraps into rows instead of
+   scrolling its last tabs out of sight. */
+@media (max-width: 640px) {
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+    gap: 4px;
+    overflow-x: visible;
+    border-radius: var(--r-lg);
+    padding: 5px;
+  }
+  .tab { padding: 8px 6px; text-align: center; white-space: normal; line-height: 1.25; min-height: 40px; }
+}
 .tab {
   position: relative;
   min-height: 40px;
@@ -696,8 +716,15 @@
   .auth-shell { grid-template-columns: 1fr; }
   .auth-brand { display: none; }
 }
+@media (max-width: 900px) {
+  .split-grid { grid-template-columns: minmax(0, 1fr); }
+  .legal-layout { grid-template-columns: minmax(0, 1fr); }
+  .legal-nav { position: static; }
+}
+
 @media (max-width: 720px) {
   .batch-grid, .test-grid { grid-template-columns: minmax(0, 1fr); }
+  .panel { padding: var(--sp-4); }
 }
 
 /* ------------------------------------------------------------------ */
@@ -818,6 +845,10 @@
   font-size: var(--text-sm);
   min-width: 480px;
 }
+
+/* The wrapper scrolls, the page must not: without this the 480px table pushed
+   the whole document sideways on a phone. */
+.table-wrap { max-width: 100%; -webkit-overflow-scrolling: touch; }
 
 .data-table th,
 .data-table td {
