@@ -164,11 +164,33 @@ python manage.py seed_demo --clear  # remove exactly the rows it made
 Frontend checks (no build step; `tools/checks/` installs jsdom + css-tree on demand):
 
 ```bash
-node --check frontend/sw.js
-for f in frontend/assets/js/*.js; do node --check "$f"; done
-# then serve frontend/ and walk these pages with the browser console open:
-#   index, splash, courses, course, tests, test-player, dashboard, login, legal,
-#   offline, player, downloads, community, profile
+cd tools/checks && npm install
+
+node check.js     # every page boots, renders server rows, and admits an outage
+node a11y.js      # one h1, labelled controls, landmarks, no skipped levels
+node css.js       # every class used is defined; cascade order; layout invariants
+node interact.js  # drawer, filters, exam window, notes, full screen — stubbed API
+```
+
+`live.js` repeats those against a running server and compares the DOM with what
+`/api/…` actually returned, including a contract pass that replays every path
+the screens request. It needs the API and the static server up, plus the demo
+student, which is the only account it signs in as:
+
+```bash
+# terminal 1 — API
+cd backend && python manage.py runserver 127.0.0.1:8000
+# terminal 2 — site (:8080, proxies /api to :8000)
+python3 tools/serve.py --port 8080
+# terminal 3 — the checks
+cd tools/checks && node live.js
+```
+
+Create that account once in a scratch database (`seed_demo` does not make users):
+
+```bash
+cd backend
+python manage.py shell -c "from django.contrib.auth import get_user_model; u, _ = get_user_model().objects.get_or_create(username='aarav'); u.set_password('StudySpace!2026'); u.save()"
 ```
 
 ## API Endpoints

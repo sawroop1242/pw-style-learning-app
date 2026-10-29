@@ -125,6 +125,52 @@ console.log('\nCascade order');
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Layout invariants                                                   */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The bottom tab bar is drawn from the TABS array in ui.js, but its grid was
+ * written as `repeat(5, 1fr)` while four tabs render — so the row sat
+ * off-centre with a dead column on the right. The CSS must take the count from
+ * the markup, never guess it.
+ */
+console.log('\nLayout invariants');
+{
+  const app = fs.readFileSync(path.resolve(__dirname, '../../frontend/assets/css/components.css'), 'utf8');
+  const tabbarRule = app.match(/\.tabbar ul \{[^}]*\}/);
+  const hardcoded = tabbarRule && /grid-template-columns:\s*repeat\(\s*\d+/.test(tabbarRule[0]);
+  if (!tabbarRule) {
+    failures += 1;
+    console.log('  ✗ no `.tabbar ul` rule to check');
+  } else if (hardcoded) {
+    failures += 1;
+    console.log('  ✗ `.tabbar ul` pins a column count; a tab added or removed shifts the row');
+  } else {
+    console.log('  ✓ tab bar lays itself out from the number of tabs');
+  }
+
+  // The drawer and its scrim have to outrank the tab bar, or the bar paints
+  // over the drawer foot and stays tappable through the scrim.
+  const zOf = (selector) => {
+    const rule = app.match(new RegExp(`\\${selector} \\{[^}]*\\}`));
+    const z = rule?.[0].match(/z-index:\s*([^;]+);/);
+    return z ? z[1].trim() : null;
+  };
+  const sidebarZ = zOf('.sidebar');
+  const scrimZ = zOf('.sidebar-scrim');
+  const tabbarZ = zOf('.tabbar');
+  if (!sidebarZ || !scrimZ || !tabbarZ) {
+    failures += 1;
+    console.log('  ✗ could not read the sidebar/scrim/tabbar stacking order');
+  } else if (!/\+/.test(sidebarZ) || !/\+/.test(scrimZ)) {
+    failures += 1;
+    console.log(`  ✗ drawer (${sidebarZ}) and scrim (${scrimZ}) must stack above the tab bar (${tabbarZ})`);
+  } else {
+    console.log('  ✓ drawer and scrim stack above the tab bar');
+  }
+}
+
 /* ------------------------------ report ---------------------------------- */
 const missing = [...used.entries()].filter(([name]) => !defined.has(name));
 

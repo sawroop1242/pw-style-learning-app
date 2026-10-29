@@ -34,6 +34,8 @@ const ICONS = {
   'chevron-right': '<path d="m9.5 6 6 6-6 6"/>',
   'chevron-left': '<path d="m14.5 6-6 6 6 6"/>',
   play: '<path d="M8 5.5v13l11-6.5z"/>',
+  maximize: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+  minimize: '<path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   users: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3 19a6 6 0 0 1 12 0"/><path d="M16 5.8a3.2 3.2 0 0 1 0 6.2"/><path d="M18 19a6 6 0 0 0-2-4.4"/>',
   star: '<path d="m12 4 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.7l5.4-.8z" fill="currentColor" stroke="none"/>',
@@ -234,6 +236,7 @@ export function renderHeader(active = '') {
 
   host.innerHTML = `
     <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+      <button class="icon-btn side-close" type="button" aria-label="Close menu" data-menu-close>${icon('x')}</button>
       <a class="brand" href="index.html" aria-label="StudySpace home">
         <span class="brand-mark">${icon('zap')}</span>
         <span class="brand-text">StudySpace<small>Learn · Practise · Rank</small></span>
@@ -279,9 +282,13 @@ export function renderHeader(active = '') {
   const scrim = host.querySelector('[data-scrim]');
   const menuBtn = host.querySelector('[data-menu-toggle]');
 
+  const setLocked = (locked) => {
+    document.body.classList.toggle('is-locked', locked);
+    document.documentElement.classList.toggle('is-locked', locked);
+  };
   const closeDrawer = () => {
     sidebar.classList.remove('is-open');
-    document.body.classList.remove('is-locked');
+    setLocked(false);
     scrim.hidden = true;
     menuBtn.setAttribute('aria-expanded', 'false');
     menuBtn.innerHTML = icon('menu');
@@ -289,23 +296,48 @@ export function renderHeader(active = '') {
   };
   const openDrawer = () => {
     sidebar.classList.add('is-open');
-    document.body.classList.add('is-locked');
+    setLocked(true);
     scrim.hidden = false;
     menuBtn.setAttribute('aria-expanded', 'true');
     menuBtn.innerHTML = icon('x');
     menuBtn.setAttribute('aria-label', 'Close menu');
+    // Land inside the drawer: otherwise Tab walks the page behind the scrim.
+    sidebar.querySelector('.side-close')?.focus();
   };
+  const drawerOpen = () => sidebar.classList.contains('is-open');
 
   menuBtn?.addEventListener('click', () => {
-    if (sidebar.classList.contains('is-open')) closeDrawer();
+    if (drawerOpen()) closeDrawer();
     else openDrawer();
+  });
+  host.querySelector('[data-menu-close]')?.addEventListener('click', () => {
+    closeDrawer();
+    menuBtn?.focus();
   });
   scrim?.addEventListener('click', closeDrawer);
   sidebar?.querySelectorAll('a').forEach((a) => a.addEventListener('click', closeDrawer));
+
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && sidebar?.classList.contains('is-open')) {
+    if (!drawerOpen()) return;
+    if (e.key === 'Escape') {
       closeDrawer();
       menuBtn?.focus();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    // Keep Tab inside the drawer while it covers the page.
+    const focusable = [...sidebar.querySelectorAll('a[href], button')].filter(
+      (el) => !el.hidden && !el.hasAttribute('disabled') && getComputedStyle(el).display !== 'none'
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
     }
   });
 
@@ -327,6 +359,12 @@ export function renderHeader(active = '') {
     if (e.key === '/' && !/input|textarea|select/i.test(document.activeElement.tagName)) {
       e.preventDefault();
       search?.focus();
+    }
+    // On a phone the field is a second header row; without this it stayed open
+    // until the icon was tapped again, which is not a way out.
+    if (e.key === 'Escape' && document.body.classList.contains('is-search-open')) {
+      document.body.classList.remove('is-search-open');
+      host.querySelector('[data-search-toggle]')?.focus();
     }
   });
 }

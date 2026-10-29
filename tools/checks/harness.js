@@ -52,8 +52,11 @@ function transform(src, name) {
  *   query    — search string appended to the document URL
  *   fetcher  — (url, init) => Promise<Response>; omitted means the network is
  *              unreachable, which is how the fixture fallback is exercised
+ *   fullscreen — jsdom has no Fullscreen API at all, so a check that wants to
+ *              press the stage's full-screen button has to say so; this installs
+ *              the two methods and the two properties the page touches
  */
-async function boot(page, mods, { query = '', fetcher = null, seedStorage = null } = {}) {
+async function boot(page, mods, { query = '', fetcher = null, seedStorage = null, fullscreen = false } = {}) {
   const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
   const errors = [];
   const vc = new VirtualConsole();
@@ -85,6 +88,24 @@ async function boot(page, mods, { query = '', fetcher = null, seedStorage = null
         return fetcher(url, rest);
       }
     : () => Promise.reject(new TypeError('Failed to fetch'));
+
+  if (fullscreen) {
+    // jsdom implements none of this; mimic only what player.js touches.
+    Object.defineProperty(window.document, 'fullscreenEnabled', { value: true, configurable: true });
+    Object.defineProperty(window.document, 'fullscreenElement', { value: null, writable: true, configurable: true });
+    window.Element.prototype.requestFullscreen = function requestFullscreen() {
+      window.__fullscreenElement = this;
+      window.document.fullscreenElement = this;
+      window.document.dispatchEvent(new window.Event('fullscreenchange'));
+      return Promise.resolve();
+    };
+    window.document.exitFullscreen = function exitFullscreen() {
+      window.__fullscreenElement = null;
+      window.document.fullscreenElement = null;
+      window.document.dispatchEvent(new window.Event('fullscreenchange'));
+      return Promise.resolve();
+    };
+  }
 
   window.matchMedia = (q) => ({
     matches: false, media: q, addListener() {}, removeListener() {},
