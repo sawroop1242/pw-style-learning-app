@@ -15,11 +15,76 @@ const { boot, click, wait } = require('./harness');
 
 const ORIGIN = process.env.CHECK_ORIGIN || 'http://127.0.0.1:8080';
 
-const liveBoot = (page, mods, query = '') =>
-  boot(page, mods, {
-    query,
-    fetcher: (url, init) => fetch(new URL(url, ORIGIN).toString(), init)
-  });
+const liveFetch = (url, init) => fetch(new URL(url, ORIGIN).toString(), init);
+
+const liveBoot = (page, mods, query = '', seedStorage = null) =>
+  boot(page, mods, { query, fetcher: liveFetch, seedStorage });
+
+/**
+ * A real token so a section can act as an account.
+ *
+ * The login endpoint is deliberately throttled (10/min per identifier), and a
+ * check suite that logs in on every run trips it. The token is cached on disk
+ * and reused until it is nearly expired — which is also what a real session
+ * does. A 429 is waited out once rather than reported as a product failure.
+ */
+const TOKEN_CACHE = '/tmp/studyspace-check-token.json';
+
+function tokenIsFresh(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+    return payload.exp * 1000 - Date.now() > 120000;
+  } catch {
+    return false;
+  }
+}
+
+async function mintToken() {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const res = await fetch(`${ORIGIN}/api/token/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username_or_email: 'aarav', password: 'StudySpace!2026' })
+    });
+    if (res.ok) return res.json();
+    if (res.status !== 429) return null;
+    console.log('  … login throttled, waiting for the window to reopen');
+    await wait(61000);
+  }
+  return null;
+}
+
+async function signIn() {
+  let token = null;
+  try {
+    const cached = JSON.parse(require('fs').readFileSync(TOKEN_CACHE, 'utf8'));
+    if (tokenIsFresh(cached.access)) token = cached;
+  } catch {
+    /* no usable cache */
+  }
+  if (!token) {
+    token = await mintToken();
+    if (!token) return null;
+    try {
+      require('fs').writeFileSync(TOKEN_CACHE, JSON.stringify(token));
+    } catch {
+      /* a cache miss just means the next run logs in again */
+    }
+  }
+  const me = await (
+    await fetch(`${ORIGIN}/api/auth/me/`, {
+      headers: { Authorization: `Bearer ${token.access}` }
+    })
+  ).json();
+  return {
+    storage: {
+      'studyspace.access': token.access,
+      'studyspace.refresh': token.refresh,
+      'studyspace.user': JSON.stringify({ username: me.username, email: me.email })
+    },
+    auth: { Authorization: `Bearer ${token.access}` }
+  };
+}
 
 let pass = 0;
 let fail = 0;
@@ -226,12 +291,170 @@ const FIXTURES = [
     const { doc, errors } = await liveBoot('player.html', ['core', 'content', 'ui', 'player'], `?lesson=${lesson.id}`);
     check('lesson title from the API', text(doc.querySelector('#player-title')) === lesson.title, text(doc.querySelector('#player-title')));
     check('no invented timestamp', !text(doc.querySelector('#player-sub')).includes('/ 1:00:15'));
-    check(
-      'stage says whether a recording exists',
-      lesson.video_url ? !doc.querySelector('#player-video').hidden : !doc.querySelector('#stage-empty').hidden
-    );
+    // Three honest states: an embed page, a media file, or nothing.
+    const expectsEmbed = Boolean(lesson.video_url) && /embed\.vcdn\.me|player\.vimeo\.com/.test(lesson.video_url);
+    if (!lesson.video_url) {
+      check('a lesson without a recording says so', !doc.querySelector('#stage-empty').hidden);
+    } else if (expectsEmbed) {
+      const iframe = doc.querySelector('#player-embed iframe');
+      check('an embed URL is shown as an iframe', Boolean(iframe) && !doc.querySelector('#player-embed').hidden);
+      check('the iframe src is the URL the API served', iframe?.getAttribute('src') === lesson.video_url, iframe?.getAttribute('src'));
+    } else {
+      check('a media URL uses the video element', !doc.querySelector('#player-video').hidden);
+    }
     check('section list rendered', doc.querySelectorAll('#chapter-list .lesson-item').length > 0);
     check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  console.log('\nbatch page lists its faculty (live rows)');
+  {
+    const list = await api('/api/courses/?page_size=6');
+    const course = rowsOf(list).find((row) => row.slug === 'demo-jee-main-2027') || rowsOf(list)[0];
+    const detail = await api(`/api/courses/${course.id}/`);
+    const { doc, errors } = await liveBoot('course.html', ['core', 'content', 'ui', 'course'], `?slug=${course.slug}`);
+
+    if ((detail.faculty || []).length) {
+      const cards = doc.querySelectorAll('#panel-faculty .faculty-card');
+      check('every seeded teacher is on the page', cards.length === detail.faculty.length, `${cards.length}/${detail.faculty.length}`);
+      check('the page names the same people', text(doc.querySelector('#panel-faculty')).includes(detail.faculty[0].name));
+    } else {
+      check('a batch without faculty says so', Boolean(doc.querySelector('#panel-faculty .empty-state')));
+    }
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  console.log('\nlearning loop: open a class, write a note, see it on the dashboard');
+  {
+    const session = await signIn();
+    if (!session) {
+      check('a signed-in account is available for the learning-loop check', false, 'token refused');
+    } else {
+      const lessons = await api('/api/lessons/?page_size=1');
+      const lesson = rowsOf(lessons)[0];
+
+      const { doc, window, errors } = await liveBoot(
+        'player.html',
+        ['core', 'content', 'ui', 'player'],
+        `?lesson=${lesson.id}`,
+        session.storage
+      );
+      await wait(700);
+
+      const complete = doc.querySelector('#mark-complete');
+      check('the player offers completion to a signed-in learner', Boolean(complete) && !complete.hidden);
+
+      click(window, complete);
+      await wait(700);
+
+      const saved = await (
+        await fetch(`${ORIGIN}/api/progress/?lesson=${lesson.id}`, { headers: session.auth })
+      ).json();
+      check(
+        'the server now holds a completed progress row',
+        rowsOf(saved).some((row) => row.completed),
+        JSON.stringify(rowsOf(saved)[0] || {})
+      );
+
+      doc.querySelector('#lesson-note-body').value = 'Live check note.';
+      doc.querySelector('#lesson-note-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+      await wait(800);
+
+      const notes = await (
+        await fetch(`${ORIGIN}/api/notes/?lesson=${lesson.id}`, { headers: session.auth })
+      ).json();
+      check('the note reached the database', rowsOf(notes).some((row) => row.body === 'Live check note.'));
+      check('the note is rendered under the lesson', /Live check note\./.test(text(doc.querySelector('#lesson-note-list'))));
+
+      const { doc: dash, errors: dashErrors } = await liveBoot(
+        'dashboard.html',
+        ['core', 'content', 'ui', 'dashboard'],
+        '',
+        session.storage
+      );
+      await wait(600);
+      check(
+        'the dashboard now offers the lesson under "Continue learning"',
+        Boolean(dash.querySelector('#continue-list .continue-card')),
+        text(dash.querySelector('#continue-list')).slice(0, 60)
+      );
+      check('"Lessons done" is no longer zero', text(dash.querySelectorAll('.dash-figure strong')[1]) !== '0', text(dash.querySelectorAll('.dash-figure strong')[1]));
+
+      check('no console errors while writing', errors.length === 0, errors[0]);
+      check('no console errors on the dashboard', dashErrors.length === 0, dashErrors[0]);
+    }
+  }
+
+  console.log('\nactivity inbox (live rows)');
+  {
+    const inbox = await api('/api/notifications/');
+    const { doc, window } = await liveBoot('dashboard.html', ['core', 'content', 'ui', 'dashboard']);
+    await wait(400);
+    click(window, doc.querySelector('#notify-btn'));
+    await wait(500);
+    const items = doc.querySelectorAll('#notify-panel .notify-item');
+    if (inbox.count) {
+      check('the panel lists the API items', items.length === inbox.count, `${items.length}/${inbox.count}`);
+      check('the first item is the API title', text(items[0]).includes(inbox.results[0].title));
+    } else {
+      check('an empty inbox says so', Boolean(doc.querySelector('#notify-panel .notify-empty')));
+    }
+  }
+
+  /**
+   * Parity: every path a screen asks for must exist on this API.
+   *
+   * The pages are booted with a recording fetcher, so nothing here is a
+   * hand-written list of endpoints — it is whatever the modules actually
+   * request. Each recorded path is then replayed; 404 is the one answer that
+   * means "this screen is calling something the backend does not publish".
+   * 401/403/405 all prove the route exists.
+   */
+  console.log('\ncontract (paths the screens request)');
+  {
+    const session = await signIn();
+    // Ids move when the demo is reseeded, so the player is pointed at a lesson
+    // that exists right now rather than at last week's id.
+    const liveLessons = rowsOf(await api('/api/lessons/?page_size=60'));
+    const lessonId = liveLessons[0]?.id;
+    const PAGES = [
+      ['index.html', ['core', 'content', 'ui', 'home'], '', false],
+      ['courses.html', ['core', 'content', 'ui', 'courses'], '', false],
+      ['course.html', ['core', 'content', 'ui', 'course'], '?slug=jee-main-2027', false],
+      ['tests.html', ['core', 'content', 'ui', 'tests'], '', false],
+      ['downloads.html', ['core', 'content', 'ui', 'downloads'], '', false],
+      ['community.html', ['core', 'content', 'ui', 'community'], '', false],
+      ['profile.html', ['core', 'content', 'ui', 'profile'], '', true],
+      ['dashboard.html', ['core', 'content', 'ui', 'dashboard'], '', true],
+      ['player.html', ['core', 'content', 'ui', 'player'], `?lesson=${lessonId}`, true],
+      ['legal.html', ['core', 'content', 'ui', 'legal'], '', false]
+    ];
+    const everyPath = new Set();
+    for (const [page, mods, query, asAccount] of PAGES) {
+      const asked = [];
+      const recorder = (url, init) => {
+        try {
+          const abs = new URL(url, ORIGIN);
+          asked.push(abs.pathname + abs.search);
+        } catch {
+          /* a request the browser would reject anyway */
+        }
+        return liveFetch(url, init);
+      };
+      await boot(page, mods, { query, fetcher: recorder, seedStorage: asAccount ? session?.storage : null });
+      await wait(500);
+      const missing = [];
+      for (const path of new Set(asked)) {
+        everyPath.add(path);
+        const res = await fetch(`${ORIGIN}${path}`, { method: 'GET', headers: session?.auth || {} });
+        if (res.status === 404) missing.push(`${path} → 404`);
+      }
+      check(
+        `${page} only calls published endpoints`,
+        missing.length === 0 && asked.length > 0,
+        missing.length ? missing.join(', ') : `${new Set(asked).size} paths`
+      );
+    }
+    check('the screens cover the API broadly', everyPath.size >= 20, `${everyPath.size} distinct paths`);
   }
 
   console.log(`\n${pass}/${pass + fail} live checks passed`);

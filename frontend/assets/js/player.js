@@ -2,20 +2,35 @@
  * Class player.
  *
  * Reads one lesson from `/lessons/<id>/`, the other lessons in the same
- * section, the notes (PDFs) of that section and the batch announcements. A
- * lesson without a `video_url` shows an explicit "no recording published"
- * stage instead of a fake timestamp — the API is the only source of truth
- * about whether a recording exists.
+ * section, the section PDFs and the batch announcements. A lesson without a
+ * `video_url` shows an explicit "no recording published" stage instead of a
+ * fake timestamp — the API is the only source of truth about whether a
+ * recording exists.
+ *
+ * Opening a class records it (`POST /progress/`), and "Mark complete" writes
+ * the completed flag. Until this existed the server-side progress table was
+ * never written to, so the dashboard's "Continue learning" and "Lessons done"
+ * could not fill — the endpoint was implemented and nothing called it.
  */
 
-import { $, $$, esc, getJson, rows, apiQuery, qsParam, initials, shortDate } from './core.js';
+import {
+  $, $$, esc, getJson, request, rows, apiQuery, qsParam, initials, shortDate, isSignedIn
+} from './core.js';
 import { mountChrome, icon, toast, emptyState } from './ui.js';
 
 mountChrome('');
 
 const lessonId = qsParam('lesson') || qsParam('id');
 
-const STATE = { lesson: null, siblings: [], files: [], notices: [] };
+const STATE = {
+  lesson: null,
+  siblings: [],
+  files: [],
+  notices: [],
+  notes: [],
+  progress: null,
+  progressError: null
+};
 
 function renderTabs() {
   const tabs = $$('.tabs .tab');
@@ -39,11 +54,70 @@ function renderTabs() {
   });
 }
 
+/**
+ * Hosts whose URL is a *player page*, not a media file.
+ *
+ * `https://embed.vcdn.me/embed/<id>` is an HTML document; handing it to
+ * `<video src>` shows a broken element with no explanation. Those go in an
+ * iframe instead. Everything else keeps the native player, which is better
+ * for captions, speed control and mobile fullscreen.
+ */
+const EMBED_HOSTS = ['embed.vcdn.me', 'player.vimeo.com', 'drive.google.com'];
+const EMBED_PATHS = [/^\/embed\//, /\/embed\//, /\/file\/d\//];
+
+function isEmbedUrl(raw) {
+  try {
+    const url = new URL(raw, location.origin);
+    if (url.protocol !== 'https:') return false;
+    if (EMBED_HOSTS.includes(url.hostname)) return true;
+    return EMBED_HOSTS.some((host) => url.hostname === host) && EMBED_PATHS.some((re) => re.test(url.pathname));
+  } catch {
+    return false;
+  }
+}
+
+/** The iframe an embed URL turns into, or null when the lesson has none. */
+function embedFrame(lesson) {
+  const host = $('#player-embed');
+  if (!host) return null;
+  if (!lesson.video_url || !isEmbedUrl(lesson.video_url)) {
+    // Removing the node also stops playback (and any autoplay) when the
+    // learner moves to a lesson without a recording.
+    host.innerHTML = '';
+    host.hidden = true;
+    return null;
+  }
+  if (!host.querySelector('iframe')) {
+    host.innerHTML = `
+      <iframe
+        src="${esc(lesson.video_url)}"
+        title="${esc(lesson.title || 'Class recording')}"
+        loading="lazy"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allowfullscreen
+        referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  }
+  host.hidden = false;
+  return host;
+}
+
 function setStage(lesson) {
   const stage = $('#player-stage');
   const face = $('#stage-face');
   const video = $('#player-video');
   const empty = $('#stage-empty');
+  const frame = embedFrame(lesson);
+
+  if (frame) {
+    // An embed brings its own chrome; the page stage just holds the frame.
+    stage.classList.remove('is-empty');
+    video.hidden = true;
+    video.removeAttribute('src');
+    empty.hidden = true;
+    stage.removeAttribute('role');
+    face.hidden = true;
+    return;
+  }
 
   if (lesson.video_url) {
     stage.classList.remove('is-empty');
@@ -166,6 +240,187 @@ function renderNotes(lesson) {
     .join('');
 }
 
+/* ------------------------------------------------------------------ */
+/* Progress                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Record that this lesson was opened, and paint the completion control from
+ * the server's answer rather than from local memory.
+ */
+async function loadProgress(lesson) {
+  const button = $('#mark-complete');
+  if (!button) return;
+
+  if (!isSignedIn()) {
+    button.hidden = true;
+    return;
+  }
+
+  button.hidden = false;
+  try {
+    // One row per (user, lesson): posting "opened" is safe to repeat.
+    const record = await request('/progress/', {
+      method: 'POST',
+      body: { lesson: lesson.id, completed: false }
+    });
+    STATE.progress = record;
+    paintProgress(record);
+  } catch (err) {
+    STATE.progressError = err;
+    button.hidden = true;
+    const status = $('#player-sub');
+    if (status && err?.status !== 401) {
+      status.textContent = 'Progress could not be saved — the server did not answer.';
+    }
+  }
+}
+
+function paintProgress(record) {
+  const button = $('#mark-complete');
+  const label = $('#mark-complete-label');
+  if (!button || !label) return;
+  const done = Boolean(record?.completed);
+  button.classList.toggle('is-done', done);
+  label.textContent = done ? 'Completed' : 'Mark complete';
+  button.setAttribute('aria-pressed', String(done));
+}
+
+async function toggleComplete() {
+  const lesson = STATE.lesson;
+  if (!lesson) return;
+  const button = $('#mark-complete');
+  const done = Boolean(STATE.progress?.completed);
+  button.disabled = true;
+  try {
+    const record = await request('/progress/', {
+      method: 'POST',
+      body: { lesson: lesson.id, completed: !done }
+    });
+    STATE.progress = record;
+    paintProgress(record);
+    toast(record.completed ? 'Marked this class complete.' : 'Marked as not finished.', 'success');
+  } catch (err) {
+    toast(err?.message || 'That did not save.', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('#mark-complete')?.addEventListener('click', toggleComplete);
+
+/* ------------------------------------------------------------------ */
+/* Notes on this lesson                                                */
+/* ------------------------------------------------------------------ */
+
+function noteRow(note) {
+  return `
+    <article class="note-preview" data-note="${note.id}">
+      <div class="row-between" style="gap:10px;align-items:flex-start">
+        <p style="margin:0">${esc(note.body)}</p>
+        <button class="icon-btn" type="button" data-delete-note="${note.id}"
+                aria-label="Delete this note" style="width:32px;height:32px;flex:none">
+          ${icon('trash')}
+        </button>
+      </div>
+      <span class="tiny subtle">${esc(shortDate(note.updated_at))}</span>
+    </article>`;
+}
+
+function renderLessonNotes() {
+  const host = $('#lesson-note-list');
+  const form = $('#lesson-note-form');
+  if (!host) return;
+
+  if (!isSignedIn()) {
+    if (form) form.hidden = true;
+    host.innerHTML = emptyState({
+      title: 'Sign in to keep notes',
+      body: 'Notes are private to your account, so they are saved on the server and follow you between devices.',
+      actionLabel: 'Sign in',
+      actionHref: `login.html?next=${encodeURIComponent(`player.html?lesson=${lessonId}`)}`,
+      iconName: 'note'
+    });
+    return;
+  }
+
+  if (form) form.hidden = false;
+  host.innerHTML = STATE.notes.length
+    ? STATE.notes.map(noteRow).join('')
+    : '<p class="tiny muted" style="margin:0">No note on this class yet. Anything you write above is saved to your account.</p>';
+}
+
+async function loadLessonNotes(lesson) {
+  if (!isSignedIn()) {
+    STATE.notes = [];
+    renderLessonNotes();
+    return;
+  }
+  try {
+    const payload = await getJson(`/notes/${apiQuery({ lesson: lesson.id, page_size: 20 })}`);
+    STATE.notes = rows(payload);
+  } catch {
+    STATE.notes = [];
+  }
+  renderLessonNotes();
+}
+
+$('#lesson-note-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const lesson = STATE.lesson;
+  const field = $('#lesson-note-body');
+  const status = $('#lesson-note-status');
+  const button = $('#lesson-note-save');
+  if (!lesson || !field) return;
+
+  const body = field.value.trim();
+  if (!body) {
+    if (status) status.textContent = 'Write something first.';
+    field.focus();
+    return;
+  }
+
+  if (button) button.disabled = true;
+  if (status) status.textContent = 'Saving…';
+  try {
+    const saved = await request('/notes/', {
+      method: 'POST',
+      body: {
+        lesson: lesson.id,
+        title: lesson.title ? `Note — ${lesson.title}` : 'Class note',
+        body
+      }
+    });
+    STATE.notes = [saved, ...STATE.notes];
+    field.value = '';
+    if (status) status.textContent = '';
+    renderLessonNotes();
+    toast('Note saved to your account.', 'success');
+  } catch (err) {
+    if (status) status.textContent = err?.message || 'The note did not save.';
+  } finally {
+    if (button) button.disabled = false;
+  }
+});
+
+$('#lesson-note-list')?.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-delete-note]');
+  if (!button) return;
+  const id = button.getAttribute('data-delete-note');
+  if (!window.confirm('Delete this note? This cannot be undone.')) return;
+
+  button.disabled = true;
+  try {
+    await request(`/notes/${id}/`, { method: 'DELETE' });
+    STATE.notes = STATE.notes.filter((note) => String(note.id) !== String(id));
+    renderLessonNotes();
+    toast('Note deleted.', 'success');
+  } catch (err) {
+    button.disabled = false;
+    toast(err?.message || 'The note could not be deleted.', 'error');
+  }
+});
+
 function renderNotices() {
   const host = $('#notice-list');
   if (!STATE.notices.length) {
@@ -208,6 +463,9 @@ async function load() {
       iconName: 'play'
     });
     $('#stage-empty').hidden = false;
+    const complete = $('#mark-complete');
+    if (complete) complete.hidden = true;
+    renderLessonNotes();
     return;
   }
 
@@ -243,6 +501,9 @@ async function load() {
     STATE.siblings = [];
   }
   renderChapters(lesson);
+
+  await loadProgress(lesson);
+  await loadLessonNotes(lesson);
 
   try {
     STATE.files = rows(await getJson(`/pdfs/${apiQuery({ course: lesson.course, page_size: 60 })}`));

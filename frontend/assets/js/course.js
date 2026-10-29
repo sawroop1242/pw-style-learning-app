@@ -289,12 +289,46 @@ function testCardFor(test) {
     </article>`;
 }
 
+/**
+ * The teachers on this batch, straight from `GET /courses/<id>/` → `faculty`.
+ *
+ * This list used to be hard-coded to an empty state: the tab existed and no
+ * table answered it. It now renders what the provider typed in, and says so
+ * plainly when a batch genuinely lists nobody.
+ */
 function renderFaculty() {
-  $('#panel-faculty').innerHTML = emptyState({
-    title: 'Teacher profiles are being added',
-    body: 'This batch does not list its faculty yet. Lessons and notes are already available in the Class Schedule tab.',
-    iconName: 'users'
-  });
+  const host = $('#panel-faculty');
+  const people = current.faculty || [];
+
+  if (!people.length) {
+    host.innerHTML = emptyState({
+      title: 'No faculty listed',
+      body: 'This batch does not name its teachers yet. Lessons and notes are already available in the Class Schedule tab.',
+      iconName: 'users'
+    });
+    return;
+  }
+
+  host.innerHTML = `
+    <div class="faculty-grid">
+      ${people
+        .map(
+          (person) => `
+        <article class="faculty-card">
+          <span class="faculty-avatar" aria-hidden="true">${
+            person.avatar_url
+              ? `<img src="${esc(person.avatar_url)}" alt="" loading="lazy">`
+              : esc(initials(person.name))
+          }</span>
+          <div class="faculty-body">
+            <strong>${esc(person.name)}</strong>
+            ${person.subject ? `<span class="badge badge-outline">${esc(person.subject)}</span>` : ''}
+            ${person.bio ? `<p class="small muted" style="margin:6px 0 0">${esc(person.bio)}</p>` : ''}
+          </div>
+        </article>`
+        )
+        .join('')}
+    </div>`;
 }
 
 function renderFaq() {

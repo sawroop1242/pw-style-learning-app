@@ -422,19 +422,6 @@
   margin-bottom: var(--sp-5);
 }
 .tabs::-webkit-scrollbar { display: none; }
-/* A tab strip is a primary control, so on a phone it wraps into rows instead of
-   scrolling its last tabs out of sight. */
-@media (max-width: 640px) {
-  .tabs {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
-    gap: 4px;
-    overflow-x: visible;
-    border-radius: var(--r-lg);
-    padding: 5px;
-  }
-  .tab { padding: 8px 6px; text-align: center; white-space: normal; line-height: 1.25; min-height: 40px; }
-}
 .tab {
   position: relative;
   min-height: 40px;
@@ -449,6 +436,33 @@
 .tab:hover { color: var(--text-strong); background: var(--surface-raised); }
 .tab[aria-selected="true"] { color: var(--text-invert); font-weight: 700; background: var(--violet-600); }
 .tab-panel[hidden] { display: none; }
+
+/* A tab strip is a primary control, so on a phone its labels wrap inside the
+   row instead of being clipped. These rules sit *after* the base `.tab` rules
+   on purpose: an equal-specificity override placed earlier loses to `nowrap`,
+   which is exactly how "Announcements" got cut off. */
+@media (max-width: 640px) {
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+    gap: 4px;
+    overflow-x: visible;
+    border-radius: var(--r-lg);
+    padding: 5px;
+  }
+
+  /* 11px keeps a whole word like "Announcements" inside a third of a 390px
+     strip; at 12px it broke mid-word ("Announcemen/ts"), which reads as a bug. */
+  .tab {
+    padding: 8px 4px;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: break-word;
+    font-size: var(--text-2xs);
+    line-height: 1.25;
+    min-height: 40px;
+  }
+}
 
 .prose { font-size: var(--text-base); line-height: 1.75; color: var(--text-muted); }
 .prose h3 { font-size: var(--text-lg); color: var(--text-strong); margin-block: var(--sp-5) var(--sp-2); }
@@ -719,7 +733,7 @@
 @media (max-width: 900px) {
   .split-grid { grid-template-columns: minmax(0, 1fr); }
   .legal-layout { grid-template-columns: minmax(0, 1fr); }
-  .legal-nav { position: static; }
+  /* `.legal-nav` is un-stuck in the legal block below, next to its base rule. */
 }
 
 @media (max-width: 720px) {
@@ -1047,4 +1061,20 @@
   .auth-brand-copy { margin-top: var(--sp-6); }
   .auth-facts { display: none; }
   .auth-brand-foot { margin-top: var(--sp-5); }
+}
+
+/* A greeting icon sits inline with the heading, baseline-aligned and never on
+   a line of its own. */
+#welcome-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  flex-wrap: wrap;
+}
+
+#welcome-title svg {
+  width: 0.8em;
+  height: 0.8em;
+  flex: none;
+  color: var(--violet-500);
 }

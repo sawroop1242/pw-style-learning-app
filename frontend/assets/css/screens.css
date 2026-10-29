@@ -692,7 +692,6 @@
   .quick-icon { width: 34px; height: 34px; }
   .today-grid { grid-template-columns: minmax(0, 1fr); }
   .check-list { grid-template-columns: minmax(0, 1fr); }
-  .batch-actions .btn { flex: 1 1 0; min-width: 0; }
   .player-shell { padding-inline: 0; }
   .poster-card { min-height: 280px; padding: var(--sp-5); }
 }
@@ -756,6 +755,13 @@
 
 .player-shell .tabs .tab { font-size: var(--text-xs); }
 
+/* On a phone the strip splits into equal columns, so the label has to fit a
+   third of the viewport. 11px does that without breaking mid-word; the base
+   rule above would otherwise win on specificity. */
+@media (max-width: 640px) {
+  .player-shell .tabs .tab { font-size: var(--text-2xs); padding-inline: 4px; }
+}
+
 .player-brief {
   margin: var(--sp-4) 0 0;
   font-size: var(--text-sm);
@@ -796,3 +802,127 @@
 @media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
 .empty-state.is-error svg { color: var(--danger-600, #f87171); }
 .empty-state.is-error h3 { color: var(--text-strong); }
+
+/* ------------------------------------------------------------------ */
+/* Class player: progress control and lesson notes                     */
+/* ------------------------------------------------------------------ */
+
+#mark-complete { white-space: nowrap; }
+
+#mark-complete.is-done {
+  background: rgba(52, 211, 153, 0.16);
+  border-color: transparent;
+  color: var(--success-600);
+}
+
+#mark-complete.is-done:hover { background: rgba(52, 211, 153, 0.24); }
+
+.note-composer { display: grid; gap: var(--sp-2); }
+
+.note-composer .note-preview { background: var(--surface-raised); }
+
+.note-preview [data-delete-note] { color: var(--text-subtle); }
+.note-preview [data-delete-note]:hover { color: var(--danger-600); }
+
+@media (max-width: 560px) {
+  #mark-complete { width: 100%; }
+  .player-meta > .row { width: 100%; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Dashboard study plan                                                */
+/* ------------------------------------------------------------------ */
+
+.task-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.task-row .task-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.task-row.is-done .task-title {
+  font-weight: 500;
+  color: var(--text-subtle);
+  text-decoration: line-through;
+  text-decoration-color: var(--slate-600);
+}
+
+.task-check {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.task-check svg { width: 14px; height: 14px; }
+
+.task-check:hover { border-color: var(--violet-500); color: var(--violet-600); }
+
+.task-row.is-done .task-check {
+  background: rgba(52, 211, 153, 0.16);
+  border-color: transparent;
+  color: var(--success-600);
+}
+
+.task-check:disabled { opacity: 0.5; cursor: progress; }
+
+/* ------------------------------------------------------------------ */
+/* Batch page: faculty                                                 */
+/* ------------------------------------------------------------------ */
+
+.faculty-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-3);
+}
+
+.faculty-card {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.faculty-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  color: var(--violet-600);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.faculty-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.faculty-body { display: grid; gap: 4px; min-width: 0; align-content: start; }
+.faculty-body strong { font-size: var(--text-sm); }
+.faculty-body .badge { justify-self: start; }
+
+/* An embed player owns its own chrome; the stage just sizes it. */
+.player-embed { position: absolute; inset: 0; background: #000; }
+.player-embed[hidden] { display: none; }
+.player-embed iframe { display: block; width: 100%; height: 100%; border: 0; }
+
+/* A tab label that overflows its own box is a clipped word, not a style. */
+.tabs .tab { overflow-wrap: anywhere; }

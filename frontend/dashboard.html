@@ -92,9 +92,24 @@
         </section>
 
         <section class="card card-pad" style="display:grid;gap:var(--sp-3)">
-          <h2 class="section-title" style="font-size:var(--text-md)">Study plan</h2>
+          <div class="row-between" style="gap:10px">
+            <h2 class="section-title" style="font-size:var(--text-md)">Study plan</h2>
+            <button class="icon-btn" type="button" id="task-toggle" aria-label="Add a study task"
+                    aria-expanded="false" style="width:32px;height:32px"><svg><use href="#i-plus"/></svg></button>
+          </div>
+          <form id="task-form" class="stack" style="gap:8px" hidden novalidate>
+            <div class="field">
+              <label class="visually-hidden" for="task-title">Task</label>
+              <input class="input" id="task-title" placeholder="e.g. Finish the mechanics problem set" required maxlength="180">
+            </div>
+            <div class="row" style="gap:8px">
+              <label class="visually-hidden" for="task-due">Due date</label>
+              <input class="input" id="task-due" type="date">
+              <button class="btn btn-primary btn-sm" type="submit" id="task-save">Add</button>
+            </div>
+            <p class="tiny subtle" id="task-status" role="status"></p>
+          </form>
           <div class="stack" style="gap:10px" id="task-list"></div>
-          <a class="link tiny" href="dashboard.html#task-list">Refresh</a>
         </section>
 
         <section class="card card-pad" style="display:grid;gap:var(--sp-3)">

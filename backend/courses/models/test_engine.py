@@ -291,3 +291,64 @@ class CsvImportJob(TimeStampedModel):
 
     def __str__(self):
         return f"CsvImportJob(quiz={self.quiz_id}, {self.status})"
+
+
+class QuestionReport(TimeStampedModel):
+    """A learner saying "this question looks wrong", attached to the attempt.
+
+    The reason used to live only in the browser: the exam window collected it,
+    put it in the autosave payload and the server dropped it. A report is worth
+    keeping because it is the only signal a provider gets about a bad question.
+
+    One row per (attempt, question): reporting the same question twice updates
+    the reason instead of piling up duplicates. A guest may report a question on
+    their own attempt; ``user`` stays null for them and the attempt token is the
+    only credential, exactly like autosave and submit.
+    """
+
+    class Reason(models.TextChoices):
+        WRONG_ANSWER = "wrong_answer", "The marked answer looks wrong"
+        TYPO = "typo", "Spelling or formatting problem"
+        AMBIGUOUS = "ambiguous", "Question is ambiguous"
+        MISSING_INFO = "missing_info", "Not enough information to answer"
+        OTHER = "other", "Something else"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        REVIEWING = "reviewing", "Being reviewed"
+        RESOLVED = "resolved", "Resolved"
+        DISMISSED = "dismissed", "Dismissed"
+
+    attempt = models.ForeignKey(
+        QuizAttempt, on_delete=models.CASCADE, related_name="reports"
+    )
+    question = models.ForeignKey(
+        Question, on_delete=models.CASCADE, related_name="reports"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="question_reports",
+    )
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    detail = models.TextField(blank=True, max_length=1000)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["attempt", "question"], name="unique_report_per_question"
+            )
+        ]
+        indexes = [models.Index(fields=["status", "-created_at"])]
+
+    @property
+    def owner(self):
+        """Whoever owns the paper: object permissions resolve through this."""
+        return self.attempt.quiz.owner
+
+    def __str__(self):
+        return f"Report(attempt={self.attempt_id}, question={self.question_id}, {self.reason})"

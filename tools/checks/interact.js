@@ -227,7 +227,22 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('a lone attempt does not draw an empty chart', doc.querySelectorAll('#chart-bars .chart-bar').length === 0);
 
     check('notes listed', doc.querySelectorAll('#notes-list .note-preview').length === 1);
-    check('study task listed', doc.querySelectorAll('#task-list .row-between').length === 1);
+    check('study task listed', doc.querySelectorAll('#task-list .task-row').length === 1);
+    check('an unfinished task offers its completion control', Boolean(doc.querySelector('#task-list [data-task-toggle]')));
+
+    // The planner is no longer read-only: the form posts to /study-tasks/.
+    click(window, doc.querySelector('#task-toggle'));
+    await wait(80);
+    check('the add-task form opens', !doc.querySelector('#task-form').hidden);
+    doc.querySelector('#task-title').value = 'Finish the mechanics set';
+    doc.querySelector('#task-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await wait(300);
+    check('a new task is added to the plan', doc.querySelectorAll('#task-list .task-row').length === 2, String(doc.querySelectorAll('#task-list .task-row').length));
+    check('the form closes after saving', doc.querySelector('#task-form').hidden);
+
+    click(window, doc.querySelector('#task-list [data-task-toggle]'));
+    await wait(300);
+    check('completing a task updates the row', doc.querySelectorAll('#task-list .task-row.is-done').length === 1);
 
     click(window, doc.querySelector('[data-new-note]'));
     await wait(120);
@@ -265,6 +280,96 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('a two-paper trend has no single figure', !doc.querySelector('#chart-bars .chart-single'));
     check('the better bar is highlighted', doc.querySelectorAll('#chart-bars .bar.is-best').length === 1);
     check('the legend counts both papers', /2 submitted papers/.test(doc.querySelector('#trend-note').textContent), doc.querySelector('#trend-note').textContent);
+  }
+
+  /* ------------------------------- player -------------------------------- */
+  {
+    console.log('\nplayer.html (signed in)');
+    const { window, doc, errors } = await open('player.html', ['core', 'content', 'ui', 'player'], {
+      query: '?lesson=11',
+      signedIn: true
+    });
+
+    // Opening a class records it: the dashboard's "continue learning" is fed
+    // by this call and by nothing else.
+    check('the class title comes from the API', /Units and measurement/.test(doc.querySelector('#player-title').textContent));
+
+    // `https://embed.vcdn.me/embed/…` is a player *page*. Handed to <video src>
+    // it is a broken element; it belongs in an iframe.
+    const embed = doc.querySelector('#player-embed');
+    const iframe = embed.querySelector('iframe');
+    check('an embed URL becomes an iframe', Boolean(iframe) && !embed.hidden);
+    check(
+      'the iframe points at the URL the API served',
+      iframe.getAttribute('src') === 'https://embed.vcdn.me/embed/28c4af9f-d817-460a-80ab-9a09f8c47c69',
+      iframe.getAttribute('src')
+    );
+    check('the iframe is allowed to go fullscreen', iframe.hasAttribute('allowfullscreen'));
+    check('the native video element is not used for an embed', doc.querySelector('#player-video').hidden);
+    const complete = doc.querySelector('#mark-complete');
+    check('a completion control is offered', Boolean(complete) && !complete.hidden);
+    check('it starts out not complete', complete.getAttribute('aria-pressed') === 'false');
+
+    click(window, complete);
+    await wait(300);
+    check('marking complete flips the control', complete.getAttribute('aria-pressed') === 'true');
+    check('the label reads Completed', /Completed/.test(doc.querySelector('#mark-complete-label').textContent));
+
+    // Notes on the lesson: the tab used to list PDFs only.
+    click(window, doc.querySelector('#tab-notes'));
+    await wait(120);
+    check('the note composer is available', !doc.querySelector('#lesson-note-form').hidden);
+
+    doc.querySelector('#lesson-note-body').value = 'Check the units on Q4.';
+    doc.querySelector('#lesson-note-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await wait(350);
+    check('the saved note appears under the lesson', /Check the units on Q4/.test(doc.querySelector('#lesson-note-list').textContent));
+    check('the field clears after saving', doc.querySelector('#lesson-note-body').value === '');
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    // A direct media file keeps the native player.
+    console.log('\nplayer.html (direct media URL)');
+    const { doc } = await open('player.html', ['core', 'content', 'ui', 'player'], {
+      query: '?lesson=12',
+      signedIn: true
+    });
+    check('a media file uses the native video element', !doc.querySelector('#player-video').hidden);
+    check('a media file draws no iframe', doc.querySelector('#player-embed').hidden);
+    check(
+      'the video src is the API URL',
+      /kinematics\.mp4/.test(doc.querySelector('#player-video').getAttribute('src') || '')
+    );
+  }
+
+  {
+    console.log('\nplayer.html (guest)');
+    const { doc } = await open('player.html', ['core', 'content', 'ui', 'player'], { query: '?lesson=11' });
+    check('a guest is not shown a completion control', doc.querySelector('#mark-complete').hidden);
+    check('a guest is asked to sign in before writing a note', /Sign in/.test(doc.querySelector('#lesson-note-list').textContent));
+  }
+
+  /* ------------------------------ activity -------------------------------- */
+  {
+    console.log('\nactivity panel (signed in)');
+    const { window, doc } = await open('dashboard.html', ['core', 'content', 'ui', 'dashboard'], { signedIn: true });
+    const bell = doc.querySelector('#notify-btn');
+    check('the bell is a real button', Boolean(bell) && bell.getAttribute('aria-expanded') === 'false');
+    // The inbox loads with the page, so the dot is truthful before it is opened.
+    check('the dot appears because the API reports unread items', bell.classList.contains('has-dot'));
+    check('the panel starts hidden', doc.querySelector('#notify-panel').hidden);
+
+    click(window, bell);
+    await wait(300);
+    check('the panel opens', !doc.querySelector('#notify-panel').hidden);
+    check('the panel lists what the API returned', doc.querySelectorAll('#notify-panel .notify-item').length === 2, String(doc.querySelectorAll('#notify-panel .notify-item').length));
+    check('unread items are marked', doc.querySelectorAll('#notify-panel .is-unread').length === 2, String(doc.querySelectorAll('#notify-panel .is-unread').length));
+    check('each item links somewhere real', [...doc.querySelectorAll('#notify-panel .notify-item')].every((a) => /^(community|dashboard|test-player)\.html/.test(a.getAttribute('href'))));
+
+    click(window, doc.querySelector('[data-notify-read]'));
+    await wait(250);
+    check('marking read clears the dot', !doc.querySelector('#notify-btn').classList.contains('has-dot'));
   }
 
   /* ----------------------------- community ------------------------------ */

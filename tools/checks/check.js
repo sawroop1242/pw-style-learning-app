@@ -72,6 +72,31 @@ async function inspect(page, mods, query, opts, label) {
 (async () => {
   let failed = 0;
 
+  // Every module must parse. `node --check` reads these as CommonJS and lets a
+  // stray apostrophe through, so each file is imported as a real ES module and
+  // only a SyntaxError fails the run (a runtime ReferenceError is expected:
+  // there is no `document` outside the harness).
+  console.log('\nModule syntax');
+  {
+    const fs = require('fs');
+    const path = require('path');
+    const { pathToFileURL } = require('url');
+    const jsDir = path.join(__dirname, '../../frontend/assets/js');
+    for (const file of fs.readdirSync(jsDir).filter((f) => f.endsWith('.js')).sort()) {
+      try {
+        await import(pathToFileURL(path.join(jsDir, file)).href);
+        console.log(`✓ ${file}`);
+      } catch (error) {
+        if (error instanceof SyntaxError) {
+          failed += 1;
+          console.log(`✗ ${file}: ${error.message}`);
+        } else {
+          console.log(`✓ ${file}`);
+        }
+      }
+    }
+  }
+
   // A page that links a stylesheet without tokens.css has no design tokens at
   // all, so every variable resolves to nothing and the page paints unstyled.
   console.log('\nStylesheet stack');

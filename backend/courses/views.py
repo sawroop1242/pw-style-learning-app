@@ -1,4 +1,5 @@
 import hashlib
+import os
 import secrets
 from datetime import timedelta
 
@@ -7,7 +8,7 @@ from django.db.models import Count, Prefetch, Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import filters, permissions, serializers, status, viewsets
+from rest_framework import filters, mixins, permissions, serializers, status, viewsets
 from rest_framework.decorators import (
     action,
     api_view,
@@ -19,7 +20,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from accounts.models import Role
-from . import csv_import, grading, policy
+from . import csv_import, grading, notifications, policy
 from .models import (
     AccessCode,
     AttemptAnswer,
@@ -28,15 +29,18 @@ from .models import (
     CommunityPost,
     Course,
     CourseAccessGrant,
+    CourseFaculty,
     CourseFolder,
     CsvImportJob,
     Lesson,
     Note,
+    NotificationRead,
     PdfResource,
     Progress,
     Question,
     Quiz,
     QuizAttempt,
+    QuestionReport,
     RevisionItem,
     StudyTask,
     TestSeries,
@@ -61,8 +65,10 @@ from .serializers import (
     QuizAttemptSerializer,
     QuizResultSerializer,
     QuizSerializer,
+    QuestionReportSerializer,
     QuizSubmissionSerializer,
     RevisionItemSerializer,
+    StaffCourseFacultySerializer,
     StaffLessonSerializer,
     StaffPdfResourceSerializer,
     StudyTaskSerializer,
@@ -88,6 +94,15 @@ def _attempt_token(request):
     return (request.headers.get(GUEST_TOKEN_HEADER) or "").strip()
 
 
+def _positive_int(value, default=None):
+    """Parse a query parameter, ignoring junk instead of raising a 500."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
 def _may_read_attempt(request, attempt):
     """Owner or the holder of this attempt's guest token, and nobody else."""
     if attempt.user_id is not None:
@@ -102,9 +117,13 @@ def _may_read_attempt(request, attempt):
 
 
 class StartAttemptThrottle(UserRateThrottle):
-    """Keeps a scripted client from opening attempts in a tight loop."""
+    """Keeps a scripted client from opening attempts in a tight loop.
 
-    rate = "60/hour"
+    Configurable because the right number depends on the deployment: a lab of
+    fifty students behind one address would exhaust the default.
+    """
+
+    rate = os.getenv("THROTTLE_START_ATTEMPT", "60/hour")
 
 
 class IsSubAdminOrMainAdmin(permissions.BasePermission):
@@ -645,9 +664,13 @@ class ProgressViewSet(viewsets.ModelViewSet):
     ordering = ["lesson__position", "lesson_id"]
 
     def get_queryset(self):
-        return Progress.objects.filter(user=self.request.user).select_related(
+        queryset = Progress.objects.filter(user=self.request.user).select_related(
             "lesson", "lesson__course"
         )
+        lesson = self.request.query_params.get("lesson")
+        if lesson:
+            queryset = queryset.filter(lesson_id=_positive_int(lesson))
+        return queryset
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -690,7 +713,19 @@ class NoteViewSet(viewsets.ModelViewSet):
     ordering = ["-updated_at"]
     
     def get_queryset(self):
-        return Note.objects.filter(user=self.request.user).select_related("lesson", "question")
+        queryset = Note.objects.filter(user=self.request.user).select_related(
+            "lesson", "question"
+        )
+        # The class player asks for its own lesson's notes; the dashboard asks
+        # for everything. Ignoring the parameter would make those two
+        # indistinguishable and quietly return another lesson's notes.
+        lesson = self.request.query_params.get("lesson")
+        if lesson:
+            queryset = queryset.filter(lesson_id=_positive_int(lesson))
+        question = self.request.query_params.get("question")
+        if question:
+            queryset = queryset.filter(question_id=_positive_int(question))
+        return queryset
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -1515,3 +1550,141 @@ def api_root(request):
         "pdfs": "/api/pdfs/",
         "community": "/api/community/",
     })
+
+
+# --------------------------------------------------------------------------- #
+# Question reports
+# --------------------------------------------------------------------------- #
+
+
+class QuestionReportThrottle(UserRateThrottle):
+    """A learner can flag a handful of questions, not hundreds."""
+
+    rate = "30/hour"
+
+
+class QuestionReportViewSet(
+    viewsets.GenericViewSet,
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+):
+    """Learner feedback on a question, attached to the attempt it came from.
+
+    ``POST`` works for a signed-in learner *and* for a guest holding the attempt
+    token, because a guest sits real papers and sees real mistakes. Reading back
+    is limited to the caller's own reports: the list is a receipt, not a queue —
+    triage happens in the staff route and in the admin.
+    """
+
+    serializer_class = QuestionReportSerializer
+    # Writers may be guests holding an attempt token, so the view is open and
+    # the ownership check happens per attempt in ``create``. Reads stay scoped
+    # to the caller's own reports by the queryset below.
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [QuestionReportThrottle]
+
+    def get_queryset(self):
+        user = self.request.user
+        if not getattr(user, "is_authenticated", False):
+            return QuestionReport.objects.none()
+        return QuestionReport.objects.filter(user=user).select_related("question")
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        attempt = serializer.validated_data["attempt"]
+        if not _may_read_attempt(request, attempt):
+            raise PermissionDenied("That attempt is not yours.")
+        if attempt.status != QuizAttempt.Status.IN_PROGRESS:
+            raise ValidationError({"attempt": ["This attempt is already submitted."]})
+
+        # One row per question: re-reporting updates the reason instead of
+        # stacking duplicates, and never resets a triage status.
+        report, created = QuestionReport.objects.update_or_create(
+            attempt=attempt,
+            question=serializer.validated_data["question"],
+            defaults={
+                "reason": serializer.validated_data["reason"],
+                "detail": serializer.validated_data.get("detail", ""),
+                "user": request.user if request.user.is_authenticated else None,
+            },
+        )
+        body = self.get_serializer(report).data
+        return Response(body, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.AllowAny])
+def notifications_view(request):
+    """The bell's inbox: derived from announcements, due tasks and results."""
+    return Response(notifications.build_inbox(request.user))
+
+
+@api_view(["POST"])
+@permission_classes([permissions.AllowAny])
+def notifications_read(request):
+    """Mark the named notifications as seen for this account."""
+    if not request.user.is_authenticated:
+        return Response(
+            {"detail": "Sign in to keep track of what you have seen."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+    keys = request.data.get("keys")
+    if not isinstance(keys, list) or not all(isinstance(key, str) for key in keys):
+        return Response(
+            {"keys": ["Send a list of notification ids."]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    marked = notifications.mark_read(request.user, keys[:50])
+    return Response({"marked": marked, "unread": notifications.build_inbox(request.user)["unread"]})
+
+
+class StaffQuestionReportViewSet(
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+):
+    """Provider triage: see reports on your own papers and move them along."""
+
+    serializer_class = QuestionReportSerializer
+    permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ["status", "created_at"]
+    ordering = ["-created_at"]
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_queryset(self):
+        queryset = QuestionReport.objects.select_related("question", "attempt__quiz")
+        if policy.is_main_admin(self.request.user):
+            return queryset
+        # Quiz.owner is a property (series owner, else course owner), so the
+        # lookup has to spell both paths out.
+        user = self.request.user
+        return queryset.filter(
+            Q(attempt__quiz__course__owner=user) | Q(attempt__quiz__series__owner=user)
+        )
+
+
+class StaffCourseFacultyViewSet(viewsets.ModelViewSet):
+    """Staff CRUD for the teachers listed on a batch page, owner-scoped."""
+
+    serializer_class = StaffCourseFacultySerializer
+    permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ["position", "name"]
+    ordering = ["position", "id"]
+
+    def get_queryset(self):
+        queryset = CourseFaculty.objects.select_related("course")
+        if policy.is_main_admin(self.request.user):
+            return queryset
+        return queryset.filter(course__owner=self.request.user)
+
+    def perform_create(self, serializer):
+        course = serializer.validated_data["course"]
+        if course.owner_id != self.request.user.id and not policy.is_main_admin(
+            self.request.user
+        ):
+            raise PermissionDenied("You can only list faculty on your own courses.")
+        serializer.save()

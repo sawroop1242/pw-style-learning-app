@@ -192,8 +192,10 @@ function applySaved(saved) {
   for (const [id, ms] of Object.entries(saved.questionMs || {})) {
     if (Number.isFinite(Number(ms))) state.questionMs.set(Number(id), Number(ms));
   }
-  for (const [id, reason] of Object.entries(saved.reports || {})) {
-    if (typeof reason === 'string') state.reports.set(Number(id), reason);
+  for (const [id, saved] of Object.entries(saved.reports || {})) {
+    // Older saves kept a bare string; accept both shapes.
+    if (typeof saved === 'string') state.reports.set(Number(id), { reason: 'other', detail: saved });
+    else if (saved && typeof saved === 'object') state.reports.set(Number(id), saved);
   }
 }
 
@@ -438,6 +440,10 @@ async function startTest() {
       toast('This paper is part of a paid batch. Redeem an access code on the batch page.', 'error', 6000);
     } else if (err.status === 400) {
       toast(err.message || 'This paper cannot be started right now.', 'error', 6000);
+    } else if (err.status === 429) {
+      // Saying "the server did not answer" here would be a lie: it answered,
+      // and the reason is worth passing on.
+      toast('Too many papers started from this connection. Try again in a few minutes.', 'error', 6000);
     } else {
       toast('The server did not answer. Nothing was started — try again.', 'error', 6000);
     }
@@ -1010,27 +1016,74 @@ $('#instructions-btn')?.addEventListener('click', () => {
   openModal('#instructions-modal');
 });
 
-/* Report a question. Stored with the attempt; no endpoint to send it to yet. */
+/* ------------------------------------------------------------------ */
+/* Report a question                                                   */
+/* ------------------------------------------------------------------ */
+
+/* The reason used to be parked in the autosave payload and dropped by the
+   server. It is now a `QuestionReport` row, addressed by the same credential
+   that submits the paper (bearer token, or the guest attempt token). */
+const REPORT_LABELS = {
+  wrong_answer: 'The marked answer looks wrong',
+  ambiguous: 'The question is ambiguous',
+  typo: 'Spelling or formatting problem',
+  missing_info: 'Not enough information to answer',
+  other: 'Something else'
+};
+
 $('#report-btn')?.addEventListener('click', () => {
   const q = currentQuestion();
   if (!q) return;
   setText('#report-context', `Question ${state.current + 1} · ${q.section}`);
+  const existing = state.reports.get(q.id);
+  const category = $('#report-category');
   const field = $('#report-reason');
-  if (field) field.value = state.reports.get(q.id) || '';
+  if (category) category.value = existing?.reason || 'wrong_answer';
+  if (field) field.value = existing?.detail || '';
+  const error = $('#report-error');
+  if (error) error.hidden = true;
   openModal('#report-modal');
-  field?.focus();
+  category?.focus();
 });
 
-$('#report-form')?.addEventListener('submit', (e) => {
-  e.preventDefault();
+$('#report-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
   const q = currentQuestion();
-  const reason = $('#report-reason')?.value.trim();
-  if (!q || !reason) return;
-  state.reports.set(q.id, reason);
-  $('#report-btn')?.classList.add('is-reported');
-  persist();
-  closeModal('#report-modal');
-  toast('Report saved with this attempt.', 'success');
+  const reason = $('#report-category')?.value || 'other';
+  const detail = ($('#report-reason')?.value || '').trim();
+  const error = $('#report-error');
+  const submit = $('#report-form button[type="submit"]');
+  if (!q || !state.attemptId) return;
+
+  if (submit) submit.disabled = true;
+  if (error) error.hidden = true;
+  try {
+    await request('/question-reports/', {
+      method: 'POST',
+      body: {
+        attempt: state.attemptId,
+        question: q.id,
+        reason,
+        detail: detail.slice(0, 1000)
+      },
+      guestToken: state.guestToken || undefined
+    });
+    state.reports.set(q.id, { reason, detail });
+    persist();
+    $('#report-btn')?.classList.add('is-reported');
+    closeModal('#report-modal');
+    toast("Report sent. The paper's team can now see it.", "success");
+  } catch (err) {
+    if (error) {
+      error.hidden = false;
+      error.textContent =
+        err?.status === 403
+          ? 'This attempt can no longer be changed, so the report was not sent.'
+          : err?.message || 'The report did not send. Try again in a moment.';
+    }
+  } finally {
+    if (submit) submit.disabled = false;
+  }
 });
 
 /* ------------------------------------------------------------------ */

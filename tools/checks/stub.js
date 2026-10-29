@@ -64,8 +64,8 @@ const COURSES = [
 ];
 
 const LESSONS = [
-  { id: 11, course: 1, folder: 101, title: 'Units and measurement', description: '', video_url: '', duration_minutes: 42, position: 1, is_published: true, is_locked: false },
-  { id: 12, course: 1, folder: 101, title: 'Kinematics in one dimension', description: 'Displacement, velocity and acceleration.', video_url: '', duration_minutes: 51, position: 2, is_published: true, is_locked: false },
+  { id: 11, course: 1, folder: 101, title: 'Units and measurement', description: '', video_url: 'https://embed.vcdn.me/embed/28c4af9f-d817-460a-80ab-9a09f8c47c69', duration_minutes: 42, position: 1, is_published: true, is_locked: false },
+  { id: 12, course: 1, folder: 101, title: 'Kinematics in one dimension', description: 'Displacement, velocity and acceleration.', video_url: 'https://cdn.example/kinematics.mp4', duration_minutes: 51, position: 2, is_published: true, is_locked: false },
   { id: 13, course: 1, folder: 102, title: 'Mole concept', description: '', video_url: '', duration_minutes: 38, position: 1, is_published: true, is_locked: false },
   { id: 21, course: 2, folder: 201, title: 'Cell — the unit of life', description: '', video_url: '', duration_minutes: 44, position: 1, is_published: true, is_locked: false }
 ];
@@ -229,6 +229,9 @@ const json = (body, status = 200) =>
  */
 function makeStub({ signedIn = false, empty = false } = {}) {
   const pick = (rows) => (empty ? [] : rows);
+  // Read receipts are the one piece of inbox state the real server persists,
+  // so the stub keeps them too; otherwise "mark all read" could never clear.
+  const readKeys = new Set();
 
   return (rawUrl, init = {}) => {
     const url = new URL(rawUrl, 'https://stub.local');
@@ -262,6 +265,10 @@ function makeStub({ signedIn = false, empty = false } = {}) {
       if (!course) return json({ detail: 'Not found.' }, 404);
       return json({
         ...course,
+        faculty: [
+          { id: 1, name: 'Dr. Meera Kulkarni', subject: 'Physics', bio: 'Writes the weekly problem sets.', avatar_url: '', position: 1 },
+          { id: 2, name: 'Anil Bhatt', subject: 'Mathematics', bio: '', avatar_url: '', position: 2 }
+        ],
         folders: [
           {
             id: 101,
@@ -360,7 +367,95 @@ function makeStub({ signedIn = false, empty = false } = {}) {
       return json(page(rows));
     }
 
-    if (path === '/notes/') return authed || signedIn ? json(page([{ id: 1, title: 'Rotational motion', body: 'τ = Iα', updated_at: '2026-10-26T10:00:00Z' }])) : json({ detail: 'Authentication credentials were not provided.' }, 401);
+    if (path === '/notes/' && method === 'POST') {
+      if (!authed) return json({ detail: 'Authentication credentials were not provided.' }, 401);
+      const body = JSON.parse(init.body || '{}');
+      return json(
+        {
+          id: 77,
+          lesson: body.lesson ?? null,
+          lesson_title: body.lesson ? 'Units and measurement' : null,
+          title: body.title || 'Class note',
+          body: body.body || '',
+          updated_at: iso()
+        },
+        201
+      );
+    }
+
+    if (path === '/notes/') {
+      if (!authed && !signedIn) return json({ detail: 'Authentication credentials were not provided.' }, 401);
+      const lesson = url.searchParams.get('lesson');
+      const rows = [
+        { id: 1, lesson: 11, lesson_title: 'Units and measurement', title: 'Rotational motion', body: 'τ = Iα', updated_at: '2026-10-26T10:00:00Z' }
+      ];
+      return json(page(lesson ? rows.filter((row) => String(row.lesson) === String(lesson)) : rows));
+    }
+
+    const noteDetail = path.match(/^\/notes\/(\d+)\/$/);
+    if (noteDetail && method === 'DELETE') {
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+
+    if (path === '/progress/' && method === 'POST') {
+      if (!authed) return json({ detail: 'Authentication credentials were not provided.' }, 401);
+      const body = JSON.parse(init.body || '{}');
+      return json(
+        {
+          id: 5,
+          lesson: body.lesson,
+          lesson_title: 'Units and measurement',
+          completed: Boolean(body.completed),
+          completed_at: body.completed ? iso() : null,
+          updated_at: iso()
+        },
+        201
+      );
+    }
+
+    if (path === '/progress/') {
+      if (!authed && !signedIn) return json({ detail: 'Authentication credentials were not provided.' }, 401);
+      const lesson = url.searchParams.get('lesson');
+      const rows = [{ id: 1, lesson: 1, lesson_title: 'Units and measurement', completed: false, updated_at: '2026-10-26T10:00:00Z' }];
+      return json(page(lesson ? rows.filter((row) => String(row.lesson) === String(lesson)) : rows));
+    }
+
+    if (path === '/study-tasks/' && method === 'POST') {
+      if (!authed) return json({ detail: 'Authentication credentials were not provided.' }, 401);
+      const body = JSON.parse(init.body || '{}');
+      return json({ id: 9, title: body.title, due_at: body.due_at || null, is_completed: false }, 201);
+    }
+
+    if (/^\/study-tasks\/\d+\/(complete|reopen)\/$/.test(path) && method === 'POST') {
+      const done = /complete/.test(path);
+      return json({ id: 1, title: 'Revise mole concept', due_at: '2026-10-28T10:00:00Z', is_completed: done });
+    }
+
+    if (path === '/notifications/') {
+      const items = [
+        { id: 'announcement:1', kind: 'announcement', title: 'Mock test schedule', body: 'Two papers are open this week.', href: 'community.html', at: iso() },
+        { id: 'task:1', kind: 'task', title: 'Revise mole concept', body: 'Due today', href: 'dashboard.html#task-list', at: iso() }
+      ].map((item) => ({ ...item, read: readKeys.has(item.id) }));
+      return json({
+        count: items.length,
+        unread: items.filter((item) => !item.read).length,
+        results: items
+      });
+    }
+
+    if (path === '/notifications/read/' && method === 'POST') {
+      const body = JSON.parse(init.body || '{}');
+      (body.keys || []).forEach((key) => readKeys.add(key));
+      return json({ marked: (body.keys || []).length, unread: 0 });
+    }
+
+    if (path === '/question-reports/' && method === 'POST') {
+      const body = JSON.parse(init.body || '{}');
+      return json(
+        { id: 1, attempt: body.attempt, question: body.question, reason: body.reason, detail: body.detail || '', status: 'open', created_at: iso() },
+        201
+      );
+    }
     if (path === '/progress/') return authed || signedIn ? json(page([{ id: 1, lesson: 12, lesson_title: 'Kinematics in one dimension', completed: false, updated_at: '2026-10-26T10:00:00Z' }])) : json({ detail: 'Authentication credentials were not provided.' }, 401);
     if (path === '/study-tasks/') return authed || signedIn ? json(page([{ id: 1, title: 'Revise mole concept', due_at: '2026-10-28T10:00:00Z', is_completed: false }])) : json({ detail: 'Authentication credentials were not provided.' }, 401);
     if (path === '/quiz-attempts/' || path === '/quiz-attempts') return authed || signedIn ? json(page(ATTEMPTS)) : json(page([]));
