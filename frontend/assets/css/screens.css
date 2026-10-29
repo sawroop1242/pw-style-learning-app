@@ -695,6 +695,26 @@
   .player-shell { padding-inline: 0; }
   .poster-card { min-height: 280px; padding: var(--sp-5); }
 }
+/*
+ * Four equal columns only fit a label as long as "Batches". "Announcements" is
+ * 99px wide in a 84px tile at 390px, so it ran out of the card and off the
+ * screen. Two columns give the label the room, and the tile goes back to
+ * icon-then-text so it stays one short row.
+ */
+@media (max-width: 520px) {
+  .quick-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .quick-tile {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-auto-flow: column;
+    align-items: center;
+    justify-items: start;
+    text-align: left;
+    padding: 12px;
+  }
+  .quick-tile strong { font-size: var(--text-xs); overflow-wrap: anywhere; }
+  .quick-icon { width: 34px; height: 34px; }
+}
+
 @media (max-width: 460px) {
   .topbar-brand .brand-text { display: none; }
 }
@@ -924,5 +944,71 @@
 .player-embed[hidden] { display: none; }
 .player-embed iframe { display: block; width: 100%; height: 100%; border: 0; }
 
+/*
+ * The stage's own full-screen control.
+ *
+ * A hosted embed arrives with its host's chrome and no way out of it, so the
+ * page supplies the one control a phone needs: enlarge the stage (and, while
+ * it is enlarged, turn landscape). Top-right keeps it clear of the native
+ * `<video>` controls that a direct file brings along the bottom.
+ */
+.stage-full {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--r-md);
+  background: rgba(6, 8, 18, 0.62);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.stage-full[hidden] { display: none; }
+.stage-full:hover { background: rgba(6, 8, 18, 0.86); }
+.stage-full:focus-visible { outline: 2px solid var(--violet-400); outline-offset: 2px; }
+.stage-full svg { width: 17px; height: 17px; }
+
+/* Full screen applies to the stage, so an embed and a direct file behave the
+   same and the button can leave it again. */
+.player-stage:fullscreen,
+.player-stage:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+}
+.player-stage:fullscreen .player-video,
+.player-stage:-webkit-full-screen .player-video { width: 100%; height: 100%; object-fit: contain; }
+
 /* A tab label that overflows its own box is a clipped word, not a style. */
 .tabs .tab { overflow-wrap: anywhere; }
+
+/* ============================== LANDSCAPE PHONE ======================= */
+/*
+ * A phone turned sideways has ~390px of height and the top bar, page title and
+ * tab bar were eating 122 of it. While a class is open the two bars step aside
+ * and the stage takes the height — but the back button stays, because a video
+ * screen with no way out is a dead end.
+ */
+@media (orientation: landscape) and (max-height: 520px) {
+  body.player-page.has-recording .topbar,
+  body.player-page.has-recording .tabbar { display: none; }
+  body.player-page.has-recording { padding-bottom: 0; }
+  body.player-page.has-recording .player-shell { padding-block: 8px var(--sp-6); padding-inline: 12px; }
+  body.player-page.has-recording .player-top { margin-bottom: 8px; }
+  body.player-page.has-recording .player-top h1 { font-size: var(--text-sm); }
+  body.player-page.has-recording .player-stage {
+    aspect-ratio: auto;
+    height: calc(100vh - 76px);
+    height: calc(100dvh - 76px);
+    border-radius: var(--r-md);
+  }
+}

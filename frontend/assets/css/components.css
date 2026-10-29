@@ -16,7 +16,7 @@
 .sidebar {
   position: fixed;
   top: 0; bottom: 0; left: 0;
-  z-index: var(--z-header);
+  z-index: calc(var(--z-header) + 2);
   width: var(--sidebar-w);
   display: flex;
   flex-direction: column;
@@ -87,7 +87,7 @@
 .sidebar-scrim {
   position: fixed;
   inset: 0;
-  z-index: calc(var(--z-header) - 1);
+  z-index: calc(var(--z-header) + 1);
   background: rgba(4, 4, 10, 0.66);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
@@ -663,7 +663,7 @@
   -webkit-backdrop-filter: blur(18px);
   border-top: 1px solid var(--border);
 }
-.tabbar ul { display: grid; grid-template-columns: repeat(5, 1fr); height: 100%; }
+.tabbar ul { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: 100%; }
 .tabbar a {
   display: grid;
   place-items: center;
@@ -772,6 +772,18 @@
   .topbar-brand { display: inline-flex; }
 }
 
+/* A drawer you can only close by tapping 70px of scrim is a trap on a phone. */
+.side-close {
+  display: none;
+  position: absolute;
+  top: calc(var(--sp-3) + env(safe-area-inset-top));
+  right: var(--sp-3);
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  z-index: 1;
+}
+
 @media (max-width: 760px) {
   .topbar { height: 60px; }
   .topbar-search { display: none; }
@@ -788,7 +800,11 @@
     height: 40px;
   }
   body.is-search-open .topbar-search kbd { display: none; }
-  .sidebar { width: min(84vw, 320px); }
+  .sidebar {
+    width: min(84vw, 320px);
+    padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--sp-4));
+  }
+  .side-close { display: grid; }
 
   .tabbar { display: block; }
   .site-footer { margin-bottom: 0; padding-top: var(--sp-8); }

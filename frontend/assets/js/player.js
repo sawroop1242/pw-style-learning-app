@@ -93,7 +93,7 @@ function embedFrame(lesson) {
         src="${esc(lesson.video_url)}"
         title="${esc(lesson.title || 'Class recording')}"
         loading="lazy"
-        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock"
         allowfullscreen
         referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
   }
@@ -107,6 +107,8 @@ function setStage(lesson) {
   const video = $('#player-video');
   const empty = $('#stage-empty');
   const frame = embedFrame(lesson);
+  // Only a page with a recording gives up its chrome to the video.
+  document.body.classList.toggle('has-recording', Boolean(frame || lesson.video_url));
 
   if (frame) {
     // An embed brings its own chrome; the page stage just holds the frame.
@@ -116,6 +118,7 @@ function setStage(lesson) {
     empty.hidden = true;
     stage.removeAttribute('role');
     face.hidden = true;
+    showFullButton(true);
     return;
   }
 
@@ -126,6 +129,7 @@ function setStage(lesson) {
     empty.hidden = true;
     stage.removeAttribute('role');
     face.hidden = true;
+    showFullButton(true);
     video.addEventListener('error', () => {
       video.hidden = true;
       face.hidden = false;
@@ -139,6 +143,7 @@ function setStage(lesson) {
   video.hidden = true;
   stage.classList.add('is-empty');
   empty.hidden = false;
+  showFullButton(false);
   empty.querySelector('strong').textContent = lesson.is_locked
     ? 'This lesson is locked'
     : 'No recording published';
@@ -248,6 +253,80 @@ function renderNotes(lesson) {
  * Record that this lesson was opened, and paint the completion control from
  * the server's answer rather than from local memory.
  */
+/* ------------------------------------------------------------------ */
+/* Full screen                                                        */
+/* ------------------------------------------------------------------ */
+
+const stageEl = $('#player-stage');
+const fullBtn = $('#stage-full');
+
+const fullscreenSupported = () =>
+  Boolean(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+
+const stageIsFull = () => document.fullscreenElement || document.webkitFullscreenElement;
+
+function setFullButton(full) {
+  if (!fullBtn) return;
+  fullBtn.setAttribute('aria-label', full ? 'Exit full screen' : 'Full screen');
+  fullBtn.innerHTML = icon(full ? 'minimize' : 'maximize');
+}
+
+/**
+ * The stage button is the page's own route to full screen.
+ *
+ * An embed is a frame: its controls belong to the host, so on a phone the
+ * learner has no way to enlarge it and no way to turn it landscape. Both are
+ * browser-level operations on *our* element, which is why they live here
+ * rather than inside the iframe.
+ */
+function showFullButton(visible) {
+  if (!fullBtn) return;
+  fullBtn.hidden = !visible || !fullscreenSupported();
+}
+
+/**
+ * A phone held upright shows a 16:9 recording as a letterbox stripe. Locking
+ * to landscape while the stage is full screen is what a native player does;
+ * browsers that refuse (desktop, iOS) keep whatever orientation they have.
+ */
+function lockLandscape() {
+  if (!window.matchMedia?.('(pointer: coarse)').matches) return;
+  if (window.innerWidth > window.innerHeight) return;
+  screen.orientation?.lock?.('landscape')?.catch?.(() => {});
+}
+
+async function enterStageFullscreen() {
+  if (stageEl.requestFullscreen) await stageEl.requestFullscreen({ navigationUI: 'hide' });
+  else if (stageEl.webkitRequestFullscreen) stageEl.webkitRequestFullscreen();
+  else {
+    // iPhone Safari will only full-screen a media element, never a wrapper.
+    const video = $('#player-video');
+    if (video?.webkitEnterFullscreen) video.webkitEnterFullscreen();
+  }
+}
+
+async function toggleStageFullscreen() {
+  try {
+    if (stageIsFull()) {
+      if (document.exitFullscreen) await document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      return;
+    }
+    await enterStageFullscreen();
+    if ($('#player-embed') && !$('#player-embed').hidden) lockLandscape();
+  } catch {
+    toast('This browser would not open the video full screen.', 'error');
+  }
+}
+
+fullBtn?.addEventListener('click', toggleStageFullscreen);
+document.addEventListener('fullscreenchange', () => {
+  const full = Boolean(stageIsFull());
+  setFullButton(full);
+  if (!full) screen.orientation?.unlock?.();
+});
+document.addEventListener('webkitfullscreenchange', () => setFullButton(Boolean(stageIsFull())));
+
 async function loadProgress(lesson) {
   const button = $('#mark-complete');
   if (!button) return;

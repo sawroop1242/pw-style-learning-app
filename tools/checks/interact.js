@@ -42,12 +42,40 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
 
     const menu = doc.querySelector('[data-menu-toggle]');
     const sidebar = doc.querySelector('.sidebar');
+    const close = sidebar.querySelector('[data-menu-close]');
     click(window, menu);
     check('menu opens the drawer', sidebar.classList.contains('is-open') && menu.getAttribute('aria-expanded') === 'true');
     check('scrim shown while open', !doc.querySelector('[data-scrim]').hidden);
     check('body locked while the drawer is open', doc.body.classList.contains('is-locked'));
+    // `body { overflow: hidden }` alone leaves the viewport scrollable, so the
+    // page slid around under the open drawer.
+    check('the document is locked, not just the body', doc.documentElement.classList.contains('is-locked'));
+    check('the drawer has its own close button', Boolean(close));
+    check('focus lands inside the drawer', doc.activeElement === close, doc.activeElement?.getAttribute('aria-label'));
+
+    // Tab must not walk the page behind the scrim.
+    const focusables = [...sidebar.querySelectorAll('a[href], button')].filter(
+      (el) => !el.hidden && window.getComputedStyle(el).display !== 'none'
+    );
+    focusables[focusables.length - 1].focus();
+    key(window, doc.body, 'Tab');
+    check('Tab wraps back into the drawer', doc.activeElement === focusables[0], doc.activeElement?.textContent?.trim().slice(0, 20));
     key(window, doc.body, 'Escape');
     check('Escape closes the drawer', !sidebar.classList.contains('is-open') && doc.querySelector('[data-scrim]').hidden);
+    check('Escape hands focus back to the menu button', doc.activeElement === menu);
+    check('the lock is released', !doc.documentElement.classList.contains('is-locked'));
+    click(window, menu);
+    click(window, close);
+    check('the close button closes the drawer', !sidebar.classList.contains('is-open'));
+    click(window, menu);
+    click(window, doc.querySelector('[data-scrim]'));
+    check('tapping the scrim closes the drawer', !sidebar.classList.contains('is-open'));
+
+    // On a phone the search field is a second row of the header.
+    click(window, doc.querySelector('[data-search-toggle]'));
+    check('the search icon opens the search row', doc.body.classList.contains('is-search-open'));
+    key(window, doc.body, 'Escape');
+    check('Escape closes the search row', !doc.body.classList.contains('is-search-open'));
     check('no console errors', errors.length === 0, errors[0]);
   }
 
@@ -305,6 +333,10 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
       iframe.getAttribute('src')
     );
     check('the iframe is allowed to go fullscreen', iframe.hasAttribute('allowfullscreen'));
+    check('a page with a recording gives its chrome up to it', doc.body.classList.contains('has-recording'));
+    // jsdom has no Fullscreen API, so the page must not offer a button that
+    // cannot work: hiding it is the honest behaviour there.
+    check('no full-screen button where the browser has no Fullscreen API', doc.querySelector('#stage-full').hidden);
     check('the native video element is not used for an embed', doc.querySelector('#player-video').hidden);
     const complete = doc.querySelector('#mark-complete');
     check('a completion control is offered', Boolean(complete) && !complete.hidden);
@@ -329,6 +361,34 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
   }
 
   {
+    // An embed brings its host's chrome and, on a phone, no way to enlarge it.
+    // This is the page's own control, so it gets its own boot.
+    console.log('\nplayer.html (full screen)');
+    const { window, doc } = await boot('player.html', ['core', 'content', 'ui', 'player'], {
+      query: '?lesson=11',
+      fetcher: makeStub({ signedIn: true }),
+      seedStorage: SIGNED_IN,
+      fullscreen: true
+    });
+    await wait(80);
+    const btn = doc.querySelector('#stage-full');
+    check('a recording offers a full-screen button', !btn.hidden);
+    check('the button says what it does', btn.getAttribute('aria-label') === 'Full screen');
+
+    btn.click();
+    await wait(20);
+    // The stage, not the iframe: an embed cannot be enlarged from outside, but
+    // its container can, and that is what puts the frame on the whole screen.
+    check('pressing it takes the stage full screen', window.__fullscreenElement?.id === 'player-stage', window.__fullscreenElement?.id);
+    check('the label flips to exit', btn.getAttribute('aria-label') === 'Exit full screen');
+
+    btn.click();
+    await wait(20);
+    check('pressing it again leaves full screen', !window.__fullscreenElement);
+    check('the label flips back', btn.getAttribute('aria-label') === 'Full screen');
+  }
+
+  {
     // A direct media file keeps the native player.
     console.log('\nplayer.html (direct media URL)');
     const { doc } = await open('player.html', ['core', 'content', 'ui', 'player'], {
@@ -337,6 +397,7 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     });
     check('a media file uses the native video element', !doc.querySelector('#player-video').hidden);
     check('a media file draws no iframe', doc.querySelector('#player-embed').hidden);
+    check('a media file still counts as a recording', doc.body.classList.contains('has-recording'));
     check(
       'the video src is the API URL',
       /kinematics\.mp4/.test(doc.querySelector('#player-video').getAttribute('src') || '')

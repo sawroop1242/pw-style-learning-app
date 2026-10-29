@@ -454,7 +454,15 @@ const FIXTURES = [
         missing.length ? missing.join(', ') : `${new Set(asked).size} paths`
       );
     }
-    check('the screens cover the API broadly', everyPath.size >= 20, `${everyPath.size} distinct paths`);
+    if (session) {
+      check('the screens cover the API broadly', everyPath.size >= 20, `${everyPath.size} distinct paths`);
+    } else {
+      // Without the demo account the signed-in half of the app never boots, so
+      // half the paths are never requested. Say so rather than pass quietly.
+      console.log(
+        '  … no session: signed-in paths unchecked. Create the demo student (see README) to cover them.'
+      );
+    }
   }
 
   console.log(`\n${pass}/${pass + fail} live checks passed`);

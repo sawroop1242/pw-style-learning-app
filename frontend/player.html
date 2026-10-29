@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="assets/css/screens.css">
   <link rel="stylesheet" href="assets/css/app.css">
 </head>
-<body>
+<body class="player-page">
   <a class="skip-link" href="#main">Skip to content</a>
   <div id="site-header"></div>
 
@@ -36,6 +36,9 @@
           </div>
           <video id="player-video" class="player-video" controls hidden playsinline preload="metadata"></video>
           <div class="player-embed" id="player-embed" hidden></div>
+          <button class="stage-full" type="button" id="stage-full" aria-label="Full screen" hidden>
+            <svg><use href="#i-maximize"/></svg>
+          </button>
         </div>
 
         <div class="player-meta">
