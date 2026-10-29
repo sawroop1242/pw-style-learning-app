@@ -297,6 +297,17 @@ class QuestionReportTests(ConnectedFeatureData):
         self.assertEqual(QuestionReport.objects.get().status, "open")
 
 
+def later_today():
+    """A moment that is still today, whenever this suite happens to run.
+
+    ``timezone.now() + 1 hour`` looks like "today" but crosses midnight late in
+    the evening, so the inbox — which correctly stops at the end of today —
+    drops the task and the test fails for real at 23:00 and passes all day.
+    Anchoring to noon keeps the meaning without the cliff.
+    """
+    return timezone.localtime().replace(hour=12, minute=0, second=0, microsecond=0)
+
+
 class NotificationTests(ConnectedFeatureData):
     def announcement(self, title, course=None, published=True):
         return CommunityPost.objects.create(
@@ -321,7 +332,7 @@ class NotificationTests(ConnectedFeatureData):
 
     def test_a_task_due_today_appears_for_its_owner_only(self):
         StudyTask.objects.create(
-            user=self.student, title="Revise vectors", due_at=timezone.now() + timedelta(hours=1)
+            user=self.student, title="Revise vectors", due_at=later_today()
         )
         StudyTask.objects.create(
             user=self.student, title="Later this month", due_at=timezone.now() + timedelta(days=20)
@@ -336,7 +347,7 @@ class NotificationTests(ConnectedFeatureData):
 
     def test_a_completed_task_drops_out_of_the_inbox(self):
         task = StudyTask.objects.create(
-            user=self.student, title="Revise vectors", due_at=timezone.now() + timedelta(hours=1)
+            user=self.student, title="Revise vectors", due_at=later_today()
         )
         self.client.force_authenticate(self.student)
         self.assertEqual(self.client.get("/api/notifications/").json()["count"], 1)
