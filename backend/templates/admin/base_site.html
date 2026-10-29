@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% load i18n static %}
+
+{% comment %}
+    Branding and the one stylesheet that gives the console its looks.
+
+    This overrides Django's own admin/base_site.html, which every admin page
+    extends, so the name, the palette and the font are set in exactly one place.
+
+    The theme is pinned to light on purpose (see the palette block in the CSS):
+    an OS set to dark would otherwise hand a content editor a half-converted
+    admin, and long question forms read better on white.
+{% endcomment %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {% translate "StudySpace admin" %}{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'staff/admin.css' %}">
+{% endblock %}
+
+{% block bodyclass %}ss-admin {{ block.super }}{% endblock %}
+
+{% block branding %}
+  <div id="site-name">
+    <a href="{% url 'admin:index' %}">StudySpace<span class="ss-admin-tag">admin</span></a>
+  </div>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
