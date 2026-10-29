@@ -1,8 +1,12 @@
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
+from django.db.models import Count, Max, Q
+from django import forms
+from django.forms.models import BaseInlineFormSet
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import format_html
 
 from accounts.models import Role
 from courses import csv_import
@@ -123,15 +127,88 @@ class OwnerAssignAdmin(OwnershipScopedAdmin):
         super().save_model(request, obj, form, change)
 
 
+class PublishableAdmin(OwnershipScopedAdmin):
+    """Publish or unpublish many rows at once.
+
+    Publishing was the most repeated job in the console — a new batch has a
+    dozen lessons, and each one had to be opened, ticked and saved. The action
+    runs on the queryset the changelist already filtered to, so a sub-admin can
+    only flip rows the list showed them.
+    """
+
+    publish_label = "rows"
+
+    @admin.action(description="Publish the selected rows")
+    def publish_selected(self, request, queryset):
+        updated = queryset.update(is_published=True, updated_at=timezone.now())
+        self.message_user(request, f"{updated} {self.publish_label} published.", messages.SUCCESS)
+
+    @admin.action(description="Unpublish the selected rows")
+    def unpublish_selected(self, request, queryset):
+        updated = queryset.update(is_published=False, updated_at=timezone.now())
+        self.message_user(request, f"{updated} {self.publish_label} unpublished.", messages.SUCCESS)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # The wording names the model; the tuple carries the description, so
+        # nothing shared between requests is mutated here.
+        for name, verb in (("publish_selected", "Publish"), ("unpublish_selected", "Unpublish")):
+            action, action_name, _ = actions[name]
+            actions[name] = (action, action_name, f"{verb} the selected {self.publish_label}")
+        return actions
+
+
 @admin.register(Course)
-class CourseAdmin(OwnerAssignAdmin):
-    list_display = ("title", "subject", "owner", "pricing_mode", "price", "is_published", "updated_at")
+class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
+    publish_label = "batches"
+    list_display = (
+        "title", "subject", "pricing_mode", "price", "lesson_total", "folder_total",
+        "is_published", "owner", "updated_at",
+    )
     list_filter = ("subject", "pricing_mode", "is_published")
     search_fields = ("title", "description", "slug")
     prepopulated_fields = {"slug": ("title",)}
+    def get_fieldsets(self, request, obj=None):
+        """`owner` is hidden from sub-admins by OwnerAssignAdmin, so it is only
+        named in the fieldset for someone who may actually change it."""
+        batch_fields = ("title", "slug", "subject")
+        if is_main_admin(request.user):
+            batch_fields = batch_fields + ("owner",)
+        return (
+            ("The batch", {
+                "fields": batch_fields,
+                "description": "What the card in the catalogue says.",
+            }),
+            ("Description", {"fields": ("description",)}),
+            ("Pricing", {
+                "fields": ("pricing_mode", "price", "currency"),
+                "description": "A free batch must cost 0; a paid batch needs a price. "
+                               "Nobody pays here — a paid batch unlocks with an access code.",
+            }),
+            ("Channel", {
+                "fields": ("telegram_handle", "telegram_url"),
+                "classes": ("collapse",),
+            }),
+            ("Visibility", {"fields": ("is_published", "position")}),
+        )
 
     def scope_filter(self, user):
         return Q(owner=user)
+
+    def get_queryset(self, request):
+        # Two counts in the list, so annotate rather than query per row.
+        return super().get_queryset(request).annotate(
+            _lessons=Count("lessons", distinct=True),
+            _folders=Count("folders", distinct=True),
+        )
+
+    @admin.display(description="Lessons", ordering="_lessons")
+    def lesson_total(self, obj):
+        return obj._lessons
+
+    @admin.display(description="Sections", ordering="_folders")
+    def folder_total(self, obj):
+        return obj._folders
 
 
 @admin.register(CourseFaculty)
@@ -161,10 +238,37 @@ class CourseFolderAdmin(OwnershipScopedAdmin):
 
 
 @admin.register(Lesson)
-class LessonAdmin(OwnershipScopedAdmin):
-    list_display = ("title", "course", "folder", "position", "is_published")
+class LessonAdmin(PublishableAdmin):
+    """Classes.
+
+    Two jobs dominated this screen: publishing a new batch's lessons (bulk
+    action below) and turning one written class into the next one (Duplicate).
+    Both are here so neither needs a row opened one at a time.
+    """
+
+    publish_label = "lessons"
+    list_display = (
+        "title", "course", "folder", "position", "duration_minutes",
+        "recording", "is_published",
+    )
     list_filter = ("is_published", "course")
-    search_fields = ("title", "description")
+    search_fields = ("title", "description", "course__title")
+    list_select_related = ("course", "folder")
+    actions = ("publish_selected", "unpublish_selected", "duplicate_selected")
+    fieldsets = (
+        ("Which batch", {
+            "fields": ("course", "folder"),
+            "description": "The section groups the class in the player's left column.",
+        }),
+        ("The class", {"fields": ("title", "description")}),
+        ("Recording", {
+            "fields": ("video_url", "recording_preview", "duration_minutes"),
+            "description": "A direct .mp4 plays in the page's own player; a hosted "
+                           "embed page (…/embed/…) is framed instead. Both work.",
+        }),
+        ("Order and visibility", {"fields": ("position", "is_published")}),
+    )
+    readonly_fields = ("recording_preview",)
 
     def scope_filter(self, user):
         return Q(course__owner=user)
@@ -174,6 +278,40 @@ class LessonAdmin(OwnershipScopedAdmin):
             "course": Course.objects.filter(owner=user),
             "folder": CourseFolder.objects.filter(course__owner=user),
         }
+
+    @admin.display(description="Recording")
+    def recording(self, obj):
+        return "Yes" if obj.video_url else "—"
+
+    @admin.display(description="Preview")
+    def recording_preview(self, obj):
+        """Open the URL before publishing it.
+
+        A pasted URL is not a checked URL: the host may refuse framing, or the
+        file may be gone. This saves a round trip through the learner's player.
+        """
+        if not obj or not obj.video_url:
+            return "Save the class with a video URL to preview it."
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener">Open the recording ↗</a>',
+            obj.video_url,
+        )
+
+    @admin.action(description="Duplicate the selected lessons")
+    def duplicate_selected(self, request, queryset):
+        made = 0
+        for lesson in queryset:
+            lesson.pk = None
+            lesson.title = f"{lesson.title} (copy)"[:180]
+            lesson.is_published = False
+            lesson.position = lesson.position + 1
+            lesson.save()
+            made += 1
+        self.message_user(
+            request,
+            f"{made} lesson(s) duplicated as drafts. They keep the recording and the section.",
+            messages.SUCCESS,
+        )
 
 
 @admin.register(PdfResource)
@@ -248,10 +386,32 @@ class TestSeriesAdmin(OwnerAssignAdmin):
 
 
 @admin.register(Quiz)
-class QuizAdmin(OwnershipScopedAdmin):
-    list_display = ("title", "series", "course", "timing_mode", "is_published", "updated_at")
+class QuizAdmin(PublishableAdmin):
+    publish_label = "tests"
+    list_display = (
+        "title", "series", "course", "timing_mode", "duration_minutes",
+        "question_total", "is_published", "updated_at",
+    )
     list_filter = ("timing_mode", "is_published", "series")
     search_fields = ("title", "description")
+    list_select_related = ("series", "course")
+    fieldsets = (
+        ("Which test", {
+            "fields": ("title", "series", "course", "description", "instructions"),
+            "description": "A paper belongs to a series or to a batch — usually one of the two.",
+        }),
+        ("Timing", {
+            "fields": ("timing_mode", "duration_minutes", "attempt_limit"),
+            "description": "The deadline is fixed when a learner starts, so changing "
+                           "the duration never moves a paper that is already running.",
+        }),
+        ("Marking", {
+            "fields": ("marks_per_question", "negative_marks_per_wrong", "pass_threshold_percent"),
+        }),
+        ("When results appear", {"fields": ("result_release_policy",)}),
+        ("Shuffling", {"fields": ("shuffle_questions", "shuffle_options"), "classes": ("collapse",)}),
+        ("Window and visibility", {"fields": ("opens_at", "closes_at", "is_published")}),
+    )
 
     def scope_filter(self, user):
         return Q(series__owner=user) | Q(course__owner=user)
@@ -262,19 +422,104 @@ class QuizAdmin(OwnershipScopedAdmin):
             "course": Course.objects.filter(owner=user),
         }
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(_questions=Count("questions"))
+
+    @admin.display(description="Questions", ordering="_questions")
+    def question_total(self, obj):
+        return obj._questions
+
+
+class ChoiceForm(forms.ModelForm):
+    """The four answer rows, labelled the way a question paper reads."""
+
+    class Meta:
+        model = Choice
+        fields = ("text", "is_correct")
+        labels = {"text": "Answer", "is_correct": "Correct"}
+
+
+class ChoiceInlineFormSet(BaseInlineFormSet):
+    """Number the answers for the admin.
+
+    `position` used to be a visible integer column, so writing one question
+    meant typing 0, 1, 2, 3 by hand — and a mistake there reordered the paper.
+    The order the rows are shown in is the order they are served in, so the
+    value is assigned on save and never typed.
+    """
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        position = 0
+        for form in self.forms:
+            data = getattr(form, "cleaned_data", None)
+            if not data or data.get("DELETE"):
+                continue
+            if not (data.get("text") or "").strip():
+                continue
+            form.instance.position = position
+            position += 1
+
 
 class ChoiceInline(admin.TabularInline):
+    """The answers to one question.
+
+    The permission methods are not decoration. Django falls back to the model
+    permissions (`courses.add_choice`) when an inline does not define them, and
+    a sub-admin has none — so the answers section vanished from the question
+    form and a question saved with no answers at all. The gate is the role, the
+    same one the parent admin uses.
+    """
+
     model = Choice
-    extra = 2
+    form = ChoiceForm
+    formset = ChoiceInlineFormSet
+    fields = ("text", "is_correct")
+    extra = 4
+    max_num = 10
     ordering = ("position",)
+    verbose_name = "answer"
+    verbose_name_plural = "Answers"
+
+    def has_add_permission(self, request, obj):
+        return is_staff_role(request.user)
+
+    def has_view_permission(self, request, obj):
+        return is_staff_role(request.user)
+
+    def has_change_permission(self, request, obj):
+        return is_staff_role(request.user)
+
+    def has_delete_permission(self, request, obj):
+        return is_staff_role(request.user)
 
 
 @admin.register(Question)
 class QuestionAdmin(OwnershipScopedAdmin):
-    list_display = ("prompt_short", "quiz", "question_type", "position", "topic")
+    list_display = ("prompt_short", "quiz", "question_type", "difficulty", "position", "topic")
     list_filter = ("question_type", "difficulty", "quiz")
-    search_fields = ("prompt", "topic")
+    search_fields = ("prompt", "topic", "quiz__title")
     inlines = [ChoiceInline]
+    list_select_related = ("quiz",)
+    actions = ("duplicate_selected",)
+    fieldsets = (
+        ("The question", {
+            "fields": ("quiz", "prompt", "explanation"),
+            "description": "The explanation is what a learner reads in review. "
+                           "Leave it blank rather than writing \"see the notes\".",
+        }),
+        ("Marking", {
+            "fields": ("question_type", "marks", "negative_marks"),
+            "description": "Blank marks fall back to the test's own values.",
+        }),
+        ("Classification", {
+            "fields": ("difficulty", "topic"),
+            "description": "The topic is what the result's strengths panel groups by.",
+        }),
+        ("Placement", {"fields": ("position",)}),
+    )
 
     @admin.display(description="Prompt")
     def prompt_short(self, obj):
@@ -288,6 +533,30 @@ class QuestionAdmin(OwnershipScopedAdmin):
             "quiz": Quiz.objects.filter(series__owner=user)
             | Quiz.objects.filter(course__owner=user)
         }
+
+    @admin.action(description="Duplicate the selected questions")
+    def duplicate_selected(self, request, queryset):
+        """Copy a question *and its answers*, which is how a paper is built."""
+        made = 0
+        for question in queryset.prefetch_related("choices"):
+            choices = list(question.choices.all())
+            question.pk = None
+            question.position = (
+                (queryset.model.objects.filter(quiz=question.quiz).aggregate(
+                    top=Max("position")
+                )["top"] or 0) + 1
+            )
+            question.save()
+            for choice in choices:
+                choice.pk = None
+                choice.question = question
+                choice.save()
+            made += 1
+        self.message_user(
+            request,
+            f"{made} question(s) duplicated at the end of their paper, answers and all.",
+            messages.SUCCESS,
+        )
 
 
 @admin.register(QuizAttempt)
@@ -556,9 +825,29 @@ class QuestionReportAdmin(OwnershipScopedAdmin):
     search_fields = ("question__prompt", "detail")
     readonly_fields = ("attempt", "question", "user", "reason", "detail", "created_at")
     date_hierarchy = "created_at"
+    list_select_related = ("question", "attempt")
+    actions = ("mark_reviewing", "mark_resolved", "mark_dismissed")
+
+    def _set_status(self, request, queryset, status, label):
+        updated = queryset.update(status=status)
+        self.message_user(request, f"{updated} report(s) {label}.", messages.SUCCESS)
+
+    @admin.action(description="Mark the selected reports as being reviewed")
+    def mark_reviewing(self, request, queryset):
+        self._set_status(request, queryset, QuestionReport.Status.REVIEWING, "now under review")
+
+    @admin.action(description="Resolve the selected reports (the question was fixed)")
+    def mark_resolved(self, request, queryset):
+        self._set_status(request, queryset, QuestionReport.Status.RESOLVED, "resolved")
+
+    @admin.action(description="Dismiss the selected reports (nothing to fix)")
+    def mark_dismissed(self, request, queryset):
+        self._set_status(request, queryset, QuestionReport.Status.DISMISSED, "dismissed")
 
     def scope_filter(self, user):
-        return Q(attempt__quiz__owner=user)
+        # A Quiz has no owner of its own: it belongs to a series or to a batch,
+        # and the owner sits on whichever of those it hangs from.
+        return Q(attempt__quiz__series__owner=user) | Q(attempt__quiz__course__owner=user)
 
     def get_readonly_fields(self, request, obj=None):
         base = list(self.readonly_fields)

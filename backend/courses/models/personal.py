@@ -52,6 +52,10 @@ class Progress(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        # Django's default plural of "progress" is "progresss"; naming it saves
+        # the admin (and the generated docs) that spelling.
+        verbose_name = "lesson progress"
+        verbose_name_plural = "progress records"
         ordering = ["lesson__position", "lesson_id"]
         constraints = [
             models.UniqueConstraint(

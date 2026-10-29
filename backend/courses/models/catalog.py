@@ -164,6 +164,8 @@ class PdfResource(TimeStampedModel):
     )
 
     class Meta:
+        verbose_name = "PDF resource"
+        verbose_name_plural = "PDF resources"
         ordering = ["position", "id"]
 
     @property

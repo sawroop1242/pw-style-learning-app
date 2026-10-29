@@ -4,7 +4,17 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import Profile, Role
-from courses.models import AccessCode, Course, Lesson, TestSeries
+from courses.models import (
+    AccessCode,
+    Choice,
+    Course,
+    CourseFolder,
+    Lesson,
+    Question,
+    QuestionReport,
+    Quiz,
+    TestSeries,
+)
 
 User = get_user_model()
 
@@ -255,3 +265,200 @@ class AdminCookieTests(TestCase):
         """Without {% csrf_token %} the POST could never pass, cookie or not."""
         response = self.client.get("/admin/login/")
         self.assertContains(response, "csrfmiddlewaretoken")
+
+
+class AdminIndexTests(AdminTestDataMixin, TestCase):
+    """The console home groups models by job, and every link on it must work."""
+
+    def test_the_index_renders_for_a_sub_admin(self):
+        self.client.force_login(self.sub_admin)
+        response = self.client.get("/admin/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Batches and lessons")
+        self.assertContains(response, "Tests and questions")
+
+    def test_the_index_lists_every_registered_model(self):
+        """A model missing from the cards would be unreachable from the home."""
+        self.client.force_login(self.main_admin)
+        response = self.client.get("/admin/")
+
+        page = response.content.decode()
+        for model in admin.site._registry:
+            # Django capitalises the first letter of the label on the index.
+            self.assertIn(model._meta.verbose_name_plural.lower(), page.lower())
+
+    def test_every_admin_queryset_survives_a_sub_admin(self):
+        """Counting rows on the index calls get_queryset on every admin.
+
+        A scope filter that names a field which does not exist (Quiz has no
+        owner, only its series and course do) used to take the whole page down
+        with a 500 instead of showing the one list that was misconfigured.
+        """
+        request = self.request_for(self.sub_admin)
+
+        for model, model_admin in admin.site._registry.items():
+            with self.subTest(model=model.__name__):
+                self.assertIsNotNone(model_admin.get_queryset(request).count())
+
+
+class AdminWorkflowTests(AdminTestDataMixin, TestCase):
+    """The jobs the console is used for, exercised through the admin itself."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.folder = CourseFolder.objects.create(course=cls.own_course, title="Mechanics", position=1)
+        cls.lesson = Lesson.objects.create(
+            course=cls.own_course, folder=cls.folder, title="Vectors", position=1,
+            video_url="https://embed.vcdn.me/embed/abc", is_published=True,
+        )
+        cls.quiz = Quiz.objects.create(title="Mock 1", course=cls.own_course, is_published=False)
+        cls.question = Question.objects.create(quiz=cls.quiz, prompt="What is 2 + 2?", position=1)
+
+    def test_publishing_many_lessons_at_once(self):
+        self.client.force_login(self.sub_admin)
+        draft = Lesson.objects.create(
+            course=self.own_course, folder=self.folder, title="Draft", position=2
+        )
+
+        self.client.post(
+            reverse("admin:courses_lesson_changelist"),
+            {"action": "publish_selected", "_selected_action": [str(draft.pk)], "index": "0"},
+            follow=True,
+        )
+
+        draft.refresh_from_db()
+        self.assertTrue(draft.is_published)
+
+    def test_unpublishing_leaves_the_others_alone(self):
+        self.client.force_login(self.sub_admin)
+        self.client.post(
+            reverse("admin:courses_lesson_changelist"),
+            {"action": "unpublish_selected", "_selected_action": [str(self.lesson.pk)], "index": "0"},
+            follow=True,
+        )
+
+        self.lesson.refresh_from_db()
+        self.assertFalse(self.lesson.is_published)
+
+    def test_a_lesson_can_be_duplicated_as_a_draft(self):
+        self.client.force_login(self.sub_admin)
+
+        self.client.post(
+            reverse("admin:courses_lesson_changelist"),
+            {"action": "duplicate_selected", "_selected_action": [str(self.lesson.pk)], "index": "0"},
+            follow=True,
+        )
+
+        copy = Lesson.objects.get(title="Vectors (copy)")
+        self.assertEqual(copy.video_url, self.lesson.video_url)
+        self.assertEqual(copy.folder_id, self.lesson.folder_id)
+        self.assertFalse(copy.is_published, "a duplicate must not go live on its own")
+
+    def test_a_question_can_be_duplicated_with_its_answers(self):
+        Choice.objects.create(question=self.question, text="4", is_correct=True, position=0)
+        Choice.objects.create(question=self.question, text="5", is_correct=False, position=1)
+        self.client.force_login(self.sub_admin)
+
+        self.client.post(
+            reverse("admin:courses_question_changelist"),
+            {"action": "duplicate_selected", "_selected_action": [str(self.question.pk)], "index": "0"},
+            follow=True,
+        )
+
+        self.assertEqual(Question.objects.filter(quiz=self.quiz).count(), 2)
+        copy = Question.objects.filter(quiz=self.quiz).exclude(pk=self.question.pk).get()
+        self.assertEqual([c.text for c in copy.choices.all()], ["4", "5"])
+        self.assertEqual([c.is_correct for c in copy.choices.all()], [True, False])
+
+    def test_answers_are_numbered_in_the_order_they_are_written(self):
+        """Nobody types 0,1,2,3 — the order of the rows is the order served."""
+        self.client.force_login(self.sub_admin)
+        formset_data = {
+            "quiz": str(self.quiz.pk),
+            "prompt": "Which is a prime?",
+            "explanation": "",
+            "question_type": "single_choice",
+            "marks": "",
+            "negative_marks": "",
+            "difficulty": "easy",
+            "topic": "Number theory",
+            "position": "2",
+            "choices-TOTAL_FORMS": "3",
+            "choices-INITIAL_FORMS": "0",
+            "choices-MIN_NUM_FORMS": "0",
+            "choices-MAX_NUM_FORMS": "10",
+            "choices-0-text": "2",
+            "choices-0-is_correct": "on",
+            "choices-1-text": "4",
+            "choices-2-text": "9",
+            "_save": "Save",
+        }
+
+        response = self.client.post(reverse("admin:courses_question_add"), formset_data, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        question = Question.objects.get(prompt="Which is a prime?")
+        self.assertEqual(
+            [(c.text, c.position) for c in question.choices.all()],
+            [("2", 0), ("4", 1), ("9", 2)],
+        )
+
+    def test_a_blank_answer_row_is_ignored(self):
+        """`extra = 4` leaves spare rows; they must not become empty answers."""
+        self.client.force_login(self.sub_admin)
+        self.client.post(
+            reverse("admin:courses_question_add"),
+            {
+                "quiz": str(self.quiz.pk),
+                "prompt": "Fill me",
+                "explanation": "",
+                "question_type": "single_choice",
+                "marks": "",
+                "negative_marks": "",
+                "difficulty": "",
+                "topic": "",
+                "position": "3",
+                "choices-TOTAL_FORMS": "4",
+                "choices-INITIAL_FORMS": "0",
+                "choices-MIN_NUM_FORMS": "0",
+                "choices-MAX_NUM_FORMS": "10",
+                "choices-0-text": "Only one",
+                "choices-0-is_correct": "on",
+                "choices-1-text": "",
+                "choices-2-text": "",
+                "choices-3-text": "",
+                "_save": "Save",
+            },
+            follow=True,
+        )
+
+        question = Question.objects.get(prompt="Fill me")
+        self.assertEqual([c.text for c in question.choices.all()], ["Only one"])
+
+    def test_the_report_queue_can_be_moved_along_in_bulk(self):
+        from courses.models import QuizAttempt
+
+        attempt = QuizAttempt.objects.create(user=self.student, quiz=self.quiz)
+        report = QuestionReport.objects.create(
+            attempt=attempt, question=self.question, reason=QuestionReport.Reason.TYPO
+        )
+        self.client.force_login(self.sub_admin)
+
+        self.client.post(
+            reverse("admin:courses_questionreport_changelist"),
+            {"action": "mark_resolved", "_selected_action": [str(report.pk)], "index": "0"},
+            follow=True,
+        )
+
+        report.refresh_from_db()
+        self.assertEqual(report.status, QuestionReport.Status.RESOLVED)
+
+    def test_the_lesson_form_offers_a_preview_of_the_recording(self):
+        self.client.force_login(self.sub_admin)
+
+        response = self.client.get(reverse("admin:courses_lesson_change", args=[self.lesson.pk]))
+
+        self.assertContains(response, "Open the recording")
+        self.assertContains(response, self.lesson.video_url)

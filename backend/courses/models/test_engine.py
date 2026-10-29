@@ -278,6 +278,8 @@ class CsvImportJob(TimeStampedModel):
     confirmed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        verbose_name = "CSV import job"
+        verbose_name_plural = "CSV import jobs"
         ordering = ["-created_at"]
 
     @property
