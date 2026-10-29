@@ -12,10 +12,10 @@ Design notes
   command twice updates rather than duplicates.
 * **Removable.** Everything it creates has a ``demo-`` slug prefix; ``--clear``
   deletes exactly those rows and nothing else.
-* **No dead links.** Lessons carry titles and durations but no ``video_url``,
-  and every chapter PDF is published *and* protected. The public payload
-  therefore contains no media URL that would 404, while the lock path still
-  gets exercised.
+* **No dead links.** One known-good embed URL is attached to the first lesson
+  of a free batch and of a paid batch; every other lesson carries no
+  ``video_url``. The paid one stays out of the public payload, so the lock path
+  is exercised against the same URL the free one serves.
 * **Sit-able anonymously, without breaking the paywall.** A test is readable
   when it hangs off a published series (or a published *free* course). The
   demo therefore attaches the SSC CGL mock to its free course and keeps the
@@ -33,6 +33,7 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Q
@@ -40,7 +41,9 @@ from django.utils import timezone
 
 from courses.models import (
     Choice,
+    CommunityPost,
     Course,
+    CourseFaculty,
     CourseFolder,
     Lesson,
     PdfResource,
@@ -49,7 +52,69 @@ from courses.models import (
     TestSeries,
 )
 
+User = get_user_model()
+
 SLUG_PREFIX = "demo-"
+
+# --------------------------------------------------------------------------
+# A real, playable recording. Attached to the first lesson of a *free* batch so
+# an anonymous visitor can open the player and watch it, and to the first
+# lesson of a *paid* batch where the same URL must stay locked in the public
+# payload. Using one URL for both is the point: the difference is the grant,
+# not the media.
+# --------------------------------------------------------------------------
+
+DEMO_VIDEO_URL = "https://embed.vcdn.me/embed/28c4af9f-d817-460a-80ab-9a09f8c47c69"
+
+LESSON_VIDEOS = {
+    ("demo-ssc-cgl-2026", "Series and analogy"): DEMO_VIDEO_URL,
+    ("demo-class-10-science", "Types of reactions"): DEMO_VIDEO_URL,
+    ("demo-jee-main-2027", "Units, dimensions and errors"): DEMO_VIDEO_URL,
+}
+
+# --------------------------------------------------------------------------
+# Faculty and notices. Names are invented for this project — no real teacher
+# is referenced, and no photograph is borrowed. A batch page that lists
+# "Faculty: none" is a screen with a feature missing, not a design choice.
+# --------------------------------------------------------------------------
+
+FACULTY = {
+    "demo-jee-main-2027": [
+        ("Dr. Meera Kulkarni", "Physics", "Twelve years of JEE coaching; writes the weekly problem sets."),
+        ("Anil Bhatt", "Mathematics", "Focuses on calculus and coordinate geometry shortcuts."),
+    ],
+    "demo-neet-2027-biology": [
+        ("Dr. Ritu Sharma", "Biology", "NCERT-first teaching with diagram-heavy revision."),
+    ],
+    "demo-ssc-cgl-2026": [
+        ("Vikas Yadav", "Reasoning", "Pattern-based reasoning drills for tier 1 and tier 2."),
+        ("Neha Goel", "Quantitative Aptitude", "Speed maths and accuracy practice."),
+    ],
+    "demo-bank-po-2026": [
+        ("Sandeep Rao", "Quantitative Aptitude", "Data interpretation and arithmetic for bank exams."),
+    ],
+    "demo-class-10-science": [
+        ("Priya Nair", "Science", "Board-exam preparation with practical demonstrations."),
+    ],
+    "demo-gate-cs-2027": [
+        ("Arjun Menon", "Computer Science", "Algorithms, operating systems and GATE problem patterns."),
+    ],
+}
+
+ANNOUNCEMENTS = [
+    (
+        "Mock test schedule for this fortnight",
+        "Two full-length papers are open this week. Both are timed, scored on the "
+        "server, and the solution review unlocks the moment you submit.",
+        True,
+    ),
+    (
+        "Chapter PDFs are live",
+        "Formula sheets and revision notes for the published chapters are in "
+        "Downloads. They stay available offline once opened.",
+        False,
+    ),
+]
 
 # --------------------------------------------------------------------------
 # Catalogue content. Every title, topic and question here is written for this
@@ -440,10 +505,12 @@ class Command(BaseCommand):
 
         courses = self._courses()
         series, tests = self._series(courses)
+        faculty, notices = self._faculty_and_notices()
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Demo catalogue ready — {courses} courses, {series} test series, {tests} tests."
+                f"Demo catalogue ready — {courses} courses, {series} test series, "
+                f"{tests} tests, {faculty} faculty rows, {notices} announcements."
             )
         )
         self.stdout.write(
@@ -452,6 +519,42 @@ class Command(BaseCommand):
         )
 
     # ------------------------------------------------------------------ #
+
+    def _faculty_and_notices(self):
+        """Faculty rows and two platform announcements.
+
+        Announcements need an author. This command does not create accounts, so
+        it uses (or creates) one clearly-named system author with an unusable
+        password: it owns demo notices and nothing else, and cannot be signed
+        into.
+        """
+        faculty_count = CourseFaculty.objects.filter(
+            course__slug__startswith=SLUG_PREFIX
+        ).count()
+
+        author, created = User.objects.get_or_create(
+            username="studyspace_demo_team",
+            defaults={"email": "demo@studyspace.example"},
+        )
+        if created:
+            author.set_unusable_password()
+            author.save(update_fields=["password"])
+
+        notice_count = 0
+        for index, (title, body, pinned) in enumerate(ANNOUNCEMENTS, start=1):
+            CommunityPost.objects.update_or_create(
+                title=title,
+                defaults={
+                    "body": body,
+                    "author": author,
+                    "is_published": True,
+                    "is_pinned": pinned and index == 1,
+                    "course": None,
+                },
+            )
+            notice_count += 1
+
+        return faculty_count, notice_count
 
     def _clear(self):
         """Delete only rows this command owns — the ``demo-`` slug prefix.
@@ -468,14 +571,20 @@ class Command(BaseCommand):
         series_count = series.count()
         quiz_count = Quiz.objects.filter(quiz_filter).distinct().count()
 
+        notice_count = CommunityPost.objects.filter(title__in=[a[0] for a in ANNOUNCEMENTS]).count()
+
         Quiz.objects.filter(quiz_filter).delete()
         courses.delete()
         series.delete()
+        CommunityPost.objects.filter(title__in=[a[0] for a in ANNOUNCEMENTS]).delete()
+
+        # The system author exists only to own those notices.
+        User.objects.filter(username="studyspace_demo_team", community_posts__isnull=True).delete()
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"Removed demo data — {course_count} courses, {series_count} test series, "
-                f"{quiz_count} tests."
+                f"{quiz_count} tests, {notice_count} announcements."
             )
         )
 
@@ -516,8 +625,22 @@ class Command(BaseCommand):
                             "duration_minutes": minutes,
                             "position": lesson_position,
                             "is_published": True,
+                            "video_url": LESSON_VIDEOS.get((spec["slug"], title), ""),
                         },
                     )
+
+            for faculty_position, (name, subject, bio) in enumerate(
+                FACULTY.get(spec["slug"], []), start=1
+            ):
+                CourseFaculty.objects.update_or_create(
+                    course=course,
+                    name=name,
+                    defaults={
+                        "subject": subject,
+                        "bio": bio,
+                        "position": faculty_position,
+                    },
+                )
 
             # Chapter PDFs live in the first folder; protected, so the public
             # payload carries the lock rather than a URL that would 404.

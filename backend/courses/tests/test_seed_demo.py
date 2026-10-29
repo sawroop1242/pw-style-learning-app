@@ -90,14 +90,31 @@ class SeedDemoTests(TestCase):
             ),
         )
 
-    def test_seed_data_holds_no_media_urls(self):
-        """Seeded lessons carry no video URL and every PDF is protected, so the
-        public payload can never advertise a link that would 404."""
+    def test_only_the_known_recording_carries_a_media_url(self):
+        """One real, reachable embed URL and nothing invented.
+
+        Every other lesson must stay empty so the public payload never
+        advertises a link that would 404, and every PDF stays protected.
+        """
         run()
 
-        self.assertFalse(Lesson.objects.exclude(video_url="").exists())
+        from courses.management.commands.seed_demo import DEMO_VIDEO_URL
+
+        with_video = Lesson.objects.exclude(video_url="")
+        self.assertTrue(with_video.exists())
+        self.assertFalse(with_video.exclude(video_url=DEMO_VIDEO_URL).exists())
         self.assertTrue(PdfResource.objects.exists())
         self.assertFalse(PdfResource.objects.filter(is_protected=False).exists())
+
+    def test_the_recording_is_on_a_free_batch_and_a_paid_one(self):
+        """The same URL proves both paths: playable where granted, withheld
+        where not."""
+        run()
+        from courses.management.commands.seed_demo import DEMO_VIDEO_URL
+
+        courses = Course.objects.filter(lessons__video_url=DEMO_VIDEO_URL).distinct()
+        modes = set(courses.values_list("pricing_mode", flat=True))
+        self.assertEqual(modes, {Course.PricingMode.FREE, Course.PricingMode.PAID})
 
     def test_clear_removes_only_demo_rows(self):
         run()

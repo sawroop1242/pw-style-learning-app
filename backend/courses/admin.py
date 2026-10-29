@@ -14,6 +14,7 @@ from courses.models import (
     CommunityPost,
     Course,
     CourseAccessGrant,
+    CourseFaculty,
     CourseFolder,
     CsvImportJob,
     Lesson,
@@ -23,6 +24,7 @@ from courses.models import (
     Question,
     Quiz,
     QuizAttempt,
+    QuestionReport,
     RevisionItem,
     StudyTask,
     TestSeries,
@@ -130,6 +132,19 @@ class CourseAdmin(OwnerAssignAdmin):
 
     def scope_filter(self, user):
         return Q(owner=user)
+
+
+@admin.register(CourseFaculty)
+class CourseFacultyAdmin(OwnershipScopedAdmin):
+    list_display = ("name", "course", "subject", "position")
+    list_filter = ("course__subject",)
+    search_fields = ("name", "subject", "course__title")
+
+    def scope_filter(self, user):
+        return Q(course__owner=user)
+
+    def owner_scoped_fk_querysets(self, user):
+        return {"course": Course.objects.filter(owner=user)}
 
 
 @admin.register(CourseFolder)
@@ -525,3 +540,26 @@ class RevisionItemAdmin(PrivateDataAdminBase):
 class StudyTaskAdmin(PrivateDataAdminBase):
     list_display = ("user", "title", "due_at", "priority", "is_completed", "created_at")
     search_fields = ("user__username", "title")
+
+
+@admin.register(QuestionReport)
+class QuestionReportAdmin(OwnershipScopedAdmin):
+    """Triage queue for reported questions.
+
+    Deliberately read-mostly: a provider changes ``status`` (open → reviewing →
+    resolved/dismissed). The learner's reason and note are inputs, not fields a
+    provider should be able to rewrite.
+    """
+
+    list_display = ("question", "reason", "status", "attempt", "created_at")
+    list_filter = ("status", "reason")
+    search_fields = ("question__prompt", "detail")
+    readonly_fields = ("attempt", "question", "user", "reason", "detail", "created_at")
+    date_hierarchy = "created_at"
+
+    def scope_filter(self, user):
+        return Q(attempt__quiz__owner=user)
+
+    def get_readonly_fields(self, request, obj=None):
+        base = list(self.readonly_fields)
+        return base

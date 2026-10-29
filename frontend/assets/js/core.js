@@ -380,7 +380,9 @@ export const adaptCourse = (row = {}) => ({
   free: (row.pricing_mode || '') === 'free' || Number(row.price ?? 0) === 0,
   hasAccess: row.has_access !== false,
   telegram: row.telegram_url || '',
-  position: Number(row.position ?? 0)
+  position: Number(row.position ?? 0),
+  // Only the detail endpoint nests these; a grid row leaves them empty.
+  faculty: Array.isArray(row.faculty) ? row.faculty : []
 });
 
 /** API quiz row → the fields a test card renders. */

@@ -2,15 +2,19 @@ from rest_framework import serializers
 from django.contrib.contenttypes.models import ContentType
 from . import grading, policy
 from .models import (
-    CommunityPost, Course, CourseFolder, Lesson, PdfResource, Quiz, Question, Choice,
-    Note, Progress, QuizAttempt, AttemptAnswer, Bookmark, RevisionItem, StudyTask
+    CommunityPost, Course, CourseFaculty, CourseFolder, Lesson, PdfResource, Quiz,
+    Question, Choice, Note, Progress, QuizAttempt, AttemptAnswer, Bookmark,
+    RevisionItem, StudyTask, QuestionReport
 )
 
 ALLOWED_VIDEO_SCHEMES = {"https"}
+# Only hosts we are willing to put in an <iframe> or a <video src>. An open
+# URL field here would let a provider point a learner's page at any origin.
 ALLOWED_VIDEO_HOSTS = {
     "www.youtube.com", "youtube.com", "youtu.be",
     "www.vimeo.com", "vimeo.com", "player.vimeo.com",
     "drive.google.com", "www.drive.google.com",
+    "embed.vcdn.me",
 }
 
 
@@ -58,6 +62,15 @@ class PdfResourceSerializer(serializers.ModelSerializer):
 
     def get_is_locked(self, obj):
         return self.get_file_url(obj) is None
+
+
+class CourseFacultySerializer(serializers.ModelSerializer):
+    """A teacher on the batch page. Read-only: rows are authored by staff."""
+
+    class Meta:
+        model = CourseFaculty
+        fields = ["id", "name", "subject", "bio", "avatar_url", "position"]
+        read_only_fields = fields
 
 
 class CourseFolderSerializer(serializers.ModelSerializer):
@@ -141,10 +154,26 @@ class StaffPdfResourceSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 
+class StaffCourseFacultySerializer(serializers.ModelSerializer):
+    """Write serializer for staff. Ownership is checked in the view."""
+
+    class Meta:
+        model = CourseFaculty
+        fields = ["id", "course", "name", "subject", "bio", "avatar_url", "position"]
+        read_only_fields = ["id"]
+
+
 class CourseListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for course listings."""
-    lesson_count = serializers.IntegerField(source="lessons.count", read_only=True)
-    folder_count = serializers.IntegerField(source="folders.count", read_only=True)
+    """Lightweight serializer for course listings.
+
+    Counts read the annotation the viewset already computed. Asking the
+    reverse manager instead (`source="lessons.count"`) runs one query per row
+    per counter — twelve extra queries on a six-row catalogue page — and the
+    annotation it ignores is exactly the same number.
+    """
+
+    lesson_count = serializers.SerializerMethodField()
+    folder_count = serializers.SerializerMethodField()
     quiz_count = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
 
@@ -156,6 +185,18 @@ class CourseListSerializer(serializers.ModelSerializer):
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",
             "has_access", "created_at", "updated_at"
         ]
+
+    def get_lesson_count(self, course):
+        annotated = getattr(course, "lesson_count", None)
+        if annotated is not None:
+            return annotated
+        return course.lessons.filter(is_published=True).count()
+
+    def get_folder_count(self, course):
+        annotated = getattr(course, "folder_count", None)
+        if annotated is not None:
+            return annotated
+        return course.folders.count()
 
     def get_quiz_count(self, course):
         annotated = getattr(course, "quiz_total", None)
@@ -179,6 +220,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     quiz_count = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
     folders = serializers.SerializerMethodField()
+    faculty = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -186,7 +228,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             "id", "title", "slug", "description", "subject", "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",
-            "has_access", "folders", "created_at", "updated_at"
+            "has_access", "folders", "faculty", "created_at", "updated_at"
         ]
 
     def get_quiz_count(self, course):
@@ -201,6 +243,9 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     def get_folders(self, course):
         folders = course.folders.all().prefetch_related("lessons", "pdf_resources")
         return CourseFolderSerializer(folders, many=True, context=self.context).data
+
+    def get_faculty(self, course):
+        return CourseFacultySerializer(course.faculty.all(), many=True).data
 
 
 class ChoiceSerializer(serializers.ModelSerializer):
@@ -283,10 +328,14 @@ class QuizAttemptSerializer(serializers.ModelSerializer):
     """Read-only view of an attempt. Every field is server-owned: a client may
     never set status, score, snapshot or release state directly."""
 
+    # The attempt history used to fall back to "Test #5" because the payload
+    # carried only a numeric id. The title is the row's reason to exist.
+    quiz_title = serializers.CharField(source="quiz.title", read_only=True)
+
     class Meta:
         model = QuizAttempt
         fields = [
-            "id", "quiz", "status", "started_at", "deadline", "submitted_at",
+            "id", "quiz", "quiz_title", "status", "started_at", "deadline", "submitted_at",
             "score", "max_score", "question_order", "rules_snapshot", "result_released_at"
         ]
         read_only_fields = fields
@@ -301,6 +350,55 @@ class AttemptAnswerSerializer(serializers.ModelSerializer):
         model = AttemptAnswer
         fields = ["id", "question", "selected_choices", "answered", "marked_for_review"]
         read_only_fields = ["id", "answered"]
+
+
+class QuestionReportSerializer(serializers.ModelSerializer):
+    """A learner's complaint about one question in one attempt.
+
+    ``attempt`` and ``question`` are both required and both re-validated: the
+    caller must own the attempt (JWT or guest token, checked in the view) and
+    the question must belong to the paper that attempt was started on. Without
+    that, anyone could attach a report to another student's attempt.
+    """
+
+    question_prompt = serializers.CharField(source="question.prompt", read_only=True)
+
+    class Meta:
+        model = QuestionReport
+        fields = ["id", "attempt", "question", "question_prompt", "reason", "detail", "status", "created_at"]
+        # ``status`` is writable for the staff triage route; the learner route
+        # never passes it to the model, so a student cannot mark their own
+        # report resolved.
+        read_only_fields = ["id", "created_at", "question_prompt"]
+        # Reporting the same question twice is an update, handled in the view.
+        # Keeping the auto unique-together validator would answer 400 first and
+        # tell an unauthorised caller that a report already exists.
+        validators = []
+
+    def validate_detail(self, value):
+        if len(value) > 1000:
+            raise serializers.ValidationError("Keep the note under 1000 characters.")
+        return value
+
+    def validate(self, attrs):
+        # A partial update carries only ``status``; nothing to cross-check.
+        attempt = attrs.get("attempt")
+        question = attrs.get("question")
+        if attempt is None or question is None:
+            if self.instance is not None and ("attempt" in attrs or "question" in attrs):
+                raise serializers.ValidationError(
+                    "A report stays attached to the attempt and question it was filed against."
+                )
+            return attrs
+        if question.quiz_id != attempt.quiz_id:
+            raise serializers.ValidationError(
+                {"question": "That question is not part of this attempt's paper."}
+            )
+        if attempt.question_order and question.id not in attempt.question_order:
+            raise serializers.ValidationError(
+                {"question": "That question was not on this attempt."}
+            )
+        return attrs
 
 
 class QuizSubmissionSerializer(serializers.Serializer):
@@ -454,6 +552,22 @@ class NoteSerializer(serializers.ModelSerializer):
         model = Note
         fields = ["id", "title", "body", "lesson", "lesson_title", "question", "question_text", "updated_at"]
         read_only_fields = ["id", "updated_at"]
+
+    def validate_lesson(self, lesson):
+        """A note may only point at a published lesson the caller can open.
+
+        Same reason as progress: the response echoes ``lesson_title``, so an
+        unchecked FK would let a learner read the title of a draft lesson in
+        somebody else's batch.
+        """
+        if lesson is None:
+            return lesson
+        user = _request_user(self)
+        if not lesson.is_published:
+            raise serializers.ValidationError("That lesson is not published.")
+        if not policy.can_access_course(user, lesson.course):
+            raise serializers.ValidationError("You do not have access to this lesson.")
+        return lesson
 
 
 class ProgressSerializer(serializers.ModelSerializer):

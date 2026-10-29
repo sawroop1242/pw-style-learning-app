@@ -5,7 +5,7 @@
 
 import {
   $, $$, esc, money, compact, shortDate, countdown,
-  initials, isSignedIn, storage
+  initials, isSignedIn, storage, getJson, request, API_BASE
 } from './core.js';
 
 /* ------------------------------------------------------------------ */
@@ -263,7 +263,8 @@ export function renderHeader(active = '') {
       </div>
       <div class="topbar-actions">
         <button class="icon-btn" aria-label="Search" data-search-toggle>${icon('search')}</button>
-        <button class="icon-btn has-dot" aria-label="Notifications" data-tip="Notifications">${icon('bell')}</button>
+        <button class="icon-btn" type="button" id="notify-btn" aria-label="Activity"
+                aria-expanded="false" aria-controls="notify-panel">${icon('bell')}</button>
         ${
           isSignedIn() && user
             ? `<a class="user-chip" href="dashboard.html" aria-label="Signed in as ${esc(user.username || 'Student')}">
@@ -308,6 +309,8 @@ export function renderHeader(active = '') {
     }
   });
 
+  mountNotifications(host);
+
   const search = host.querySelector('[data-global-search]');
   search?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && search.value.trim()) {
@@ -326,6 +329,145 @@ export function renderHeader(active = '') {
       search?.focus();
     }
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Activity inbox (the bell)                                          */
+/* ------------------------------------------------------------------ */
+
+const NOTIFY_ICON = {
+  announcement: 'megaphone',
+  task: 'check-circle',
+  result: 'award'
+};
+
+let notifyInbox = null;
+
+function notifyPanel(topbar) {
+  const panel = document.createElement('div');
+  panel.className = 'notify-panel';
+  panel.id = 'notify-panel';
+  panel.hidden = true;
+  panel.innerHTML = `
+    <div class="notify-head">
+      <strong>Activity</strong>
+      <button class="link-button tiny" type="button" data-notify-read>Mark all read</button>
+    </div>
+    <div class="stack" style="gap:2px" id="notify-list" aria-live="polite"></div>`;
+  topbar.appendChild(panel);
+  return panel;
+}
+
+function paintNotify(inbox) {
+  const host = $('#notify-list');
+  if (!host) return;
+  if (!inbox.results.length) {
+    host.innerHTML = `
+      <div class="notify-empty">
+        <strong>Nothing new</strong>
+        <p class="tiny muted" style="margin:4px 0 0">Announcements, tasks falling due and released results arrive here.</p>
+      </div>`;
+    return;
+  }
+  host.innerHTML = inbox.results
+    .map(
+      (item) => `
+      <a class="notify-item ${item.read ? '' : 'is-unread'}" href="${esc(item.href)}" data-notify-key="${esc(item.id)}">
+        <span class="notify-icon">${icon(NOTIFY_ICON[item.kind] || 'bell')}</span>
+        <span class="notify-body">
+          <strong>${esc(item.title)}</strong>
+          <small>${esc(item.body || '')}</small>
+        </span>
+      </a>`
+    )
+    .join('');
+}
+
+async function loadNotifications() {
+  try {
+    notifyInbox = await getJson('/notifications/');
+  } catch {
+    notifyInbox = { count: 0, unread: 0, results: [] };
+  }
+  // A guest has no account to remember a read receipt, so a dot would never
+  // clear. Guests get the list without one.
+  const button = $('#notify-btn');
+  if (button) button.classList.toggle('has-dot', notifyInbox.unread > 0 && isSignedIn());
+  paintNotify(notifyInbox);
+  return notifyInbox;
+}
+
+function mountNotifications(host) {
+  // The panel hangs off the top bar so `position: sticky` on the bar is its
+  // containing block; appended to #site-header it would anchor to the viewport.
+  const topbar = host.querySelector('.topbar');
+  const button = host.querySelector('#notify-btn');
+  if (!topbar || !button) return;
+  const panel = notifyPanel(topbar);
+
+  const close = () => {
+    panel.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+  };
+
+  button.addEventListener('click', async () => {
+    const willOpen = panel.hidden;
+    panel.hidden = !willOpen;
+    button.setAttribute('aria-expanded', String(willOpen));
+    if (!willOpen) return;
+    await loadNotifications();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (panel.hidden) return;
+    if (panel.contains(event.target) || button.contains(event.target)) return;
+    close();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !panel.hidden) {
+      close();
+      button.focus();
+    }
+  });
+
+  panel.querySelector('[data-notify-read]')?.addEventListener('click', async () => {
+    if (!isSignedIn()) {
+      location.href = 'login.html';
+      return;
+    }
+    const keys = (notifyInbox?.results || []).filter((item) => !item.read).map((item) => item.id);
+    if (!keys.length) return;
+    try {
+      await request('/notifications/read/', { method: 'POST', body: { keys } });
+      await loadNotifications();
+    } catch {
+      /* The list stays as it was; nothing was recorded. */
+    }
+  });
+
+  // Opening an item marks it read, then follows the link.
+  panel.addEventListener('click', (event) => {
+    const link = event.target.closest('[data-notify-key]');
+    if (!link || !isSignedIn()) return;
+    const key = link.getAttribute('data-notify-key');
+    // keepalive lets the request finish while the browser navigates away.
+    try {
+      fetch(`${API_BASE}/notifications/read/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(storage.access ? { Authorization: `Bearer ${storage.access}` } : {})
+        },
+        body: JSON.stringify({ keys: [key] }),
+        keepalive: true
+      }).catch(() => {});
+    } catch {
+      /* a lost read receipt is not worth blocking navigation */
+    }
+  });
+
+  loadNotifications();
 }
 
 export function renderTabbar(active = '') {

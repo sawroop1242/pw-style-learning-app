@@ -290,15 +290,25 @@
       <form id="report-form" class="modal-body" style="display:grid;gap:14px">
         <p class="tiny subtle" id="report-context">Question 1</p>
         <div class="field">
-          <label for="report-reason">What is wrong?</label>
-          <textarea class="textarea" id="report-reason" name="reason" rows="3" required
-                    placeholder="Wrong answer key, typo, missing data in the chart…"></textarea>
+          <label for="report-category">What is wrong?</label>
+          <select class="select" id="report-category" name="category" required>
+            <option value="wrong_answer">The marked answer looks wrong</option>
+            <option value="ambiguous">The question is ambiguous</option>
+            <option value="typo">Spelling or formatting problem</option>
+            <option value="missing_info">Not enough information to answer</option>
+            <option value="other">Something else</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="report-reason">Anything else? (optional)</label>
+          <textarea class="textarea" id="report-reason" name="reason" rows="3"
+                    placeholder="Which part is unclear, and what did you expect?"></textarea>
         </div>
         <p class="tiny subtle">
-          The report is stored with this attempt on this device. It reaches the content team once the
-          reporting endpoint exists — this build does not pretend to send it.
+          This goes to the team that set the paper, attached to this attempt. Your score is not affected.
         </p>
-        <button class="btn btn-primary btn-block" type="submit">Save report</button>
+        <p class="field-error" id="report-error" role="alert" hidden></p>
+        <button class="btn btn-primary btn-block" type="submit">Send report</button>
       </form>
     </div>
   </div>

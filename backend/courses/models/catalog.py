@@ -82,6 +82,38 @@ class CourseFolder(TimeStampedModel):
         return f"{self.course}: {self.title}"
 
 
+class CourseFaculty(TimeStampedModel):
+    """A teacher listed on a batch page.
+
+    Deliberately small and owned by whoever owns the course: a name, the
+    subject they teach, a short bio and an optional portrait URL. Nothing here
+    is scraped or borrowed from another platform — a row exists because a
+    provider typed it in.
+    """
+
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, related_name="faculty"
+    )
+    name = models.CharField(max_length=120)
+    subject = models.CharField(max_length=80, blank=True)
+    bio = models.TextField(blank=True)
+    avatar_url = models.URLField(blank=True)
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
+        verbose_name_plural = "course faculty"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["course", "name"], name="unique_faculty_name_per_course"
+            )
+        ]
+        indexes = [models.Index(fields=["course", "position"])]
+
+    def __str__(self):
+        return f"{self.course}: {self.name}"
+
+
 class Lesson(TimeStampedModel):
     course = models.ForeignKey(
         Course, related_name="lessons", on_delete=models.CASCADE

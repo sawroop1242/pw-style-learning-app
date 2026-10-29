@@ -27,7 +27,9 @@ function renderWelcome() {
   const title = $('#welcome-title');
   if (title) {
     const first = name.split(/[\s._-]/)[0] || 'Student';
-    title.innerHTML = `Hello, ${esc(first.charAt(0).toUpperCase() + first.slice(1))}! <span aria-hidden="true">👋</span>`;
+    // An inline icon, not an emoji: a host without an emoji font paints 👋 as
+    // an empty box, and the sprite always renders.
+    title.innerHTML = `Hello, ${esc(first.charAt(0).toUpperCase() + first.slice(1))}! ${icon('sparkles')}`;
   }
   const sub = document.querySelector('[data-welcome-sub]');
   if (sub && user) sub.textContent = 'Your batches, tests and notes are on your dashboard.';

@@ -17,6 +17,9 @@ mountChrome('dashboard');
 
 const signedIn = isSignedIn();
 
+/** Rows the page has loaded, so an action can update them without a refetch. */
+const STATE = { tasks: [] };
+
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                      */
 /* ------------------------------------------------------------------ */
@@ -296,26 +299,111 @@ function renderBatches(courseRows) {
 
 function renderTasks(taskRows) {
   const host = $('#task-list');
+  const form = $('#task-form');
   if (!signedIn) {
+    if (form) form.hidden = true;
+    $('#task-toggle')?.setAttribute('hidden', '');
     host.innerHTML = '<p class="tiny muted" style="margin:0">Sign in to plan study tasks.</p>';
     return;
   }
+  $('#task-toggle')?.removeAttribute('hidden');
+
   if (!taskRows.length) {
-    host.innerHTML = '<p class="tiny muted" style="margin:0">No study task yet. Tasks you add in the API appear here.</p>';
+    host.innerHTML =
+      '<p class="tiny muted" style="margin:0">Nothing planned yet. Add a task and it is saved to your account.</p>';
     return;
   }
+
   host.innerHTML = taskRows
-    .slice(0, 4)
+    .slice(0, 6)
     .map(
       (task) => `
-      <div class="row-between tiny" style="gap:10px">
-        <span class="truncate ${task.is_completed ? 'subtle' : 'strong'}" style="max-width:70%;font-size:12px">
-          ${task.is_completed ? '✓ ' : ''}${esc(task.title)}
-        </span>
-        <span class="subtle">${task.due_at ? shortDate(task.due_at) : ''}</span>
+      <div class="task-row ${task.is_completed ? 'is-done' : ''}" data-task="${task.id}">
+        <button class="task-check" type="button" data-task-toggle="${task.id}"
+                aria-pressed="${task.is_completed ? 'true' : 'false'}"
+                aria-label="${task.is_completed ? 'Mark not done' : 'Mark done'}: ${esc(task.title)}">
+          ${icon(task.is_completed ? 'check-circle' : 'check')}
+        </button>
+        <span class="task-title truncate">${esc(task.title)}</span>
+        <span class="tiny subtle">${task.due_at ? shortDate(task.due_at) : ''}</span>
       </div>`
     )
     .join('');
+}
+
+function wireStudyPlan() {
+  const form = $('#task-form');
+  const toggle = $('#task-toggle');
+  const title = $('#task-title');
+  const due = $('#task-due');
+  const status = $('#task-status');
+
+  toggle?.addEventListener('click', () => {
+    if (!signedIn) {
+      location.href = 'login.html?next=dashboard.html';
+      return;
+    }
+    const open = form.hidden;
+    form.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if (open) title?.focus();
+  });
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!signedIn) return;
+    const value = title?.value.trim();
+    if (!value) {
+      if (status) status.textContent = 'Give the task a name first.';
+      title?.focus();
+      return;
+    }
+    const save = $('#task-save');
+    if (save) save.disabled = true;
+    if (status) status.textContent = 'Saving…';
+    try {
+      // A date input gives a local calendar day; the API stores an instant, so
+      // it is sent as the end of that day rather than midnight (a task due
+      // "today" should not read as overdue the moment it is created).
+      const dueAt = due?.value ? new Date(`${due.value}T23:59:00`).toISOString() : null;
+      const saved = await request('/study-tasks/', {
+        method: 'POST',
+        body: { title: value, due_at: dueAt }
+      });
+      STATE.tasks = [saved, ...STATE.tasks];
+      renderTasks(STATE.tasks);
+      title.value = '';
+      if (due) due.value = '';
+      if (status) status.textContent = '';
+      form.hidden = true;
+      toggle?.setAttribute('aria-expanded', 'false');
+      toast('Task added to your study plan.', 'success');
+    } catch (err) {
+      if (status) status.textContent = err?.message || 'That did not save.';
+    } finally {
+      if (save) save.disabled = false;
+    }
+  });
+
+  $('#task-list')?.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-task-toggle]');
+    if (!button) return;
+    const id = button.getAttribute('data-task-toggle');
+    const task = STATE.tasks.find((row) => String(row.id) === String(id));
+    if (!task) return;
+
+    button.disabled = true;
+    try {
+      const path = task.is_completed ? `/study-tasks/${id}/reopen/` : `/study-tasks/${id}/complete/`;
+      const saved = await request(path, { method: 'POST' });
+      STATE.tasks = STATE.tasks.map((row) => (String(row.id) === String(id) ? saved : row));
+      renderTasks(STATE.tasks);
+      toast(saved.is_completed ? 'Task done.' : 'Task reopened.', 'success');
+    } catch (err) {
+      button.disabled = false;
+      toast(err?.message || 'That did not save.', 'error');
+    }
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -383,6 +471,7 @@ async function boot() {
   renderGreeting();
   renderFigures({});
   wireNoteModal();
+  wireStudyPlan();
 
   // Personal endpoints are only asked when there is an account to ask about:
   // an anonymous request for them is not an empty answer, it is a 401.
@@ -426,6 +515,7 @@ async function boot() {
   renderUpcoming(quizRows);
   renderNotes(noteRows);
   renderBatches(courseRows);
+  STATE.tasks = taskRows;
   renderTasks(taskRows);
 
   // A signed-in account whose endpoints all failed is a real outage; say so.
