@@ -93,7 +93,10 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        # Project-level overrides (the admin's branding and index) live here.
+        # They must come before APP_DIRS: django.contrib.admin ships its own
+        # admin/index.html, and an app directory would lose to it.
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
