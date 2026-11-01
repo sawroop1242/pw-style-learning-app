@@ -6,3 +6,6 @@ dj-database-url>=2.3,<3.0
 gunicorn>=23.0,<24.0
 psycopg[binary]>=3.2,<4.0
 whitenoise>=6.8,<7.0
+# Fernet encryption for Cloudflare R2 credentials stored in the database.
+# The backend never needs to write a plaintext secret anywhere.
+cryptography>=43,<47

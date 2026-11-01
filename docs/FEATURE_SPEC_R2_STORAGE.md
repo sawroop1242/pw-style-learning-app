@@ -1,12 +1,38 @@
 # Feature Specification — Sub-admin Multi-account Cloudflare R2 Storage
 
-**Status:** Planned; implementation and tests have not been verified.  
+**Status:** Step 1 shipped (2026-11-02): the account/bucket model, encrypted
+credentials, the admin panel and the connection test. Upload plumbing (sections
+3–5) is **not** built yet — the panel configures storage, it does not yet move
+a file into it.  
 **Priority:** Mandatory prerequisite for Community post images and course thumbnails.  
 **Applies to:** Django backend, sub-admin panel, object-storage adapter, Community posts, course administration, media delivery, audit/security controls.
 
 ## 1. Goal
 
 Allow every sub-admin to connect and manage multiple Cloudflare R2 buckets across different Cloudflare accounts entirely from their own sub-admin panel. The same storage manager must support Community post image uploads and course thumbnail uploads. Storage targets are tenant-owned; one sub-admin must never gain access to another sub-admin's credentials, target configuration, or media.
+
+### 1a. What exists today (verified)
+
+| Piece | Where | Evidence |
+|---|---|---|
+| `R2Account` — one Cloudflare login: name, 32-hex account id, owner, on/off | `objectstore/models.py` | `objectstore/tests/test_storage.py::AccountModelTests` |
+| `R2Bucket` — name, public base URL, enabled, per-purpose allow flags, one default per purpose per owner | `objectstore/models.py` | `BucketRulesTests` |
+| Credentials encrypted at rest (Fernet; keys from `R2_CREDENTIAL_KEYS`, or HKDF-SHA256 over `SECRET_KEY` when unset) | `objectstore/crypto.py` | `CryptoLockTests` |
+| SigV4 signing, presigned URLs, read/write calls — stdlib only, no SDK | `objectstore/r2.py` | `SigningTests` (fixed clock) |
+| "Test connection": read-only ListObjectsV2, bounded at 8 s, result stored on the bucket *and* the account, audited | `objectstore/services.py` | `ConnectionTestTests` against a local HTTP server |
+| Admin panel with buckets inline on the account page; sub-admins see only their own; secrets never rendered | `objectstore/admin.py` | `AdminPanelTests` |
+| `manage.py r2_check [--bucket X] [--write]`, `manage.py r2_rotate_key [--new-key|--apply]` | `objectstore/management/commands/` | `CommandTests` |
+| `objectstore.W001` warns a production deploy whose tokens rely on `SECRET_KEY` | `objectstore/checks.py` | `StartupCheckTests` |
+
+Not built yet, and therefore not claimed: upload endpoints and validation
+(section 4), routing/defaults beyond `resolve_bucket()`, Community and course
+thumbnail integration, cleanup/retry, migration between targets, and the
+end-to-end tests that go with them.
+
+Credentials live in the database, not a secret manager, because a sub-admin has
+to be able to paste their own token without a deploy. That is only acceptable
+because they are encrypted with application key material and never returned by
+any UI.
 
 ## 2. Target and ownership model
 

@@ -25,6 +25,29 @@ This document describes how to deploy the StudySpace Django API and frontend to 
 
 ## Environment Variables
 
+### Cloudflare R2 storage (optional)
+
+The admin panel stores R2 credentials encrypted. Set the key material
+explicitly in production:
+
+```bash
+# Generate: python manage.py r2_rotate_key --new-key
+R2_CREDENTIAL_KEYS=<urlsafe-base64 32-byte key>[,<older key>,...]
+R2_REQUEST_TIMEOUT=8       # seconds a connection test may take
+R2_SIGNED_URL_TTL=900      # seconds a private object URL stays valid
+```
+
+The first key encrypts; every key in the list can decrypt, which is what makes
+rotation possible without re-entering every token. Without the variable, a key
+is derived from `SECRET_KEY` — workable, but rotating `SECRET_KEY` then makes
+every stored token unreadable, and `manage.py check` warns about it in a
+production deploy that has tokens stored.
+
+Rotation: add a new key at the front, deploy, run
+`python manage.py r2_rotate_key --apply`, then remove the old key.
+
+
+
 Create a `.env` file in the `backend/` directory with the following variables. **Never commit real secrets to version control.**
 
 ```bash
