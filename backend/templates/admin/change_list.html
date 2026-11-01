@@ -1,0 +1,27 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% comment %}
+    Django titles every list "<Select model to change>", an instruction left
+    over from a screen that no longer exists, and it repeats on all 25 lists.
+    The model's plural name is what the page is about.
+
+    Set here rather than in each ModelAdmin so the lists Django registers for
+    itself (Users, Groups, Profiles) read the same as ours.
+{% endcomment %}
+
+{% block title %}
+  {% if cl %}
+    {{ cl.opts.verbose_name_plural|capfirst }} | {% translate "StudySpace admin" %}
+  {% else %}
+    {{ block.super }}
+  {% endif %}
+{% endblock %}
+
+{% block content_title %}
+  {% if cl %}
+    <h1>{{ cl.opts.verbose_name_plural|capfirst }}</h1>
+  {% elif title %}
+    <h1>{{ title }}</h1>
+  {% endif %}
+{% endblock %}

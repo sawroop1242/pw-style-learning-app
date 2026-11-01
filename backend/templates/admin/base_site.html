@@ -14,10 +14,23 @@
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {% translate "StudySpace admin" %}{% endblock %}
 
-{% block extrastyle %}
+{% comment %}
+    Loaded in the `responsive` block, i.e. last in the <head>: Django's
+    change_form and change_list templates append forms.css and changelists.css
+    to `extrastyle`, so a stylesheet linked there is overridden by rules of the
+    same weight. Last wins without !important everywhere.
+{% endcomment %}
+{% block responsive %}
   {{ block.super }}
   <link rel="stylesheet" href="{% static 'staff/admin.css' %}">
 {% endblock %}
+
+{% comment %}
+    "Welcome, admin." is four words of greeting in a bar that also has to hold
+    View site / Change password / Log out; on a phone it pushed Log out off the
+    edge. The bar says who you are by being there.
+{% endcomment %}
+{% block welcome-msg %}{% endblock %}
 
 {% block bodyclass %}ss-admin {{ block.super }}{% endblock %}
 

@@ -51,7 +51,26 @@ def is_staff_role(user):
     return user.is_authenticated and user_role(user) in {Role.MAIN_ADMIN, Role.SUB_ADMIN}
 
 
-class OwnershipScopedAdmin(admin.ModelAdmin):
+class CompactTextareaMixin:
+    """Give every long-text field four visible lines instead of ten.
+
+    A course blurb, a folder description or a statement is a paragraph, and
+    Django's ten-row textarea makes each of those forms twice as tall as the
+    fields it sits between. The handle is still there for anything longer.
+    """
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        field = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if field is not None and isinstance(field.widget, forms.Textarea):
+            # `forms.Textarea` seeds its attrs with rows=10, so setdefault()
+            # would never fire; replace that default and leave any explicit
+            # size an author set alone.
+            if str(field.widget.attrs.get("rows", "10")) == "10":
+                field.widget.attrs["rows"] = 4
+        return field
+
+
+class OwnershipScopedAdmin(CompactTextareaMixin, admin.ModelAdmin):
     """Main admins see everything; sub-admins only rows belonging to courses
     or series they own. Object-level checks mirror the queryset scoping."""
 
@@ -102,6 +121,33 @@ class OwnershipScopedAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return self.has_view_permission(request, obj)
 
+    @admin.display(description="Updated", ordering="updated_at")
+    def last_edited(self, obj):
+        """A compact timestamp for list columns.
+
+        Django prints ``Nov. 1, 2026, 8:41 p.m.``, which is 26 characters of
+        noise per row and the widest thing in a list. The day is what a person
+        scans for; the clock only matters for today's rows.
+        """
+        stamp = timezone.localtime(obj.updated_at)
+        now = timezone.localtime()
+        if stamp.date() == now.date():
+            return f"Today {stamp:%H:%M}"
+        if stamp.year == now.year:
+            return f"{stamp:%d %b} {stamp:%H:%M}"
+        return f"{stamp:%d %b %Y}"
+
+    def changelist_view(self, request, extra_context=None):
+        """Name the list after what it holds.
+
+        Django titles every list "Select <model> to change", which reads like
+        an instruction and repeats on all 25 of them. The heading is the thing
+        the page is about.
+        """
+        extra_context = dict(extra_context or {})
+        extra_context.setdefault("title", str(self.model._meta.verbose_name_plural).capitalize())
+        return super().changelist_view(request, extra_context)
+
 
 class OwnerAssignAdmin(OwnershipScopedAdmin):
     """Also assigns the current staff user as owner on create and blocks
@@ -115,6 +161,17 @@ class OwnerAssignAdmin(OwnershipScopedAdmin):
         if not is_main_admin(request.user):
             exclude = list(exclude or []) + [self.owner_field]
         return exclude
+
+    def get_changeform_initial_data(self, request):
+        """Pre-select the signed-in person as owner of anything new.
+
+        Without it the owner picker opens on "---------" and the row is saved
+        with no owner at all, which then hides it from every sub-admin.
+        """
+        initial = super().get_changeform_initial_data(request)
+        if is_main_admin(request.user):
+            initial.setdefault(self.owner_field, request.user.pk)
+        return initial
 
     def save_model(self, request, obj, form, change):
         if not change:
@@ -312,7 +369,7 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
             }),
             ("Channel", {
                 "fields": ("telegram_handle", "telegram_url"),
-                "classes": ("collapse",),
+                "description": "Where learners ask questions about this batch.",
             }),
             ("Visibility", {"fields": ("is_published", "position")}),
         )
@@ -624,7 +681,7 @@ class CourseAccessGrantAdmin(OwnershipScopedAdmin):
 
 @admin.register(TestSeries)
 class TestSeriesAdmin(OwnerAssignAdmin):
-    list_display = ("title", "subject", "owner", "is_published", "updated_at")
+    list_display = ("title", "subject", "owner", "is_published", "last_edited")
     list_filter = ("subject", "is_published")
     search_fields = ("title", "description")
     prepopulated_fields = {"slug": ("title",)}
@@ -637,8 +694,8 @@ class TestSeriesAdmin(OwnerAssignAdmin):
 class QuizAdmin(PublishableAdmin):
     publish_label = "tests"
     list_display = (
-        "title", "series", "course", "timing_mode", "duration_minutes",
-        "question_total", "is_published", "updated_at",
+        "title", "series", "course", "timing_mode", "duration",
+        "question_total", "is_published", "last_edited",
     )
     list_filter = ("timing_mode", "is_published", "series")
     search_fields = ("title", "description")
@@ -660,7 +717,11 @@ class QuizAdmin(PublishableAdmin):
             "fields": ("marks_per_question", "negative_marks_per_wrong", "pass_threshold_percent"),
         }),
         ("When results appear", {"fields": ("result_release_policy",)}),
-        ("Shuffling", {"fields": ("shuffle_questions", "shuffle_options"), "classes": ("collapse",)}),
+        ("Shuffling", {
+            "fields": ("shuffle_questions", "shuffle_options"),
+            "classes": ("collapse",),
+            "description": "Optional. Leave collapsed unless the paper needs it.",
+        }),
         ("Window and visibility", {"fields": ("opens_at", "closes_at", "is_published")}),
     )
 
@@ -675,6 +736,15 @@ class QuizAdmin(PublishableAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(_questions=Count("questions"))
+
+    @admin.display(description="Minutes", ordering="duration_minutes")
+    def duration(self, obj):
+        """The header is the unit, so the cell is just the number.
+
+        ``Duration minutes`` was the widest heading in the list and pushed the
+        last column off the right edge at 1440px.
+        """
+        return obj.duration_minutes
 
     @admin.display(description="Questions", ordering="_questions")
     def question_total(self, obj):
@@ -1012,7 +1082,7 @@ class CommunityPostAdmin(OwnershipScopedAdmin):
 class NoteAdmin(OwnershipScopedAdmin):
     """Notes are private; only main admins may view them for support."""
 
-    list_display = ("user", "title", "lesson", "question", "updated_at")
+    list_display = ("user", "title", "lesson", "question", "last_edited")
     search_fields = ("title", "body", "user__username")
 
     def scope_filter(self, user):
@@ -1041,7 +1111,7 @@ class ProgressAdmin(OwnershipScopedAdmin):
         return Q(lesson__course__owner=user)
 
 
-class PrivateDataAdminBase(admin.ModelAdmin):
+class PrivateDataAdminBase(CompactTextareaMixin, admin.ModelAdmin):
     """Private user data: read-only, main-admin support access only."""
 
     def has_module_permission(self, request):
