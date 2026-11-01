@@ -127,6 +127,29 @@ class OwnerAssignAdmin(OwnershipScopedAdmin):
         super().save_model(request, obj, form, change)
 
 
+class StaffInlineMixin:
+    """Inlines are gated on the staff *role*, not on model permissions.
+
+    Django falls back to `<app>.add_<model>` when an inline does not define the
+    permission methods. A sub-admin holds none of those permissions, so every
+    inline silently disappeared from their forms — the answers section on a
+    question, and now the sections and lessons on a batch. The role is the thing
+    that decides access everywhere else in this admin; it decides it here too.
+    """
+
+    def has_add_permission(self, request, obj):
+        return is_staff_role(request.user)
+
+    def has_view_permission(self, request, obj):
+        return is_staff_role(request.user)
+
+    def has_change_permission(self, request, obj):
+        return is_staff_role(request.user)
+
+    def has_delete_permission(self, request, obj):
+        return is_staff_role(request.user)
+
+
 class PublishableAdmin(OwnershipScopedAdmin):
     """Publish or unpublish many rows at once.
 
@@ -137,6 +160,10 @@ class PublishableAdmin(OwnershipScopedAdmin):
     """
 
     publish_label = "rows"
+    # `@admin.action` only marks a method; it is not registered until it is
+    # named here. Without this line the bulk publish never appeared on a list
+    # page — `get_actions` below then raised KeyError and the page 500ed.
+    actions = ("publish_selected", "unpublish_selected")
 
     @admin.action(description="Publish the selected rows")
     def publish_selected(self, request, queryset):
@@ -153,14 +180,106 @@ class PublishableAdmin(OwnershipScopedAdmin):
         # The wording names the model; the tuple carries the description, so
         # nothing shared between requests is mutated here.
         for name, verb in (("publish_selected", "Publish"), ("unpublish_selected", "Unpublish")):
+            if name not in actions:
+                # A subclass may offer only one of the two.
+                continue
             action, action_name, _ = actions[name]
             actions[name] = (action, action_name, f"{verb} the selected {self.publish_label}")
         return actions
 
 
+class FolderLessonFormSet(BaseInlineFormSet):
+    """Lessons written inside a section inherit the section's batch.
+
+    `Lesson.course` is a required foreign key that is not on this inline — the
+    section already knows it. Setting it while the form is *built* (rather than
+    only when it is saved) is what lets the model's own clean() check compare
+    the two and pass.
+    """
+
+    def _construct_form(self, i, **kwargs):
+        form = super()._construct_form(i, **kwargs)
+        if self.instance.pk:
+            form.instance.course_id = self.instance.course_id
+        return form
+
+
+class FolderLessonInlineForm(forms.ModelForm):
+    """A plain URL box.
+
+    The admin's URL widget prints "Currently: <link>" above the input and wraps
+    both in one paragraph, which inside a table row doubled the height and cut
+    the URL off at the point you need to check. In a row, the value in the box
+    is the whole story.
+    """
+
+    class Meta:
+        model = Lesson
+        fields = ("title", "video_url", "duration_minutes", "position", "is_published")
+        widgets = {
+            "title": forms.TextInput(attrs={"placeholder": "Class title"}),
+            "video_url": forms.URLInput(attrs={"placeholder": "https://embed…"}),
+        }
+
+
+class FolderLessonInline(StaffInlineMixin, admin.TabularInline):
+    model = Lesson
+    fk_name = "folder"
+    form = FolderLessonInlineForm
+    formset = FolderLessonFormSet
+    fields = ("title", "video_url", "duration_minutes", "position", "is_published")
+    extra = 1
+    ordering = ("position", "id")
+    verbose_name = "class"
+    verbose_name_plural = "Classes in this section"
+
+
+class FolderPdfInlineForm(forms.ModelForm):
+    class Meta:
+        model = PdfResource
+        fields = ("title", "file_url", "position", "is_published", "is_protected")
+        widgets = {
+            "title": forms.TextInput(attrs={"placeholder": "Note or PDF title"}),
+            "file_url": forms.URLInput(attrs={"placeholder": "https://…pdf"}),
+        }
+
+
+class FolderPdfInline(StaffInlineMixin, admin.TabularInline):
+    model = PdfResource
+    fk_name = "folder"
+    form = FolderPdfInlineForm
+    fields = ("title", "file_url", "position", "is_published", "is_protected")
+    extra = 1
+    ordering = ("position", "id")
+    verbose_name = "PDF"
+    verbose_name_plural = "Notes and PDFs"
+
+
+class CourseFolderInline(StaffInlineMixin, admin.TabularInline):
+    """Sections on the batch page.
+
+    A batch used to be built in two places: the batch here, then "Course
+    folders" somewhere else, with the batch picked again from a dropdown. The
+    sections are part of the batch, so they are edited on it.
+    """
+
+    model = CourseFolder
+    fk_name = "course"
+    fields = ("title", "position")
+    extra = 1
+    ordering = ("position", "id")
+    verbose_name = "section"
+    verbose_name_plural = "Sections (folders of classes)"
+    show_change_link = True
+
+
 @admin.register(Course)
 class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
     publish_label = "batches"
+    # Autocomplete views paginate the model admin's queryset, which needs a
+    # stable order (Django warns "Pagination may yield inconsistent results"
+    # otherwise).
+    ordering = ("title",)
     list_display = (
         "title", "subject", "pricing_mode", "price", "lesson_total", "folder_total",
         "is_published", "owner", "updated_at",
@@ -168,13 +287,19 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
     list_filter = ("subject", "pricing_mode", "is_published")
     search_fields = ("title", "description", "slug")
     prepopulated_fields = {"slug": ("title",)}
+    inlines = [CourseFolderInline]
+    list_editable = ("is_published",)
+    save_on_top = True
+    # A fieldset may only name a non-model field when it is declared read-only.
+    readonly_fields = ("shortcuts",)
+
     def get_fieldsets(self, request, obj=None):
         """`owner` is hidden from sub-admins by OwnerAssignAdmin, so it is only
         named in the fieldset for someone who may actually change it."""
         batch_fields = ("title", "slug", "subject")
         if is_main_admin(request.user):
             batch_fields = batch_fields + ("owner",)
-        return (
+        fieldsets = (
             ("The batch", {
                 "fields": batch_fields,
                 "description": "What the card in the catalogue says.",
@@ -190,6 +315,33 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
                 "classes": ("collapse",),
             }),
             ("Visibility", {"fields": ("is_published", "position")}),
+        )
+        if obj is not None:
+            # Appended as a one-element tuple of (name, options).
+            fieldsets += (("Add to this batch", {"fields": ("shortcuts",)}),)
+        return fieldsets
+
+    @admin.display(description="Shortcuts")
+    def shortcuts(self, obj):
+        """Straight to the add form, with this batch already chosen.
+
+        Picking the batch from a dropdown for every new class is the step people
+        get wrong (and the reason a class occasionally lands in the wrong
+        batch), so the next action carries the id with it.
+        """
+        if obj is None:
+            return ""
+        return format_html(
+            '<span class="ss-shortcuts">'
+            '<a class="ss-shortcut" href="{}">+ Add a class</a>'
+            '<a class="ss-shortcut" href="{}">+ Add a section</a>'
+            '<a class="ss-shortcut" href="{}">+ Add a test</a>'
+            '<a class="ss-shortcut" href="{}">+ Add faculty</a>'
+            "</span>",
+            reverse("admin:courses_lesson_add") + f"?course={obj.pk}",
+            reverse("admin:courses_coursefolder_add") + f"?course={obj.pk}",
+            reverse("admin:courses_quiz_add") + f"?course={obj.pk}",
+            reverse("admin:courses_coursefaculty_add") + f"?course={obj.pk}",
         )
 
     def scope_filter(self, user):
@@ -216,6 +368,7 @@ class CourseFacultyAdmin(OwnershipScopedAdmin):
     list_display = ("name", "course", "subject", "position")
     list_filter = ("course__subject",)
     search_fields = ("name", "subject", "course__title")
+    autocomplete_fields = ("course",)
 
     def scope_filter(self, user):
         return Q(course__owner=user)
@@ -226,15 +379,52 @@ class CourseFacultyAdmin(OwnershipScopedAdmin):
 
 @admin.register(CourseFolder)
 class CourseFolderAdmin(OwnershipScopedAdmin):
-    list_display = ("title", "course", "position", "created_at")
-    list_filter = ("course__subject",)
+    ordering = ("course__title", "position", "title")
+    list_display = ("title", "course", "lesson_total", "position", "created_at")
+    list_filter = ("course__subject", "course")
     search_fields = ("title", "course__title")
+    list_select_related = ("course",)
+    autocomplete_fields = ("course",)
+    inlines = [FolderLessonInline, FolderPdfInline]
+    save_on_top = True
+    readonly_fields = ("shortcuts",)
+    def get_fieldsets(self, request, obj=None):
+        base = (
+            ("Which batch", {
+                "fields": ("course",),
+                "description": "Type a few letters — the list is searchable.",
+            }),
+            ("The section", {"fields": ("title", "description", "position")}),
+        )
+        if obj is None:
+            return base
+        return base + (("Add to this section", {"fields": ("shortcuts",)}),)
+
+    @admin.display(description="Shortcuts")
+    def shortcuts(self, obj):
+        if obj is None:
+            return ""
+        return format_html(
+            '<span class="ss-shortcuts">'
+            '<a class="ss-shortcut" href="{}">+ Add a class</a>'
+            '<a class="ss-shortcut" href="{}">+ Add a PDF</a>'
+            "</span>",
+            reverse("admin:courses_lesson_add") + f"?folder={obj.pk}",
+            reverse("admin:courses_pdfresource_add") + f"?folder={obj.pk}",
+        )
 
     def scope_filter(self, user):
         return Q(course__owner=user)
 
     def owner_scoped_fk_querysets(self, user):
         return {"course": Course.objects.filter(owner=user)}
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(_lessons=Count("lessons"))
+
+    @admin.display(description="Classes", ordering="_lessons")
+    def lesson_total(self, obj):
+        return obj._lessons
 
 
 @admin.register(Lesson)
@@ -254,6 +444,9 @@ class LessonAdmin(PublishableAdmin):
     list_filter = ("is_published", "course")
     search_fields = ("title", "description", "course__title")
     list_select_related = ("course", "folder")
+    list_editable = ("position", "is_published")
+    autocomplete_fields = ("course", "folder")
+    save_on_top = True
     actions = ("publish_selected", "unpublish_selected", "duplicate_selected")
     fieldsets = (
         ("Which batch", {
@@ -278,6 +471,33 @@ class LessonAdmin(PublishableAdmin):
             "course": Course.objects.filter(owner=user),
             "folder": CourseFolder.objects.filter(course__owner=user),
         }
+
+    def get_changeform_initial_data(self, request):
+        """`?course=…` / `?folder=…` prefill the form.
+
+        The batch and section pages link here, so adding the next class means
+        typing a title instead of re-picking the batch from a dropdown and
+        hoping it is the right one. Values are checked against the rows this
+        user owns; a forged id in the URL is ignored, not obeyed.
+        """
+        initial = super().get_changeform_initial_data(request)
+        user = request.user
+        course_qs = Course.objects.all() if is_main_admin(user) else Course.objects.filter(owner=user)
+        folder_qs = (
+            CourseFolder.objects.all()
+            if is_main_admin(user)
+            else CourseFolder.objects.filter(course__owner=user)
+        )
+        folder_id = request.GET.get("folder")
+        if folder_id and folder_qs.filter(pk=folder_id).exists():
+            folder = folder_qs.get(pk=folder_id)
+            initial["folder"] = folder.pk
+            initial["course"] = folder.course_id
+            initial.setdefault("position", folder.lessons.count() + 1)
+        course_id = request.GET.get("course")
+        if course_id and course_qs.filter(pk=course_id).exists():
+            initial["course"] = int(course_id)
+        return initial
 
     @admin.display(description="Recording")
     def recording(self, obj):
@@ -319,6 +539,20 @@ class PdfResourceAdmin(OwnershipScopedAdmin):
     list_display = ("title", "folder", "position", "is_published", "is_protected")
     list_filter = ("is_published", "is_protected")
     search_fields = ("title", "description")
+    autocomplete_fields = ("folder",)
+
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        folder_id = request.GET.get("folder")
+        if folder_id:
+            allowed = (
+                CourseFolder.objects.all()
+                if is_main_admin(request.user)
+                else CourseFolder.objects.filter(course__owner=request.user)
+            )
+            if allowed.filter(pk=folder_id).exists():
+                initial["folder"] = int(folder_id)
+        return initial
 
     def scope_filter(self, user):
         return Q(folder__course__owner=user)
@@ -335,7 +569,21 @@ class AccessCodeAdmin(OwnershipScopedAdmin):
     fields = ("course", "max_uses", "expires_at")
     list_display = ("course", "status", "max_uses", "uses_count", "expires_at", "created_by", "created_at")
     list_filter = ("course",)
+    autocomplete_fields = ("course",)
     search_fields = ("course__title",)
+
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        course_id = request.GET.get("course")
+        if course_id:
+            allowed = (
+                Course.objects.all()
+                if is_main_admin(request.user)
+                else Course.objects.filter(owner=request.user)
+            )
+            if allowed.filter(pk=course_id).exists():
+                initial["course"] = int(course_id)
+        return initial
 
     def scope_filter(self, user):
         return Q(course__owner=user)
@@ -395,6 +643,9 @@ class QuizAdmin(PublishableAdmin):
     list_filter = ("timing_mode", "is_published", "series")
     search_fields = ("title", "description")
     list_select_related = ("series", "course")
+    list_editable = ("is_published",)
+    autocomplete_fields = ("series", "course")
+    save_on_top = True
     fieldsets = (
         ("Which test", {
             "fields": ("title", "series", "course", "description", "instructions"),
@@ -503,6 +754,8 @@ class QuestionAdmin(OwnershipScopedAdmin):
     search_fields = ("prompt", "topic", "quiz__title")
     inlines = [ChoiceInline]
     list_select_related = ("quiz",)
+    autocomplete_fields = ("quiz",)
+    save_on_top = True
     actions = ("duplicate_selected",)
     fieldsets = (
         ("The question", {
@@ -520,6 +773,20 @@ class QuestionAdmin(OwnershipScopedAdmin):
         }),
         ("Placement", {"fields": ("position",)}),
     )
+
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        quiz_id = request.GET.get("quiz")
+        if quiz_id:
+            allowed = self.owner_scoped_fk_querysets(request.user).get("quiz", Quiz.objects.none())
+            if is_main_admin(request.user):
+                allowed = Quiz.objects.all()
+            if allowed.filter(pk=quiz_id).exists():
+                initial["quiz"] = int(quiz_id)
+                initial.setdefault(
+                    "position", (Question.objects.filter(quiz_id=quiz_id).aggregate(top=Max("position"))["top"] or 0) + 1
+                )
+        return initial
 
     @admin.display(description="Prompt")
     def prompt_short(self, obj):

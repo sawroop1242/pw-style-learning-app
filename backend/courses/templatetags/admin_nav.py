@@ -103,7 +103,7 @@ def _count(model_admin, request):
         return None
 
 
-def build_cards(app_list, request, site=admin.site):
+def build_cards(app_list, request, site=admin.site, with_counts=True):
     """Turn Django's ``app_list`` into the workflow cards the index renders.
 
     ``app_list`` is already permission-filtered, so nothing is invented here: a
@@ -125,12 +125,12 @@ def build_cards(app_list, request, site=admin.site):
             if model is None:
                 continue
             placed.add(model_key)
-            rows.append(_row(model_key, model, request, site))
+            rows.append(_row(model_key, model, request, site, with_counts))
         if rows:
             cards.append({"key": key, "title": title, "blurb": blurb, "models": rows})
 
     leftovers = [
-        _row(model_key, model, request, site)
+        _row(model_key, model, request, site, with_counts)
         for model_key, model in seen.items()
         if model_key not in placed
     ]
@@ -146,24 +146,38 @@ def build_cards(app_list, request, site=admin.site):
     return cards
 
 
-def _row(model_key, model, request, site):
+def _row(model_key, model, request, site, with_counts=True):
     app_label, model_name = model_key.split(".")
     count = None
-    try:
-        model_class = apps.get_model(app_label, model_name)
-        count = _count(site.get_model_admin(model_class), request)
-    except (LookupError, admin.sites.NotRegistered, PermissionDenied):
-        count = None
+    if with_counts:
+        try:
+            model_class = apps.get_model(app_label, model_name)
+            count = _count(site.get_model_admin(model_class), request)
+        except (LookupError, admin.sites.NotRegistered, PermissionDenied):
+            count = None
     return {
         "key": model_key,
         "name": model["name"],
+        "slug": app_label.lower(),
         "url": model["admin_url"],
         "add_url": model.get("add_url"),
         "count": count,
+        # The sidebar highlights the row for the page being edited.
+        "is_current": bool(model["admin_url"]) and model["admin_url"] in request.path,
     }
 
 
 @register.simple_tag(takes_context=True)
 def workflow_cards(context, app_list):
-    """``{% workflow_cards app_list as cards %}``"""
-    return build_cards(app_list, context.get("request"))
+    """``{% workflow_cards app_list as cards %}`` — the console home."""
+    return build_cards(app_list, context.get("request"), with_counts=True)
+
+
+@register.simple_tag(takes_context=True)
+def workflow_groups(context, app_list):
+    """The same grouping for the navigation rail, without the row counts.
+
+    Counting every model on every admin page would be twenty-five queries for
+    a number nobody reads in the sidebar.
+    """
+    return build_cards(app_list, context.get("request"), with_counts=False)
