@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='pdfresource',
             name='embed_url',
-            field=models.URLField(blank=True, help_text="Optional viewer link. Leave blank and the app works one out: a .pdf URL is framed directly, a Google Drive link becomes its preview, anything else goes through Google's document viewer."),
+            field=models.URLField(blank=True, help_text="Optional. Paste the link the host gives for embedding, if it has one. Leave it blank and the file link is shown as it is — a PDF opens in the browser's viewer, and a share page such as pdfhost's /v/… opens in that site's reader."),
         ),
     ]
