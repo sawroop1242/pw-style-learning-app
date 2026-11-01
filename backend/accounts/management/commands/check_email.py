@@ -33,6 +33,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from accounts.checks import API_BACKENDS
+
         backend = getattr(settings, "EMAIL_BACKEND", "")
         host = getattr(settings, "EMAIL_HOST", "")
         port = getattr(settings, "EMAIL_PORT", "")
@@ -41,18 +43,35 @@ class Command(BaseCommand):
         from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
         timeout = getattr(settings, "EMAIL_TIMEOUT", None)
 
+        is_smtp = "smtp" in backend
+        key_name = API_BACKENDS.get(backend)
+        key = (getattr(settings, key_name, "") or "").strip() if key_name else ""
+
         self.stdout.write(f"backend   {backend}")
-        if "smtp" in backend:
+        if is_smtp:
             self.stdout.write(f"host      {host or '(empty)'}:{port}")
             self.stdout.write(f"encryption {'SSL' if use_ssl else 'STARTTLS' if use_tls else 'none'}")
-            self.stdout.write(f"timeout   {timeout if timeout is not None else 'unset'}")
+        if key_name:
+            shown = f"set (…{key[-4:]})" if key else "(empty)"
+            self.stdout.write(f"{key_name:<9} {shown}")
+            self.stdout.write(
+                "note      the sender address must be verified in the provider's dashboard"
+            )
+        self.stdout.write(f"timeout   {timeout if timeout is not None else 'unset'}")
         self.stdout.write(f"from      {from_email}")
 
-        if "smtp" in backend and not host.strip():
+        if is_smtp and not host.strip():
             raise CommandError(
                 "EMAIL_HOST is empty: Django would connect to localhost and every "
                 "send would fail. Set EMAIL_HOST/EMAIL_PORT/EMAIL_HOST_USER/"
-                "EMAIL_HOST_PASSWORD/DEFAULT_FROM_EMAIL first."
+                "EMAIL_HOST_PASSWORD/DEFAULT_FROM_EMAIL first, or set BREVO_API_KEY "
+                "to send through Brevo instead."
+            )
+        if key_name and not key:
+            raise CommandError(
+                f"{key_name} is empty, so {backend.rsplit('.', 1)[-1]} cannot send "
+                "anything. Create a key in the provider's dashboard and add it to "
+                "the environment."
             )
 
         connection = get_connection(timeout=timeout)
@@ -64,7 +83,13 @@ class Command(BaseCommand):
                 f"could not open the mail connection ({type(error).__name__}: {error})"
             ) from error
         elapsed_ms = int((time.monotonic() - started) * 1000)
-        self.stdout.write(self.style.SUCCESS(f"connected in {elapsed_ms} ms"))
+        if key_name:
+            provider = backend.rsplit(".", 1)[-1].replace("EmailBackend", "")
+            self.stdout.write(
+                self.style.SUCCESS(f"{provider} accepted the credentials in {elapsed_ms} ms")
+            )
+        else:
+            self.stdout.write(self.style.SUCCESS(f"connected in {elapsed_ms} ms"))
 
         recipient = options.get("to")
         if not recipient:
@@ -97,9 +122,15 @@ class Command(BaseCommand):
             connection.close()
 
         elapsed_ms = int((time.monotonic() - started) * 1000)
-        self.stdout.write(
-            self.style.SUCCESS(f"message handed to the server in {elapsed_ms} ms")
-        )
+        if key_name:
+            provider = backend.rsplit(".", 1)[-1].replace("EmailBackend", "")
+            self.stdout.write(
+                self.style.SUCCESS(f"{provider} accepted the message in {elapsed_ms} ms")
+            )
+        else:
+            self.stdout.write(
+                self.style.SUCCESS(f"message handed to the server in {elapsed_ms} ms")
+            )
         self.stdout.write(
             "The server accepted it; whether it lands in the inbox is up to the "
             "provider's own logs."

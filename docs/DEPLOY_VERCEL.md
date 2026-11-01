@@ -29,6 +29,9 @@ Names and shapes only; values live in the Vercel project settings, never in Git.
 | `ADMIN_USERNAME` / `ADMIN_EMAIL` | administrator identity created by `ensure_admin` |
 | `ADMIN_PASSWORD` | encrypted; only used when the account is first created |
 | `SEED_DEMO` | `1` to load the demo catalogue on every build (idempotent) |
+| `BREVO_API_KEY` | optional; enables password-reset email (see below) |
+| `DEFAULT_FROM_EMAIL` | the address the mail provider has verified, e.g. `StudySpace <you@gmail.com>` |
+| `EMAIL_TIMEOUT` | `10` — seconds before a provider that stopped answering is abandoned |
 
 The Supabase **direct** host (`db.<ref>.supabase.co`) is IPv6-only and a Vercel
 function cannot reach it. Use the pooler on port 5432 (session mode). If session
@@ -64,6 +67,40 @@ The repair keeps one project, not a copy:
 If the project is ever moved so that `manage.py` sits beside `settings.py`,
 these two files become one-line `get_wsgi_application()` calls and the indirection
 can go.
+
+## Password-reset email (the one setting students notice)
+
+`forgot-password` generates a six-digit code, stores only its HMAC, and mails it.
+Without a working transport the endpoint still answers with the generic message
+(the alternative leaks which addresses exist), so the failure is invisible from
+the browser — that is exactly how this deployment ran with no mail at all.
+
+Two transports are supported. The HTTPS one needs **one** value:
+
+1. Create a free [Brevo](https://www.brevo.com) account (300 mails/day).
+2. **Senders & IPs → Senders → Add a sender**: your own Gmail address works;
+   click the confirmation link Brevo mails you.
+3. **SMTP & API → API Keys → Generate a new API key**.
+4. In Vercel add `BREVO_API_KEY` (encrypted) and
+   `DEFAULT_FROM_EMAIL=StudySpace <the address you verified>`.
+5. Redeploy, then prove it from the deployment:
+   `python manage.py check_email --to you@example.com`.
+
+With `BREVO_API_KEY` set, `EMAIL_BACKEND` resolves to
+`accounts.mail_backends.BrevoEmailBackend` — no host, port, username or app
+password. `RESEND_API_KEY` does the same with Resend, but Resend only delivers to
+the account owner's address until a **domain** is verified, so Brevo is the
+realistic choice for students.
+
+The SMTP route still works if you prefer it: `EMAIL_BACKEND` (SMTP),
+`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`/`EMAIL_USE_SSL`,
+`EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`. For Gmail that
+needs 2-Step Verification and an **App Password**, not the account password.
+
+`manage.py check` runs on every build and reports what is missing:
+`accounts.W001` (SMTP with no host), `W002` (sender still `.local`), `W003` (API
+backend with no key), `W004` (print-only backend in production). The admin home
+shows the same sentence as a banner.
 
 ## Build pipeline
 

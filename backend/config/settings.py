@@ -229,9 +229,33 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", ENVIRONMENT == "production")
 
 # Email configuration
-EMAIL_BACKEND = os.getenv(
-    "EMAIL_BACKEND",
-    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend"
+# Password-reset mail has three possible transports, picked in this order:
+#
+#   1. an explicit EMAIL_BACKEND, so an operator can always override;
+#   2. an HTTP provider key — Brevo or Resend — which needs one secret instead
+#      of a host/port/username/password set and works where SMTP is blocked;
+#   3. console while DEBUG (prints the letter in the terminal), SMTP otherwise.
+#
+# The API keys are read here, before EMAIL_BACKEND is resolved, because the
+# presence of a key is what selects the transport.
+BREVO_API_KEY = (os.getenv("BREVO_API_KEY") or "").strip()
+RESEND_API_KEY = (os.getenv("RESEND_API_KEY") or "").strip()
+MAIL_API_BACKEND = (
+    "accounts.mail_backends.BrevoEmailBackend"
+    if BREVO_API_KEY
+    else "accounts.mail_backends.ResendEmailBackend"
+    if RESEND_API_KEY
+    else ""
+)
+
+EMAIL_BACKEND = (
+    os.getenv("EMAIL_BACKEND", "").strip()
+    or MAIL_API_BACKEND
+    or (
+        "django.core.mail.backends.console.EmailBackend"
+        if DEBUG
+        else "django.core.mail.backends.smtp.EmailBackend"
+    )
 )
 EMAIL_HOST = os.getenv("EMAIL_HOST", "")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))

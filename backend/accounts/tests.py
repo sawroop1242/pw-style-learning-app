@@ -1,5 +1,9 @@
 import hashlib
 import hmac
+import io
+import json
+import re
+import urllib.error
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -7,7 +11,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.core.management import call_command
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -1211,3 +1216,282 @@ class CheckEmailCommandTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["operator@example.com"])
         self.assertIn("message handed to the server", out.getvalue())
+
+
+class _FakeHttpResponse:
+    """The little bit of `urlopen`'s return value the backend actually uses."""
+
+    def __init__(self, status=200, body=b'{"ok": true}'):
+        self.status = status
+        self._body = body
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+def _http_error(url, status, body=b'{"message": "nope"}'):
+    return urllib.error.HTTPError(url, status, "refused", None, io.BytesIO(body))
+
+
+class ApiMailBackendTests(SimpleTestCase):
+    """Brevo and Resend send the same letter over HTTPS that SMTP would.
+
+    The deployment had no SMTP host; an API key is one secret instead of five
+    settings, and it works on hosts that block outbound port 587. These tests
+    pin the request each provider receives, because a wrong field name there is
+    a silent 400 in production.
+    """
+
+    def message(self, **overrides):
+        from django.core.mail import EmailMessage
+
+        fields = {
+            "subject": "Your StudySpace Password Reset Code",
+            "body": "Your password reset code is: 123456",
+            "from_email": "StudySpace <codes@example.com>",
+            "to": ["student@example.com"],
+        }
+        fields.update(overrides)
+        return EmailMessage(**fields)
+
+    @override_settings(
+        BREVO_API_KEY="xkeysib-test-key",
+        DEFAULT_FROM_EMAIL="StudySpace <codes@example.com>",
+        EMAIL_TIMEOUT=3,
+    )
+    def test_brevo_gets_one_json_request_per_message(self):
+        from accounts.mail_backends import BrevoEmailBackend
+
+        backend = BrevoEmailBackend()
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.return_value = _FakeHttpResponse(status=201)
+            sent = backend.send_messages([self.message()])
+
+        self.assertEqual(sent, 1)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.brevo.com/v3/smtp/email")
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(request.get_header("Api-key"), "xkeysib-test-key")
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], 3)
+
+        payload = json.loads(request.data)
+        self.assertEqual(payload["sender"], {"email": "codes@example.com", "name": "StudySpace"})
+        self.assertEqual(payload["to"], [{"email": "student@example.com"}])
+        self.assertEqual(payload["subject"], "Your StudySpace Password Reset Code")
+        self.assertIn("123456", payload["textContent"])
+
+    @override_settings(
+        RESEND_API_KEY="re-test-key",
+        DEFAULT_FROM_EMAIL="StudySpace <codes@example.com>",
+        EMAIL_TIMEOUT=3,
+    )
+    def test_resend_gets_the_flattened_sender_string(self):
+        from accounts.mail_backends import ResendEmailBackend
+
+        backend = ResendEmailBackend()
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.return_value = _FakeHttpResponse(status=200)
+            backend.send_messages([self.message()])
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.resend.com/emails")
+        self.assertEqual(request.get_header("Authorization"), "Bearer re-test-key")
+        payload = json.loads(request.data)
+        self.assertEqual(payload["from"], "StudySpace <codes@example.com>")
+        self.assertEqual(payload["to"], ["student@example.com"])
+        self.assertIn("123456", payload["text"])
+
+    @override_settings(BREVO_API_KEY="xkeysib-super-secret-value")
+    def test_a_refused_message_raises_and_never_names_the_key(self):
+        from accounts.mail_backends import BrevoEmailBackend, EmailBackendError
+
+        backend = BrevoEmailBackend()
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.side_effect = _http_error(
+                "https://api.brevo.com/v3/smtp/email", 401, b'{"message":"Key not found"}'
+            )
+            with self.assertRaises(EmailBackendError) as caught:
+                backend.send_messages([self.message()])
+
+        text = str(caught.exception)
+        self.assertIn("401", text)
+        self.assertIn("Key not found", text)
+        self.assertNotIn("xkeysib-super-secret-value", text)
+
+    @override_settings(BREVO_API_KEY="xkeysib-test-key")
+    def test_fail_silently_swallows_the_refusal_and_counts_nothing(self):
+        from accounts.mail_backends import BrevoEmailBackend
+
+        backend = BrevoEmailBackend(fail_silently=True)
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.side_effect = _http_error("https://api.brevo.com/v3/smtp/email", 500)
+            self.assertEqual(backend.send_messages([self.message()]), 0)
+
+    @override_settings(BREVO_API_KEY="xkeysib-test-key")
+    def test_attachments_are_refused_rather_than_dropped(self):
+        from accounts.mail_backends import BrevoEmailBackend, EmailBackendError
+
+        message = self.message()
+        message.attach("notes.txt", "hello", "text/plain")
+        with self.assertRaises(EmailBackendError):
+            BrevoEmailBackend().send_messages([message])
+
+    @override_settings(BREVO_API_KEY="")
+    def test_opening_without_a_key_says_which_variable_is_missing(self):
+        from accounts.mail_backends import BrevoEmailBackend, EmailBackendError
+
+        with self.assertRaises(EmailBackendError) as caught:
+            BrevoEmailBackend().open()
+        self.assertIn("BREVO_API_KEY", str(caught.exception))
+
+
+@override_settings(
+    EMAIL_BACKEND="accounts.mail_backends.BrevoEmailBackend",
+    BREVO_API_KEY="xkeysib-test-key",
+    DEFAULT_FROM_EMAIL="StudySpace <codes@example.com>",
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "api-mail-tests",
+        }
+    },
+)
+class ResetThroughApiBackendTests(TestCase):
+    """The whole reset flow, with the provider's HTTPS call faked.
+
+    SMTP was proven against a local server; this proves the same request works
+    when the message leaves through Brevo, which is what the deployment will do.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.user = User.objects.create_user("apiuser", "api@example.com", "SecurePass123!")
+
+    def test_a_code_is_mailed_and_then_accepted(self):
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.return_value = _FakeHttpResponse(status=201)
+            response = self.client.post(
+                "/api/auth/forgot-password/", {"email": "api@example.com"}
+            )
+
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            sent = [
+                json.loads(call.args[0].data)
+                for call in urlopen.call_args_list
+                if call.args[0].data
+            ]
+            self.assertEqual(len(sent), 1)
+            self.assertEqual(sent[0]["to"], [{"email": "api@example.com"}])
+            code = re.search(r"code is: (\d{6})", sent[0]["textContent"]).group(1)
+
+            reset = self.client.post(
+                "/api/auth/verify-otp/",
+                {
+                    "email": "api@example.com",
+                    "otp": code,
+                    "new_password": "BrandNew!2026",
+                    "new_password_confirm": "BrandNew!2026",
+                },
+            )
+
+        self.assertEqual(reset.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("BrandNew!2026"))
+
+    def test_a_provider_refusal_leaves_no_live_code(self):
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.side_effect = _http_error(
+                "https://api.brevo.com/v3/smtp/email", 401, b'{"message":"Key not found"}'
+            )
+            response = self.client.post(
+                "/api/auth/forgot-password/", {"email": "api@example.com"}
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(
+            PasswordResetOTP.objects.filter(user=self.user, consumed_at__isnull=True).exists()
+        )
+        audit = AuditEvent.objects.filter(outcome="email_failed").last()
+        self.assertIsNotNone(audit)
+
+
+class ApiBackendConfigurationTests(TestCase):
+    """`manage.py check` must tell the two API failures apart."""
+
+    def check_ids(self):
+        from django.core.checks import run_checks
+
+        return {issue.id for issue in run_checks()}
+
+    @override_settings(
+        EMAIL_BACKEND="accounts.mail_backends.BrevoEmailBackend",
+        BREVO_API_KEY="",
+        DEFAULT_FROM_EMAIL="StudySpace <codes@example.com>",
+    )
+    def test_a_selected_backend_without_its_key_is_reported(self):
+        ids = self.check_ids()
+        self.assertIn("accounts.W003", ids)
+        self.assertNotIn("accounts.W001", ids)
+
+    @override_settings(
+        EMAIL_BACKEND="accounts.mail_backends.BrevoEmailBackend",
+        BREVO_API_KEY="xkeysib-test-key",
+        DEFAULT_FROM_EMAIL="StudySpace <codes@example.com>",
+    )
+    def test_a_configured_api_backend_raises_nothing(self):
+        self.assertEqual(self.check_ids() & {"accounts.W001", "accounts.W002", "accounts.W003"}, set())
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend",
+        ENVIRONMENT="production",
+        DEFAULT_FROM_EMAIL="StudySpace <codes@example.com>",
+    )
+    def test_a_print_only_backend_in_production_is_reported(self):
+        self.assertIn("accounts.W004", self.check_ids())
+
+    @override_settings(
+        EMAIL_BACKEND="accounts.mail_backends.BrevoEmailBackend",
+        BREVO_API_KEY="xkeysib-test-key",
+        DEFAULT_FROM_EMAIL="StudySpace <noreply@studyspace.local>",
+    )
+    def test_a_placeholder_sender_is_reported_for_api_backends_too(self):
+        self.assertIn("accounts.W002", self.check_ids())
+
+
+@override_settings(
+    EMAIL_BACKEND="accounts.mail_backends.BrevoEmailBackend",
+    BREVO_API_KEY="xkeysib-test-key",
+    DEFAULT_FROM_EMAIL="StudySpace <codes@example.com>",
+)
+class CheckEmailApiCommandTests(TestCase):
+    """`check_email` proves the key before spending a message on it."""
+
+    def test_it_validates_the_key_then_sends(self):
+        from io import StringIO
+
+        out = StringIO()
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.return_value = _FakeHttpResponse(status=201)
+            call_command("check_email", "--to", "operator@example.com", stdout=out)
+
+        text = out.getvalue()
+        self.assertIn("Brevo accepted the credentials", text)
+        self.assertIn("Brevo accepted the message", text)
+        urls = [call.args[0].full_url for call in urlopen.call_args_list]
+        self.assertIn("https://api.brevo.com/v3/account", urls)
+        self.assertIn("https://api.brevo.com/v3/smtp/email", urls)
+
+    @override_settings(BREVO_API_KEY="")
+    def test_it_refuses_when_the_key_is_missing(self):
+        from django.core.management.base import CommandError
+
+        with self.assertRaises(CommandError) as caught:
+            call_command("check_email")
+        self.assertIn("BREVO_API_KEY", str(caught.exception))
