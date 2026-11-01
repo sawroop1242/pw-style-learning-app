@@ -83,7 +83,17 @@ class Command(BaseCommand):
                 f"could not open the mail connection ({type(error).__name__}: {error})"
             ) from error
         elapsed_ms = int((time.monotonic() - started) * 1000)
-        if key_name:
+        note = getattr(connection, "probe_note", "")
+        if note:
+            # A send-only key: it works for the one thing that matters, but it
+            # cannot read account details back, so do not claim it was verified.
+            self.stdout.write(
+                self.style.WARNING(
+                    "the key cannot read account details back "
+                    f"({note}); sending is the real test, use --to"
+                )
+            )
+        elif key_name:
             provider = backend.rsplit(".", 1)[-1].replace("EmailBackend", "")
             self.stdout.write(
                 self.style.SUCCESS(f"{provider} accepted the credentials in {elapsed_ms} ms")
