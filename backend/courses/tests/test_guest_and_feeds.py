@@ -229,13 +229,17 @@ class PdfLibraryTests(GuestAttemptTestData, TestCase):
         self.assertNotIn("Draft notes", titles)
         self.assertIn("Formula sheet", titles)
 
-    def test_a_protected_file_url_is_withheld_from_a_visitor(self):
+    def test_a_file_url_is_withheld_until_the_batch_is_joined(self):
+        """Every PDF now rides on enrolment, locked ones included.
+
+        The library still lists the titles — a visitor can see what exists —
+        but the link itself only appears for a learner in that batch.
+        """
         rows = {row["title"]: row for row in self.client.get("/api/pdfs/").json()["results"]}
         self.assertIsNone(rows["Protected notes"]["file_url"])
         self.assertTrue(rows["Protected notes"]["is_locked"])
-        self.assertEqual(
-            rows["Formula sheet"]["file_url"], "https://example.com/formula.pdf"
-        )
+        self.assertIsNone(rows["Formula sheet"]["file_url"])
+        self.assertTrue(rows["Formula sheet"]["is_locked"])
 
     def test_a_course_filter_limits_the_library(self):
         rows = self.client.get(
@@ -247,13 +251,29 @@ class PdfLibraryTests(GuestAttemptTestData, TestCase):
 
 
 class CourseAccessFlagTests(GuestAttemptTestData, TestCase):
-    def test_free_batches_report_access_and_paid_ones_do_not(self):
+    def test_a_free_batch_is_not_open_until_it_is_joined(self):
         rows = {row["slug"]: row for row in self.client.get("/api/courses/").json()["results"]}
-        self.assertTrue(rows["free-batch"]["has_access"])
+        self.assertFalse(rows["free-batch"]["has_access"])
         self.assertFalse(rows["paid-batch"]["has_access"])
 
-    def test_mine_returns_only_openable_batches(self):
+    def test_mine_is_empty_for_a_visitor_who_joined_nothing(self):
         response = self.client.get("/api/courses/?mine=1")
-        self.assertEqual(
-            [row["slug"] for row in response.json()["results"]], ["free-batch"]
+        self.assertEqual(response.json()["results"], [])
+
+    def test_mine_lists_a_free_batch_once_the_student_enrols(self):
+        from courses.models import CourseAccessGrant
+
+        learner = User.objects.create_user(
+            username="learner", email="learner@example.com", password="TestPass123!"
         )
+        CourseAccessGrant.objects.create(
+            user=learner, course=self.free_course, granted_by=learner
+        )
+        self.client.force_authenticate(learner)
+
+        response = self.client.get("/api/courses/?mine=1")
+        self.assertEqual([row["slug"] for row in response.json()["results"]], ["free-batch"])
+
+        detail = self.client.get(f"/api/courses/{self.free_course.id}/")
+        self.assertTrue(detail.json()["has_access"])
+        self.assertTrue(detail.json()["is_enrolled"])

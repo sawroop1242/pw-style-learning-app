@@ -9,13 +9,14 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import filters, mixins, permissions, serializers, status, viewsets
+from rest_framework import decorators
 from rest_framework.decorators import (
     action,
     api_view,
     permission_classes,
     throttle_classes,
 )
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
@@ -599,23 +600,65 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
                 qs = qs.filter(pricing_mode=Course.PricingMode.FREE)
             else:
                 qs = qs.filter(pricing_mode=Course.PricingMode.PAID)
-        # "mine" = the batches this caller can actually open: every published
-        # free batch plus every paid batch they hold an active grant for.
+        # "mine" = the batches this caller has joined. A free batch is no
+        # longer auto-included: enrolment is explicit, so "my batches" means
+        # the ones they actually enrolled in (or were granted).
         mine = self.request.query_params.get("mine")
         if mine is not None and mine.lower() in {"1", "true", "yes"}:
-            qs = qs.filter(
-                Q(pricing_mode=Course.PricingMode.FREE)
-                | Q(id__in=policy.granted_course_ids(self.request.user))
-            )
+            qs = qs.filter(id__in=policy.granted_course_ids(self.request.user))
         return qs
+
+    @decorators.action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
+    def enroll(self, request, pk=None):
+        """Join a free batch. Paid batches still need an access code.
+
+        Idempotent: enrolling twice answers the same body, because a learner
+        who taps the button on a flaky connection should not get an error for
+        the tap that actually worked.
+        """
+        course = self.get_object()
+        if not course.is_published:
+            raise NotFound("No such batch.")
+
+        existing = CourseAccessGrant.objects.filter(user=request.user, course=course).first()
+        if existing and existing.revoked_at is None:
+            return Response({"course": course.id, "is_enrolled": True, "created": False})
+
+        if course.pricing_mode != Course.PricingMode.FREE:
+            return Response(
+                {
+                    "detail": (
+                        "This is a paid batch. Enter an access code from your teacher "
+                        "to unlock it."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if existing:
+            # The grant was revoked earlier; enrolling again restores it rather
+            # than tripping the unique constraint.
+            existing.revoked_at = None
+            existing.save(update_fields=["revoked_at", "updated_at"])
+            created = True
+        else:
+            CourseAccessGrant.objects.create(
+                user=request.user, course=course, granted_by=request.user
+            )
+            created = True
+        return Response(
+            {"course": course.id, "is_enrolled": True, "created": created},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class LessonViewSet(viewsets.ReadOnlyModelViewSet):
-    """Lesson listing limited to courses the caller may consume.
+    """Lesson listing limited to the batches the caller joined.
 
-    Only free published courses (and paid courses with an active grant) are
-    listed. Media URLs are additionally gated by the serializer, so a lesson
-    that leaks into a response still cannot leak its video URL.
+    Free batches are not different from paid ones here: both need an active
+    grant, so a visitor who has enrolled in nothing gets an empty list. Media
+    URLs are additionally gated by the serializer, so a lesson that leaks into
+    a response still cannot leak its video URL.
     """
 
     serializer_class = LessonSerializer
@@ -639,12 +682,23 @@ class LessonViewSet(viewsets.ReadOnlyModelViewSet):
                 return qs.none()
             qs = qs.filter(course_id=course_id)
 
-        allowed_course_ids = set(
-            Course.objects.filter(
-                is_published=True, pricing_mode=Course.PricingMode.FREE
-            ).values_list("id", flat=True)
-        ) | policy.granted_course_ids(user)
-        return qs.filter(course_id__in=allowed_course_ids)
+        # Only batches the caller joined (plus their own, for staff previewing).
+        allowed_course_ids = policy.granted_course_ids(user)
+        if getattr(user, "is_authenticated", False):
+            allowed_course_ids |= set(
+                Course.objects.filter(owner=user).values_list("id", flat=True)
+            )
+        qs = qs.filter(course_id__in=allowed_course_ids)
+
+        # "added=today" is the home page's "latest classes" feed: classes that
+        # went up today, in the batches this learner is enrolled in. Anything
+        # older belongs in the batch page, not on the dashboard.
+        added = (self.request.query_params.get("added") or "").lower()
+        if added in {"today", "1", "true"}:
+            qs = qs.filter(created_at__date=timezone.localdate())
+        if (self.request.query_params.get("has_video") or "").lower() in {"1", "true"}:
+            qs = qs.exclude(Q(video_url="") | Q(video_url__isnull=True))
+        return qs
 
 
 class ProgressViewSet(viewsets.ModelViewSet):

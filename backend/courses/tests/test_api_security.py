@@ -140,15 +140,25 @@ class PaidContentLeakTests(ApiTestMixin, TestCase):
         response = self.as_user(self.sub_admin).get(f"/api/courses/{self.paid_course.id}/")
         self.assertIn("PAIDVIDEO", str(response.json()))
 
-    def test_free_course_media_stays_public(self):
+    def test_free_course_media_needs_enrolment(self):
+        """A free batch is joined, not handed out.
+
+        The video URL used to ride along with the public batch page. It is now
+        withheld until the learner enrols, which is the whole point of the
+        Enrol button: a batch you never joined is not in "my batches".
+        """
         response = self.anon().get(f"/api/courses/{self.free_course.id}/")
+        self.assertNotIn("FREEVIDEO", str(response.json()))
+
+        CourseAccessGrant.objects.create(
+            user=self.grantee, course=self.free_course, granted_by=self.grantee
+        )
+        response = self.as_user(self.grantee).get(f"/api/courses/{self.free_course.id}/")
         self.assertIn("FREEVIDEO", str(response.json()))
 
-    def test_lesson_list_excludes_paid_course_for_anonymous(self):
+    def test_lesson_list_is_empty_for_an_anonymous_visitor(self):
         response = self.anon().get("/api/lessons/")
-        titles = [lesson["title"] for lesson in response.json()["results"]]
-        self.assertIn("Free Lesson", titles)
-        self.assertNotIn("Paid Lesson", titles)
+        self.assertEqual(response.json()["results"], [])
 
 
 class PaidQuizLeakTests(ApiTestMixin, TestCase):

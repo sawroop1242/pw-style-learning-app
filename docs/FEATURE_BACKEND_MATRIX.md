@@ -11,6 +11,7 @@ configuration and calling it with real data.
 | 0.1 | Recorded class, direct file | `player.html` | `Lesson.video_url` → `<video>` | connected |
 | 0.2 | Recorded class, embed page | `player.html` | `Lesson.video_url` → `<iframe>` | connected — `https://embed.vcdn.me/embed/…` is an HTML player, not a media file, so it is framed instead of handed to `<video src>` |
 | 0.3 | Locked recording on a paid batch | `player.html` | `video_url` withheld without a grant | connected |
+| 0.4 | Download the recording | — | removed on purpose | `controlslist="nodownload"` and no download button; advisory only, since a third-party embed cannot be made to refuse a download |
 
 **Verdicts**
 
@@ -39,11 +40,13 @@ paths. Findings below are as of commit `ab0493c` + this change.
 | 1.3 | Subject facet (from returned rows) | `courses.html` | `?subject=` | connected |
 | 1.4 | Text search (top bar + in-page) | shell, `courses.html` | `?search=` | connected |
 | 1.5 | Sort (newest, price, title) | `courses.html` | `?ordering=` | connected |
-| 1.6 | "My batches" tab | `courses.html?mine=1` | `?mine=1` | connected |
+| 1.6 | "My batches" tab | `courses.html?mine=1` | `?mine=1` | connected — the batches the learner joined, and nothing else |
 | 1.7 | Paging | `courses.html` | `?page=`, `?page_size=` | connected |
 | 1.8 | Batch detail, description, curriculum | `course.html` | `GET /api/courses/?slug=` | connected |
 | 1.9 | Paper list for a batch | `course.html` | `GET /api/quizzes/?course=` | connected |
-| 1.10 | Enrol with an access code | `course.html` | `POST /api/access-codes/redeem/` | connected |
+| 1.10 | Join a free batch | `course.html` "Enrol — free" | `POST /api/courses/<id>/enroll/` | connected — idempotent, revives a revoked grant, `400` on a paid batch |
+| 1.10a | Enrol with an access code | `course.html` | `POST /api/access-codes/redeem/` | connected |
+| 1.10b | Batch cover image | `courses.html`, `course.html` | `Course.image_url` | connected — set in the admin "Artwork" section, falls back to the subject colour |
 | 1.11 | Similar batches | `course.html` | `GET /api/courses/?page_size=6` | connected |
 | 1.12 | FAQ accordion | `course.html` | — (authored copy) | n/a |
 | 1.13 | Faculty panel | `course.html` | `GET /api/courses/<id>/` → `faculty` | connected (`CourseFaculty`, staff CRUD at `/api/staff/faculty/`) |
@@ -67,6 +70,7 @@ paths. Findings below are as of commit `ab0493c` + this change.
 | # | Feature | Screen | Endpoint | Verdict |
 |---|---|---|---|---|
 | 3.1 | Lesson player, chapters, PDFs, notices | `player.html` | `GET /api/lessons/`, `/pdfs/`, `/community/` | connected |
+| 3.1a | PDF reader (frame the provider's viewer) | `pdf.html?pdf=<id>` | `GET /api/pdfs/<id>/` → `viewer_url` | connected — `viewer_url` is the embed URL, the `.pdf` itself, Drive `/preview`, or the host's own reader page (pdfhost `/v/…`), with "open in a new tab" always offered |
 | 3.2 | Record that a lesson was opened / finished | `player.html` | `POST /api/progress/` | connected |
 | 3.3 | "Continue learning" and "Lessons done" | `dashboard.html` | read `/api/progress/` | connected once 3.2 writes |
 | 3.4 | Note on a lesson | `player.html` "Notes" tab | `GET`/`POST /api/notes/?lesson=` | connected (the tab writes notes and lists the section PDFs below) |
@@ -89,8 +93,9 @@ worse than no bell.
 
 | # | Feature | Screen | Endpoint | Verdict |
 |---|---|---|---|---|
-| 5.1 | Lecture list (only lessons with a recording) | `downloads.html` | `GET /api/lessons/` | connected |
-| 5.2 | Chapter PDFs | `downloads.html` | `GET /api/pdfs/` | connected |
+| 5.1 | Lecture list (only lessons with a recording) | `downloads.html` | `GET /api/lessons/?has_video=1` | connected |
+| 5.1a | "Today's classes" on the home screen | `index.html` | `GET /api/lessons/?added=today&has_video=1` | connected — today's uploads in the batches the learner joined; a quiet day is an empty state, not an error |
+| 5.2 | Chapter PDFs | `downloads.html`, `pdf.html` | `GET /api/pdfs/` | connected — the row opens the reader, never a raw file download |
 | 5.3 | Papers | `downloads.html` | `GET /api/quizzes/` | connected |
 | 5.4 | Offline "saved" list | — | none by design (the PWA caches the shell, never student data) | documented |
 | 5.5 | Announcement feed | `community.html` | `GET /api/community/` | connected |
@@ -116,6 +121,23 @@ worse than no bell.
 | 7.3 | CSV question import | `/api/staff/import-jobs/` | schema, template, validate, confirm, export | connected |
 
 ---
+
+## Access is enrolment, not price
+
+A free batch used to be readable by anyone, which meant "free" and "joined"
+were the same thing. Since run 28 they are not: the catalogue shows the batch,
+its description and its price, and the media (video URL, PDF file and viewer
+URL, today's classes) appears only for a learner with an active
+`CourseAccessGrant` — which a free batch creates when the learner presses
+**Enrol — free**. `?mine=1` therefore lists grants, not free batches.
+
+| Where | Rule |
+|---|---|
+| `policy.is_enrolled(user, course)` | an active `CourseAccessGrant` |
+| `policy.can_consume_course` | enrolled, or staff/owner |
+| `LessonViewSet` | published lessons in granted ∪ owned batches |
+| `PdfResourceSerializer` | `file_url`/`viewer_url` null unless enrolled |
+| `POST /courses/<id>/enroll/` | free only; paid answers `400` and points at the access code |
 
 ## What this change closes
 

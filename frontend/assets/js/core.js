@@ -379,6 +379,8 @@ export const adaptCourse = (row = {}) => ({
   pricing_mode: row.pricing_mode || (Number(row.price) > 0 ? 'paid' : 'free'),
   free: (row.pricing_mode || '') === 'free' || Number(row.price ?? 0) === 0,
   hasAccess: row.has_access !== false,
+  isEnrolled: row.is_enrolled === true,
+  image: row.image_url || '',
   telegram: row.telegram_url || '',
   position: Number(row.position ?? 0),
   // Only the detail endpoint nests these; a grid row leaves them empty.

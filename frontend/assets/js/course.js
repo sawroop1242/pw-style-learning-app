@@ -87,6 +87,7 @@ function render(detail, testRows) {
   renderAside();
   wireTabs();
   wireRedeem();
+  wireEnroll();
   loadSimilar();
 }
 
@@ -114,28 +115,39 @@ function renderHeadline() {
   const cover = $('#course-cover');
   if (cover) {
     cover.className = `batch-cover-lg ${thumbTone(current.subject)}`;
-    cover.innerHTML = `<span class="cover-faces"><span class="cover-face">${esc(initials(current.subject || 'SS'))}</span></span>`;
+    cover.innerHTML = `${
+      current.image
+        ? `<img class="batch-cover-img" src="${esc(current.image)}" alt="" decoding="async" onerror="this.remove()">`
+        : ''
+    }<span class="cover-faces"><span class="cover-face">${esc(initials(current.subject || 'SS'))}</span></span>`;
   }
 }
 
 function renderPurchase() {
   const host = $('#purchase-slot');
   const isFree = current.free;
-  const open = isFree || current.hasAccess;
+  // A free batch is not handed out: it is joined. Until the learner enrols,
+  // the recordings stay locked, so the button says "Enrol" rather than
+  // "Start learning" and the copy stops promising open access.
+  const open = current.hasAccess;
 
   host.innerHTML = `
     <div class="batch-actions">
       ${
         open
           ? `<a class="btn btn-primary btn-lg" href="#panel-curriculum" data-open-curriculum>Start learning</a>`
-          : `<button class="btn btn-accent btn-lg" type="button" data-redeem>Redeem access code</button>`
+          : isFree
+            ? `<button class="btn btn-primary btn-lg" type="button" data-enroll>Enrol — free</button>`
+            : `<button class="btn btn-accent btn-lg" type="button" data-redeem>Redeem access code</button>`
       }
       <button class="btn btn-ghost btn-lg" data-share>${icon('share')} Share</button>
     </div>
     ${
-      isFree
-        ? '<p class="tiny subtle" style="margin-top:12px">Open to every account, including guests — no code needed.</p>'
-        : current.hasAccess
+      isFree && !open
+        ? '<p class="tiny subtle" style="margin-top:12px">Free to join. One tap adds the batch to your account and unlocks its classes and notes.</p>'
+        : isFree
+          ? '<p class="tiny subtle" style="margin-top:12px">Enrolled. Classes and notes are open on this account.</p>'
+          : current.hasAccess
           ? '<p class="tiny subtle" style="margin-top:12px">Unlocked on this account. No card payment is taken on this platform.</p>'
           : `<p class="tiny subtle" style="margin-top:12px">${money(current.price)} · unlocks with an access code, no card payment</p>`
     }`;
@@ -150,7 +162,9 @@ function renderPurchase() {
       ${
         open
           ? `<a class="btn btn-primary btn-sm" href="#panel-curriculum">Start learning</a>`
-          : `<button class="btn btn-accent btn-sm" type="button" data-redeem>Redeem code</button>`
+          : isFree
+            ? `<button class="btn btn-primary btn-sm" type="button" data-enroll>Enrol free</button>`
+            : `<button class="btn btn-accent btn-sm" type="button" data-redeem>Redeem code</button>`
       }`;
   }
 }
@@ -183,7 +197,7 @@ function pdfRow(pdf) {
       ${
         locked
           ? '<span class="badge badge-outline">Locked</span>'
-          : `<a class="dl-action" href="${esc(pdf.file_url)}" target="_blank" rel="noopener" aria-label="Open ${esc(pdf.title)}">${icon('download')}</a>`
+          : `<a class="dl-action" href="pdf.html?pdf=${pdf.id}" aria-label="Read ${esc(pdf.title)}">${icon('book')}</a>`
       }
     </div>`;
 }
@@ -419,6 +433,34 @@ function selectTab(index) {
     tab.setAttribute('aria-selected', String(selected));
     const panel = document.getElementById(tab.getAttribute('aria-controls'));
     if (panel) panel.hidden = !selected;
+  });
+}
+
+function wireEnroll() {
+  // Its own listener: joining a free batch must not depend on the redeem
+  // dialog existing on the page.
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-enroll]');
+    if (!button) return;
+
+    if (!isSignedIn()) {
+      location.href = `login.html?next=${encodeURIComponent(`course.html?slug=${current.slug}`)}`;
+      return;
+    }
+
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Joining…';
+    request(`/courses/${current.id}/enroll/`, { method: 'POST' })
+      .then(() => {
+        toast('Batch joined. Opening its classes…', 'success');
+        setTimeout(() => location.reload(), 600);
+      })
+      .catch((err) => {
+        button.disabled = false;
+        button.textContent = label;
+        toast(err?.message || 'That batch could not be joined.', 'danger');
+      });
   });
 }
 

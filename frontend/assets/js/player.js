@@ -237,7 +237,7 @@ function renderNotes(lesson) {
         </span>
         ${
           file.file_url
-            ? `<a class="dl-action" href="${esc(file.file_url)}" target="_blank" rel="noopener" aria-label="Open ${esc(file.title)}">${icon('download')}</a>`
+            ? `<a class="dl-action" href="pdf.html?pdf=${file.id}" aria-label="Read ${esc(file.title)}">${icon('book')}</a>`
             : '<span class="badge badge-outline">Locked</span>'
         }
       </div>`

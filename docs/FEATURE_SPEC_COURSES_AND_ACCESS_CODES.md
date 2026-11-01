@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-Implement a course platform where the main administrator can create sub-admin accounts, authorized sub-admins can manage their own courses, and students can access free courses immediately or unlock paid courses using a code issued by an authorized administrator. A student obtains a paid-course code by contacting the provider through the Telegram contact shown on that course's details page.
+Implement a course platform where the main administrator can create sub-admin accounts, authorized sub-admins can manage their own courses, and students join a free course with one button press (**Enrol — free**) or unlock a paid course using a code issued by an authorized administrator. A student obtains a paid-course code by contacting the provider through the Telegram contact shown on that course's details page.
 
 **There is no online checkout or in-app payment method.** Do not add Stripe, Razorpay, UPI collection, payment gateway, payment links, or an alternative payment flow. The app records course access after code redemption; it does not verify that money changed hands.
 
@@ -27,7 +27,7 @@ This is a product requirements document. The coding agent must inspect the curre
 
 ### Student
 - Can browse published courses and course details.
-- Can open free courses without a code.
+- Can join a free course without a code (`POST /api/courses/<id>/enroll/`); enrolment is what grants access.
 - Can submit a code to unlock a paid course.
 - Can access paid-course resources only after a valid course grant exists.
 - Cannot create courses, generate codes, or access staff/admin endpoints.
@@ -92,7 +92,7 @@ Authorized main admins and authorized course-owning sub-admins can create one or
 - Prevent enumeration, replay, race conditions, cross-user grants, and cross-course redemption.
 
 ### Free courses
-- A free course requires no access code.
+- A free course requires no access code; it requires enrolment. A grant row is the membership, so "joined" and "may read the media" are the same thing for free and paid batches alike.
 - Do not permit paid codes to be redeemed for a free course unless a future explicit requirement defines a separate purpose.
 - If a course changes from free to paid or paid to free, define how existing grants are handled; do not unexpectedly lock out existing enrolled learners or expose paid content. Document and test the selected migration policy.
 

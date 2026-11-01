@@ -1078,3 +1078,37 @@
   flex: none;
   color: var(--violet-500);
 }
+
+/* A batch may carry a cover image (an https URL pasted in the admin). It sits
+   behind the badge and the subject tag, and the whole cover keeps a sane
+   height whether or not one is set. */
+.batch-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+.batch-cover:has(.batch-cover-img) {
+  min-height: 150px;
+}
+.batch-cover:has(.batch-cover-img)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(6, 8, 16, 0.55), rgba(6, 8, 16, 0.2));
+}
+.batch-cover .cover-tag,
+.batch-cover .badge,
+.batch-cover .cover-faces {
+  position: relative;
+  z-index: 2;
+}
+.batch-cover .badge {
+  position: absolute;
+}
+.batch-cover-lg:has(.batch-cover-img) {
+  min-height: 260px;
+}

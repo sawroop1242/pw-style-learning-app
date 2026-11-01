@@ -337,6 +337,50 @@ class CourseFolderInline(StaffInlineMixin, admin.TabularInline):
     show_change_link = True
 
 
+class FolderByCourseSelect(forms.Select):
+    """A folder dropdown whose options remember which batch they belong to.
+
+    The attribute lets the admin page group the sections by batch and show
+    which batch each one belongs to, so a class can be filed into any batch's
+    section without guessing. Nothing is filtered out.
+    """
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        instance = getattr(value, "instance", None)
+        if instance is not None:
+            option["attrs"]["data-course"] = str(instance.course_id)
+        return option
+
+
+class LessonAdminForm(forms.ModelForm):
+    """Lesson form with the folder list grouped by batch."""
+
+    class Meta:
+        model = Lesson
+        fields = "__all__"
+        widgets = {"folder": FolderByCourseSelect}
+
+    def __init__(self, *args, **kwargs):
+        request = kwargs.pop("request", None)
+        super().__init__(*args, **kwargs)
+        folder_field = self.fields["folder"]
+        folders = CourseFolder.objects.select_related("course").order_by(
+            "course__title", "position", "id"
+        )
+        # A sub-admin may only attach a lesson to their own folders; the model
+        # is validated again on save, this only keeps the list honest.
+        user = getattr(request, "user", None)
+        if user is not None and not is_main_admin(user):
+            folders = folders.filter(course__owner=user)
+        folder_field.queryset = folders
+        folder_field.empty_label = "— no section —"
+        folder_field.help_text = (
+            "Sections from every batch are listed, grouped by batch. Pick one "
+            "and the batch above changes to match it."
+        )
+
+
 @admin.register(Course)
 class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
     publish_label = "batches"
@@ -355,7 +399,7 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
     list_editable = ("is_published",)
     save_on_top = True
     # A fieldset may only name a non-model field when it is declared read-only.
-    readonly_fields = ("shortcuts",)
+    readonly_fields = ("shortcuts", "image_preview")
 
     def get_fieldsets(self, request, obj=None):
         """`owner` is hidden from sub-admins by OwnerAssignAdmin, so it is only
@@ -367,6 +411,14 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
             ("The batch", {
                 "fields": batch_fields,
                 "description": "What the card in the catalogue says.",
+            }),
+            ("Artwork", {
+                "fields": ("image_url", "image_preview"),
+                "description": (
+                    "Paste any https image link — a CDN, Drive, Imgur. It becomes "
+                    "the cover on the catalogue card; leave it empty and the card "
+                    "keeps its subject colour."
+                ),
             }),
             ("Description", {"fields": ("description",)}),
             ("Pricing", {
@@ -384,6 +436,21 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
             # Appended as a one-element tuple of (name, options).
             fieldsets += (("Add to this batch", {"fields": ("shortcuts",)}),)
         return fieldsets
+
+    @admin.display(description="Cover preview")
+    def image_preview(self, obj):
+        """Show the pasted image, or say plainly that there is none."""
+        url = getattr(obj, "image_url", "") or ""
+        if not url:
+            return format_html(
+                '<span class="ss-muted">No cover yet — the card will use its subject colour.</span>'
+            )
+        return format_html(
+            '<img src="{}" alt="" loading="lazy" '
+            'style="max-width:320px;max-height:180px;border-radius:12px;'
+            'object-fit:cover;background:#0b0f1a;">',
+            url,
+        )
 
     @admin.display(description="Shortcuts")
     def shortcuts(self, obj):
@@ -509,13 +576,27 @@ class LessonAdmin(PublishableAdmin):
     search_fields = ("title", "description", "course__title")
     list_select_related = ("course", "folder")
     list_editable = ("position", "is_published")
-    autocomplete_fields = ("course", "folder")
+    form = LessonAdminForm
+    # Only `course` stays an autocomplete: the folder is a plain select that
+    # the browser narrows to the chosen batch (see FolderByCourseSelect).
+    autocomplete_fields = ("course",)
     save_on_top = True
     actions = ("publish_selected", "unpublish_selected", "duplicate_selected")
+
+    class Media:
+        js = ("staff/lesson_folder.js",)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request"] = self.request
+        return kwargs
     fieldsets = (
         ("Which batch", {
             "fields": ("course", "folder"),
-            "description": "The section groups the class in the player's left column.",
+            "description": (
+                "Pick the batch first — the section list then shows only that "
+                "batch's folders. The section groups the class in the player."
+            ),
         }),
         ("The class", {"fields": ("title", "description")}),
         ("Recording", {
@@ -604,6 +685,25 @@ class PdfResourceAdmin(OwnershipScopedAdmin):
     list_filter = ("is_published", "is_protected")
     search_fields = ("title", "description")
     autocomplete_fields = ("folder",)
+    fieldsets = (
+        ("The document", {
+            "fields": ("title", "description", "file_url", "embed_url"),
+            "description": (
+                "file_url is the file or the share link the provider gave you — "
+                "the in-app reader frames it, so pdfhost's /v/… link opens in "
+                "pdfhost's own reader. embed_url is optional: paste the provider's "
+                "embed link only if it has one, and the reader frames exactly that. "
+                "A Google Drive /view link is turned into its /preview."
+            ),
+        }),
+        ("Placement", {
+            "fields": ("folder", "position", "is_published", "is_protected"),
+            "description": (
+                "A protected PDF returns its URL only to learners enrolled in the "
+                "batch. That is what makes the reader private rather than public."
+            ),
+        }),
+    )
 
     def get_changeform_initial_data(self, request):
         initial = super().get_changeform_initial_data(request)

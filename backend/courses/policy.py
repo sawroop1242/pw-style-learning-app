@@ -25,7 +25,9 @@ __all__ = [
     "is_staff_role",
     "is_owner",
     "granted_course_ids",
+    "is_enrolled",
     "can_access_course",
+    "can_consume_course",
     "can_access_quiz",
     "can_read_media",
 ]
@@ -102,6 +104,44 @@ def can_access_course(user, course):
     ).exists()
 
 
+def is_enrolled(user, course):
+    """True when ``user`` holds an active grant — i.e. joined the batch.
+
+    Free batches are not auto-granted: a learner who never enrolled should not
+    find the batch in "my batches", and its recordings should not open just
+    because the price is zero. Enrolment is one POST (`/courses/{id}/enroll/`)
+    for a free batch; a paid one needs an access code from staff.
+    """
+    if course is None or user is None:
+        return False
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return CourseAccessGrant.objects.filter(
+        user=user, course=course, revoked_at__isnull=True
+    ).exists()
+
+
+def can_consume_course(user, course):
+    """May this caller open the recordings, notes and PDFs of ``course``?
+
+    This is the enrolment gate, and it applies to free batches too. Staff keep
+    their own content; a learner needs a grant.
+    """
+    if course is None:
+        return False
+    if is_main_admin(user):
+        return True
+    if not course.is_published:
+        return is_owner(user, course)
+    if is_owner(user, course):
+        return True
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    return CourseAccessGrant.objects.filter(
+        user=user, course=course, revoked_at__isnull=True
+    ).exists()
+
+
 def can_access_quiz(user, quiz):
     """Full access to a quiz, including its questions."""
     if quiz is None:
@@ -119,5 +159,10 @@ def can_access_quiz(user, quiz):
 
 
 def can_read_media(user, course):
-    """Media URLs are withheld unless the caller may consume the course."""
-    return can_access_course(user, course)
+    """Media URLs are withheld unless the caller joined the batch.
+
+    Separate from ``can_access_course`` on purpose: a published free batch is
+    still readable at catalogue level, and a free test stays attemptable
+    without an account, but the recordings and PDFs need enrolment.
+    """
+    return can_consume_course(user, course)
