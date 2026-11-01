@@ -1,24 +1,28 @@
 /*
- * StudySpace admin.
+ * StudySpace admin — the whole look, in one stylesheet.
  *
- * Loaded after Django's own stylesheets (the `extrastyle` block sits below the
- * admin links in base.html), so everything here is an override rather than a
- * replacement: the admin keeps working with JS off and with every stock
- * template.
+ * Loaded last in the <head> (see base_site.html), so it can restyle Django's
+ * admin without !important: the admin's own templates, JS and markup are left
+ * untouched and the console still works with JavaScript off.
  *
- * The palette is the site's: violet on near-white, one accent, nothing else
- * competing with the content being edited.
+ * How it is organised:
+ *   1. Tokens            7. Change form
+ *   2. Frame and type    8. Inlines
+ *   3. Header            9. Lists (changelist)
+ *   4. Navigation rail  10. Filters
+ *   5. Console home     11. Buttons, messages, login
+ *   6. Mobile drawer    12. Small screens
  */
 
 /* ------------------------------------------------------------------ */
-/* Palette                                                            */
+/* 1. Tokens                                                          */
 /* ------------------------------------------------------------------ */
 
 /*
- * Django's theme.js writes data-theme="auto|light|dark" on <html> and its
- * dark_mode.css redefines the variables under each. Pinning the palette to all
- * three keeps the console one colour for everybody — a content editor who
- * happens to use a dark OS should not get a half-converted admin.
+ * Django's theme.js writes data-theme="auto|light|dark" on <html> and
+ * dark_mode.css redefines the palette under each. Pinning all three keeps the
+ * console one colour for everybody: a content editor whose OS is dark should
+ * not get a half-converted admin, and long question forms read better on white.
  */
 html[data-theme="auto"],
 html[data-theme="light"],
@@ -26,55 +30,74 @@ html[data-theme="dark"],
 html:not([data-theme]) {
   color-scheme: light;
 
+  /* Django's own variables, which its rules read. */
   --primary: #5b5bf6;
-  --secondary: #3f3fc8;
+  --secondary: #4848d8;
   --accent: #7c6cf6;
   --primary-fg: #ffffff;
 
   --body-fg: #1b1b2f;
-  --body-bg: #f5f5fa;
+  --body-bg: #f4f4fb;
   --body-quiet-color: #6b6b85;
   --body-loud-color: #0f0f1c;
 
   --header-color: #ffffff;
   --header-branding-color: #ffffff;
-  --header-bg: #16162a;
+  --header-bg: #14142b;
   --header-link-color: #ffffff;
 
-  --breadcrumbs-fg: #4a4a66;
-  --breadcrumbs-link-fg: #4a4a66;
+  --breadcrumbs-fg: #6b6b85;
+  --breadcrumbs-link-fg: #4b4b68;
   --breadcrumbs-bg: #ffffff;
 
-  --link-fg: #4b46d8;
-  --link-hover-color: #2f2bb0;
-  --link-selected-fg: #2f2bb0;
+  --link-fg: #5353e8;
+  --link-hover-color: #3737c4;
+  --link-selected-fg: #2f2fa8;
 
-  --hairline-color: #e6e6f0;
-  --border-color: #dcdce9;
+  --hairline-color: #e6e6f1;
+  --border-color: #dedeec;
 
-  --error-fg: #c0243b;
+  --error-fg: #c02626;
+  --message-success-bg: #eafaf0;
+  --message-warning-bg: #fff6e6;
+  --message-error-bg: #fdeeee;
 
-  --message-success-bg: #e8f7ee;
-  --message-warning-bg: #fff5e2;
-  --message-error-bg: #fdecef;
+  --darkened-bg: #eeeef8;
+  --selected-bg: #eeecff;
+  --selected-row: #f7f5ff;
 
-  --darkened-bg: #f0f0f7;
-  --selected-bg: #eeeaff;
-  --selected-row: #f4f1ff;
-
-  --button-bg: #4b46d8;
-  --button-bg-hover: #3a35b8;
-  --button-fg: #ffffff;
+  --button-bg: #ffffff;
+  --button-fg: #1b1b2f;
+  --button-hover-bg: #f4f3ff;
   --default-button-bg: #5b5bf6;
-  --default-button-hover-bg: #4643e0;
-  --close-button-bg: #7b7b95;
-  --close-button-hover-bg: #63637c;
-  --delete-button-bg: #d43b4f;
-  --delete-button-hover-bg: #b82c3f;
+  --default-button-hover-bg: #4848d8;
+  --close-button-bg: #8c8ca5;
+  --close-button-hover-bg: #6f6f8a;
+  --delete-button-bg: #e04343;
+  --delete-button-hover-bg: #c92f2f;
+
+  /* This stylesheet's own names. */
+  --ss-bg: #f4f4fb;
+  --ss-surface: #ffffff;
+  --ss-ink: #191933;
+  --ss-ink-soft: #3d3d5c;
+  --ss-muted: #6b6b85;
+  --ss-faint: #9393ab;
+  --ss-line: #e6e6f1;
+  --ss-line-strong: #d6d6e6;
+  --ss-brand: #5b5bf6;
+  --ss-brand-dark: #4646d6;
+  --ss-brand-soft: #eeecff;
+  --ss-success: #128a4b;
+  --ss-warning: #a35c00;
+  --ss-danger: #c9352f;
+  --ss-radius: 14px;
+  --ss-radius-sm: 9px;
+  --ss-shadow: 0 1px 2px rgba(20, 20, 50, 0.05), 0 10px 26px -22px rgba(20, 20, 50, 0.5);
 }
 
 /* ------------------------------------------------------------------ */
-/* Type and page frame                                                */
+/* 2. Frame and type                                                  */
 /* ------------------------------------------------------------------ */
 
 html {
@@ -82,63 +105,157 @@ html {
 }
 
 body {
+  margin: 0;
+  background: var(--ss-bg);
+  color: var(--ss-ink);
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   font-size: 0.9375rem;
-  line-height: 1.55;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  background: var(--body-bg);
-  color: var(--body-fg);
 }
 
 #container {
-  background: var(--body-bg);
+  background: var(--ss-bg);
 }
 
-/* Header ------------------------------------------------------------ */
+a:link,
+a:visited {
+  color: var(--ss-brand);
+  text-decoration: none;
+}
+
+a:hover,
+a:focus {
+  color: var(--ss-brand-dark);
+  text-decoration: underline;
+}
+
+/* Django keeps the page in a flex row: rail, then content. */
+.main {
+  display: flex;
+  align-items: flex-start;
+}
+
+#content {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 26px 32px 72px;
+}
+
+#content h1 {
+  margin: 0 0 6px;
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ss-ink);
+}
+
+/* On a change form Django prints <h1>Change course</h1> and then the object's
+   name in an <h2>. The name is what you opened, so it becomes the title and
+   the model becomes a small label above it. */
+body.change-form #content > h1 {
+  max-width: calc(100% - 130px);
+  margin-bottom: 2px;
+  color: var(--ss-faint);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.change-form #content > h2 {
+  /* The object name is free text — a question prompt ran under the History
+     button and off the right edge. Reserve that corner and let it wrap. */
+  max-width: calc(100% - 130px);
+  margin: 0 0 16px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  color: var(--ss-ink);
+  overflow-wrap: anywhere;
+}
+
+body.change-form #content > h1 + #content-main {
+  margin-top: 18px;
+}
+
+#content-main {
+  max-width: none;
+}
+
+.skip-to-content-link {
+  position: absolute;
+  left: -9999px;
+}
+
+.skip-to-content-link:focus {
+  left: 12px;
+  top: 12px;
+  z-index: 100;
+  padding: 8px 12px;
+  border-radius: var(--ss-radius-sm);
+  background: var(--ss-brand);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. Header and breadcrumbs                                          */
+/* ------------------------------------------------------------------ */
 
 #header {
+  /* #container is a fixed-height column flex box, so without this the bar is
+     squeezed to its min-height and the second line of #user-tools is cut off
+     the moment the links wrap on a phone. */
+  flex: 0 0 auto;
   height: auto;
-  min-height: 60px;
-  padding: 12px 24px;
+  min-height: 58px;
+  padding: 10px 24px;
   background: var(--header-bg);
-  border-bottom: 1px solid #262640;
+  color: var(--header-color);
   display: flex;
   align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 16px;
 }
 
+#branding {
+  display: flex;
+  align-items: center;
+}
+
+#site-name a,
 #branding #site-name a {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #fff;
   font-size: 1.0625rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #fff;
 }
 
 #branding #site-name a::before {
   content: "";
   display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 3px;
-  background: var(--primary);
-  box-shadow: 0 0 0 3px rgba(91, 91, 246, 0.25);
-  vertical-align: 1px;
+  background: var(--ss-brand);
+  box-shadow: 0 0 0 3px rgba(91, 91, 246, 0.28);
 }
 
-/* The word "admin" after the product name: quieter than the name itself. */
+/* The word "admin" beside the product name: quieter than the name itself. */
 #branding .ss-admin-tag {
-  margin-left: 8px;
   padding: 2px 7px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  vertical-align: 2px;
 }
 
 #user-tools {
@@ -146,166 +263,307 @@ body {
   font-size: 0.8125rem;
   letter-spacing: 0;
   text-transform: none;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 #user-tools a,
 #user-tools button {
   color: rgba(255, 255, 255, 0.92);
-  border-bottom: none;
+  border-bottom: 0;
+  text-decoration: none;
 }
 
 #user-tools a:hover {
   color: #fff;
   text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
-#user-tools form button {
-  background: transparent;
-  border: 0;
+#user-tools form {
+  display: inline;
+  margin: 0;
+}
+
+#logout-form button {
   padding: 0;
+  border: 0;
+  background: none;
   font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
   cursor: pointer;
 }
 
-/* Breadcrumbs ------------------------------------------------------- */
+/* Django's light/dark switch is pointless here: the palette is pinned. */
+.theme-toggle {
+  display: none;
+}
 
 div.breadcrumbs {
+  padding: 10px 32px;
   background: var(--breadcrumbs-bg);
-  border-bottom: 1px solid var(--hairline-color);
-  padding: 11px 24px;
+  border-bottom: 1px solid var(--ss-line);
+  color: var(--ss-muted);
   font-size: 0.8125rem;
 }
 
 div.breadcrumbs a {
-  color: var(--body-quiet-color);
+  color: var(--ss-ink-soft);
+  text-decoration: none;
 }
 
 div.breadcrumbs a:hover {
-  color: var(--link-hover-color);
-}
-
-/* Content ----------------------------------------------------------- */
-
-#content {
-  padding: 24px;
-}
-
-#content h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0 0 4px;
-}
-
-#content h1 + .ss-page-note {
-  margin: 0 0 20px;
-  color: var(--body-quiet-color);
-  font-size: 0.875rem;
+  color: var(--ss-brand);
+  text-decoration: underline;
 }
 
 /* ------------------------------------------------------------------ */
-/* Index: workflow cards                                              */
+/* 4. Navigation rail                                                 */
+/* ------------------------------------------------------------------ */
+
+/* Django slides the rail with a negative margin (`.main.shifted`); the
+   geometry below is its own so the toggle keeps working. Only the inside of
+   the rail is restyled. */
+
+.toggle-nav-sidebar {
+  border-right: 1px solid var(--ss-line);
+  background: var(--ss-surface);
+  color: var(--ss-faint);
+  font-size: 1rem;
+}
+
+.toggle-nav-sidebar:hover,
+.toggle-nav-sidebar:focus {
+  background: var(--ss-brand-soft);
+  color: var(--ss-brand);
+}
+
+#nav-sidebar {
+  background: var(--ss-surface);
+  border-right: 1px solid var(--ss-line);
+  padding-bottom: 20px;
+}
+
+#nav-filter {
+  width: calc(100% - 24px);
+  margin: 12px 12px 6px;
+  padding: 8px 11px;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius-sm);
+  background: #fbfbfe;
+  font-size: 0.8125rem;
+  color: var(--ss-ink);
+}
+
+#nav-filter::placeholder {
+  color: var(--ss-faint);
+}
+
+#nav-sidebar .ss-nav-group {
+  margin: 0 8px 4px;
+  border: 0;
+  background: transparent;
+}
+
+/* base.css stripes every row of every table (`tr:nth-child(odd/even)`), which
+   turned the rail into a ladder of grey bands. */
+#nav-sidebar tbody tr,
+#nav-sidebar .ss-nav-group tbody tr,
+#nav-sidebar .module tbody tr {
+  background: transparent;
+}
+
+#nav-sidebar .ss-nav-group table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* The group name. Django paints `.module caption` with the dark header
+   colours; in a white rail that was white on white. */
+#nav-sidebar .ss-nav-group caption,
+#nav-sidebar .module caption {
+  padding: 14px 8px 5px;
+  background: transparent;
+  border: 0;
+  color: var(--ss-faint);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+#nav-sidebar .ss-nav-group th,
+#nav-sidebar .module th {
+  width: 100%;
+  padding: 0;
+  border-bottom: 0;
+  font-weight: 400;
+  text-align: left;
+}
+
+#nav-sidebar .ss-nav-group th a,
+#nav-sidebar .module th a {
+  display: block;
+  padding: 7px 10px;
+  border-radius: var(--ss-radius-sm);
+  color: var(--ss-ink-soft);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+#nav-sidebar .ss-nav-group tr:hover th a,
+#nav-sidebar .module tr:hover th a {
+  background: #f6f5ff;
+  color: var(--ss-ink);
+}
+
+#nav-sidebar .current-model th a,
+#nav-sidebar .ss-nav-group tr.current-model th a {
+  background: var(--ss-brand-soft);
+  color: var(--ss-brand-dark);
+  font-weight: 650;
+}
+
+/* Django's green "+" tiles are noise in this list; a quiet one is enough. */
+#nav-sidebar .addlink,
+#nav-sidebar .ss-nav-add {
+  display: inline-block;
+  width: 22px;
+  padding: 0;
+  background: none;
+  color: transparent;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+#nav-sidebar td {
+  width: 22px;
+  padding: 0 10px 0 0;
+  border: 0;
+}
+
+#nav-sidebar .ss-nav-group tr:hover .ss-nav-add {
+  color: var(--ss-brand);
+}
+
+#nav-sidebar .ss-nav-group tr.current-model:hover .ss-nav-add {
+  color: var(--ss-brand-dark);
+}
+
+#nav-sidebar .addlink::before,
+#nav-sidebar .addlink img {
+  display: none;
+}
+
+/*
+ * nav_sidebar.js hides <tr>s that do not match the filter; it leaves the group
+ * captions behind as empty headings. A group with nothing visible is hidden
+ * here too — the script marks each row it hides with an inline display: none.
+ */
+#nav-sidebar .ss-nav-group:not(:has(tr:not([style*="none"]))) {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* 5. Console home                                                    */
 /* ------------------------------------------------------------------ */
 
 /*
- * Django floats #content-main at 72% and the recent-actions column at 26%,
- * which left the cards stacked one per row in a narrow strip. On the console
- * home the cards get the whole width and the activity list moves underneath.
+ * A card per job, built from Django's permission-filtered app_list in
+ * courses/templatetags/admin_nav.py. dashboard.css is not loaded for this page
+ * (it pins #content to 600px), so everything below is the whole look.
  */
-/* base.css pins the dashboard to a 600px column and pulls the sidebar over
-   with a -300px margin (the old float layout). The cards need the width. */
-.dashboard #content {
+body.dashboard #content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+  /* admin/css/base.css:881 sets `.dashboard #content { width: 600px }` for
+     its 2003-era two-column layout. Same specificity, so not overriding it
+     left the whole console squeezed into 600px of a 1440px screen. */
+  width: auto;
+  max-width: 1400px;
+}
+
+/*
+ * Django's base.html puts the page title and a `<br class="clear">` inside
+ * #content next to the two columns. As grid items they each claimed a cell,
+ * which pushed the cards into the 300px sidebar slot and the recent actions
+ * into the main slot. Place the four children explicitly instead.
+ */
+body.dashboard #content > h1 {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  margin: 0 0 4px;
+}
+
+body.dashboard #content > #content-main {
+  grid-column: 1;
+  grid-row: 2;
+  float: none;
+  width: auto;
+  min-width: 0;
+}
+
+body.dashboard #content > #content-related {
+  grid-column: 2;
+  grid-row: 2 / span 2;
+  align-self: start;
+}
+
+body.dashboard #content > br.clear {
+  display: none;
+}
+
+body.dashboard #content-related {
   width: auto;
   max-width: none;
-}
-
-.dashboard #content-related {
-  margin-right: 0;
-}
-
-.dashboard #content-main {
   float: none;
-  width: 100%;
-}
-
-.dashboard #content-related {
-  float: none;
-  width: 100%;
-  margin: 24px 0 0;
-}
-
-.dashboard #content-related .module {
-  background: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-}
-
-.dashboard #content-related .module h2 {
-  background: #fbfbfe;
-  border-bottom: 1px solid var(--hairline-color);
-  border-radius: 12px 12px 0 0;
-  color: var(--body-quiet-color);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 11px 16px;
-}
-
-.dashboard #content-related .module h3 {
-  padding: 12px 16px 0;
-  font-size: 0.8125rem;
-  color: var(--body-fg);
-}
-
-.dashboard #content-related .actionlist {
-  padding: 0 16px 12px;
+  margin: 0;
 }
 
 .ss-workflows {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
-  margin-bottom: 8px;
+  gap: 18px;
 }
 
-/* A card spans at least two rows' worth of content, so a short card does not
-   leave a hole in the grid next to a long one. */
-.ss-card {
-  align-self: start;
+.ss-card,
+body.dashboard #content-related .module {
+  padding: 18px 18px 10px;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow);
 }
 
-.ss-card {
-  background: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 18px 18px 8px;
-  box-shadow: 0 1px 2px rgba(16, 16, 40, 0.04);
-}
-
-.ss-card h2 {
-  margin: 0;
+.ss-card h2,
+body.dashboard #content-related .module h2 {
+  margin: 0 0 4px;
   padding: 0;
   background: none;
   border: 0;
-  color: var(--body-loud-color);
-  font-size: 0.9375rem;
+  color: var(--ss-ink);
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
-.ss-card p.ss-card-blurb {
-  margin: 4px 0 12px;
-  color: var(--body-quiet-color);
+.ss-card-blurb,
+body.dashboard #content-related .module p {
+  margin: 0 0 12px;
+  color: var(--ss-muted);
   font-size: 0.8125rem;
+  line-height: 1.45;
 }
 
 .ss-card ul {
-  list-style: none;
   margin: 0;
   padding: 0;
+  list-style: none;
 }
 
 .ss-card li {
@@ -313,232 +571,347 @@ div.breadcrumbs a:hover {
   align-items: center;
   gap: 10px;
   padding: 9px 0;
-  border-top: 1px solid var(--hairline-color);
+  border-top: 1px solid #f2f2f9;
 }
 
-.ss-card li:first-child {
-  border-top: 0;
-}
-
-.ss-card li a.ss-model {
+.ss-model {
   flex: 1 1 auto;
-  min-width: 0;
-  font-weight: 600;
-  color: var(--body-fg);
+  color: var(--ss-ink);
+  font-size: 0.875rem;
+  font-weight: 550;
+  text-decoration: none;
 }
 
-.ss-card li a.ss-model:hover {
-  color: var(--link-hover-color);
+.ss-model:hover {
+  color: var(--ss-brand);
+  text-decoration: none;
 }
 
 .ss-count {
-  flex: none;
-  min-width: 30px;
-  padding: 2px 8px;
+  min-width: 26px;
+  padding: 1px 8px;
   border-radius: 999px;
-  background: var(--darkened-bg);
-  color: var(--body-quiet-color);
+  background: #f2f2fa;
+  color: var(--ss-muted);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
 .ss-count[data-empty="1"] {
   background: transparent;
-  color: #a6a6bd;
+  color: var(--ss-faint);
 }
 
-.ss-card li a.ss-add {
-  flex: none;
-  padding: 3px 10px;
-  border: 1px solid var(--border-color);
+.ss-add {
+  padding: 3px 11px;
+  border: 1px solid var(--ss-line-strong);
   border-radius: 999px;
+  color: var(--ss-ink-soft);
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--link-fg);
-  white-space: nowrap;
+  text-decoration: none;
 }
 
-.ss-card li a.ss-add:hover {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: #fff;
+.ss-add:hover {
+  border-color: var(--ss-brand);
+  background: var(--ss-brand-soft);
+  color: var(--ss-brand-dark);
+  text-decoration: none;
 }
 
-/* ------------------------------------------------------------------ */
-/* Tables                                                             */
-/* ------------------------------------------------------------------ */
-
-/*
- * Django's own `.results` is `overflow-x: auto` because a wide change list has
- * to scroll. A plain `overflow: hidden` here would clip the last columns
- * instead — the Position header was cut off mid-word — so the horizontal
- * scroll is kept and the rounded corners go on the inner table element.
- */
-#changelist .results {
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  overflow-x: auto;
-  background: #fff;
-}
-
-#result_list {
-  border: 0;
-}
-
-#result_list thead th {
-  background: #fbfbfe;
-  border-bottom: 1px solid var(--border-color);
-  padding: 11px 12px;
-  font-size: 0.75rem;
+body.dashboard #content-related .module h3 {
+  margin: 10px 0 6px;
+  color: var(--ss-faint);
+  font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--body-quiet-color);
 }
 
-/*
- * changelists.css sets `white-space: nowrap` on every header cell, and long
- * batch and folder names pushed the table to 1036px inside an 822px column —
- * the last headers were cut mid-word ("POS"). Wrapping both lets the table fit
- * the column, so nothing needs sideways scrolling to be read.
- */
-#changelist #result_list th,
-#changelist #result_list td {
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: normal;
-}
-
-/* A checkbox column never needs to be wide. */
-#changelist #result_list .action-checkbox {
-  width: 1%;
-  white-space: nowrap;
-}
-
-#result_list thead th a {
-  color: inherit;
-}
-
-#result_list tbody td,
-#result_list tbody th {
-  padding: 11px 12px;
-  border-bottom: 1px solid var(--hairline-color);
-  font-size: 0.875rem;
-  vertical-align: middle;
-}
-
-#result_list tbody tr:last-child td,
-#result_list tbody tr:last-child th {
-  border-bottom: 0;
-}
-
-#result_list tbody tr:hover td,
-#result_list tbody tr:hover th {
-  background: #fafaff;
-}
-
-#result_list tbody tr.selected td,
-#result_list tbody tr.selected th {
-  background: var(--selected-bg);
-}
-
-/* A boolean column reads as a dot, not as a green tick floating in a cell. */
-#result_list td.field-is_published img,
-#result_list td.field-is_protected img,
-#result_list td.field-is_pinned img {
-  width: 16px;
-  height: 16px;
-  vertical-align: middle;
-}
-
-/* Edit-in-list inputs stay small and aligned with the row text. */
-#result_list tbody td input[type="text"],
-#result_list tbody td input[type="number"] {
-  width: 76px;
-  padding: 5px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
+body.dashboard #content-related .actionlist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   font-size: 0.8125rem;
 }
 
+body.dashboard #content-related .actionlist li {
+  padding: 8px 0;
+  border-top: 1px solid #f2f2f9;
+  color: var(--ss-ink-soft);
+}
+
+body.dashboard #content-related .actionlist li a {
+  color: var(--ss-ink);
+}
+
+body.dashboard #content-related .mini {
+  color: var(--ss-faint);
+  font-size: 0.75rem;
+}
+
 /* ------------------------------------------------------------------ */
-/* Buttons                                                            */
+/* 7. Change form                                                     */
 /* ------------------------------------------------------------------ */
 
-.button,
-input[type="submit"],
-input[type="button"],
-button {
-  border-radius: 8px;
+/* A fieldset is a card; its heading is a quiet bar, not a dark slab. Django's
+   forms.css paints `.fieldset-heading` and collapsible `<summary>` with
+   `background: var(--header-bg)` and a 1px border in the same colour, which is
+   what left a dark edge around every section heading. */
+fieldset.module {
+  margin: 0 0 18px;
+  padding: 0;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow);
+  overflow: hidden;
+}
+
+fieldset.module > .fieldset-heading,
+fieldset.module > summary,
+fieldset.module > details > summary {
+  margin: 0;
+  padding: 13px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--ss-line);
+  background: #fbfbfe;
+  color: var(--ss-ink);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: default;
+}
+
+fieldset.module > details > summary {
+  cursor: pointer;
+  list-style: none;
+  position: relative;
+  padding-right: 44px;
+}
+
+fieldset.module > details > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The open/closed marker for a collapsible section. */
+fieldset.module > details > summary::after {
+  content: "+";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ss-faint);
+  font-size: 1.0625rem;
   font-weight: 600;
-  letter-spacing: 0;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.button,
-input[type="submit"],
-input[type="button"],
-.submit-row input,
-.submit-row a.button {
-  padding: 9px 16px;
+fieldset.module > details[open] > summary::after {
+  content: "–";
 }
 
-.submit-row input.default,
-input[type="submit"].default {
-  background: var(--default-button-bg);
+fieldset.module > details > summary:hover {
+  background: var(--ss-brand-soft);
 }
 
-.submit-row input.default:hover,
-input[type="submit"].default:hover {
-  background: var(--default-button-hover-bg);
+fieldset.module > details > summary .fieldset-heading {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
 }
 
-/* ------------------------------------------------------------------ */
-/* Forms                                                              */
-/* ------------------------------------------------------------------ */
+fieldset.module > details {
+  overflow: hidden;
+}
+
+fieldset.module .description {
+  margin: 0;
+  padding: 12px 18px 0;
+  color: var(--ss-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+/* Form rows ---------------------------------------------------------- */
 
 .form-row {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--hairline-color);
+  padding: 13px 18px;
+  margin: 0;
+  border-bottom: 1px solid #f2f2f9;
+  overflow: hidden;
 }
 
-.form-row:last-child {
+fieldset.module > .form-row:last-of-type,
+fieldset.module > details .form-row:last-of-type {
   border-bottom: 0;
+}
+
+.form-row.errors {
+  background: #fff7f7;
+}
+
+.form-row .flex-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+/* Two fields on one row (Django's `.form-multiline`): each gets a column. */
+.form-row .flex-container.form-multiline {
+  flex-wrap: wrap;
+}
+
+.form-row .flex-container.form-multiline > div {
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
 .form-row label {
+  flex: 0 0 190px;
+  width: 190px;
+  min-width: 0;
+  padding: 10px 0 0;
+  color: var(--ss-ink-soft);
+  font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--body-fg);
+  line-height: 1.4;
+  word-wrap: break-word;
 }
 
-.form-row .help,
-.form-row div.help {
-  margin-top: 4px;
-  font-size: 0.8125rem;
-  color: var(--body-quiet-color);
+.form-row label.required::after {
+  content: "";
 }
+
+.form-row .flex-container > input:not([type="checkbox"]):not([type="radio"]),
+.form-row .flex-container > select,
+.form-row .flex-container > textarea,
+.form-row .flex-container > .related-widget-wrapper,
+.form-row .flex-container > .readonly,
+.form-row .flex-container > div:not(.related-widget-wrapper) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.form-row input[type="text"],
+.form-row input[type="url"],
+.form-row input[type="email"],
+.form-row input[type="number"],
+.form-row input[type="password"],
+.form-row select,
+.form-row textarea {
+  max-width: 520px;
+}
+
+.form-row textarea {
+  max-width: 820px;
+  min-height: 120px;
+}
+
+/* A checkbox row reads as one line: the label follows the box. */
+.form-row .checkbox-row {
+  align-items: center;
+}
+
+.form-row .checkbox-row label {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 0;
+  font-weight: 500;
+}
+
+.form-row .checkbox-row input[type="checkbox"] {
+  margin: 0;
+}
+
+.form-row .readonly {
+  padding-top: 9px;
+  color: var(--ss-ink);
+  font-size: 0.875rem;
+}
+
+.form-row .readonly a {
+  overflow-wrap: anywhere;
+}
+
+.form-row .help {
+  padding: 6px 0 0 208px;
+  color: var(--ss-faint);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.form-row .help div {
+  margin: 0;
+}
+
+.form-row .help img {
+  display: none;
+}
+
+.errorlist {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  color: var(--ss-danger);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.errornote {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid #f2c4c4;
+  border-radius: var(--ss-radius-sm);
+  background: var(--message-error-bg);
+  color: var(--ss-danger);
+  font-size: 0.875rem;
+}
+
+/* Inputs ------------------------------------------------------------- */
 
 input[type="text"],
 input[type="password"],
 input[type="email"],
 input[type="url"],
 input[type="number"],
-textarea,
+input[type="search"],
+input[type="tel"],
 select,
-.vTextField {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px 10px;
+textarea,
+.vTextField,
+.vURLField,
+.vIntegerField {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: var(--ss-radius-sm);
   background: #fff;
-  color: var(--body-fg);
+  color: var(--ss-ink);
+  font-family: inherit;
   font-size: 0.875rem;
-  max-width: 100%;
+  line-height: 1.4;
+}
+
+select {
+  min-height: 38px;
+  height: auto;
+  line-height: 1.4;
 }
 
 textarea {
-  line-height: 1.5;
+  min-height: 110px;
+  line-height: 1.55;
+  resize: vertical;
 }
 
 input[type="text"]:focus,
@@ -546,104 +919,134 @@ input[type="password"]:focus,
 input[type="email"]:focus,
 input[type="url"]:focus,
 input[type="number"]:focus,
+input[type="search"]:focus,
+select:focus,
 textarea:focus,
-select:focus {
-  border-color: var(--primary);
+.vTextField:focus {
+  border-color: var(--ss-brand);
   outline: 0;
   box-shadow: 0 0 0 3px rgba(91, 91, 246, 0.16);
 }
 
-fieldset.module {
-  background: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  overflow: hidden;
-  margin-bottom: 20px;
+input[type="checkbox"],
+input[type="radio"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--ss-brand);
 }
 
-fieldset.module h2 {
-  background: #fbfbfe;
-  border-bottom: 1px solid var(--hairline-color);
-  color: var(--body-loud-color);
-  font-size: 0.8125rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 11px 16px;
+/* The one-line "Save" bar. `position: sticky` was tried and removed: inside a
+   floated form it lands in the middle of the page. */
+.submit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow);
+}
+
+.submit-row input,
+.submit-row a {
   margin: 0;
 }
 
-fieldset.module .form-row,
-fieldset.module .form-row.errors {
-  background: transparent;
+.submit-row a.deletelink {
+  margin-left: auto;
 }
 
-fieldset.module > div > .form-row,
-fieldset.module .module > .form-row {
-  padding-inline: 16px;
+/* + Add a class / section / test: the shortcuts on a batch or section. */
+.ss-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 0;
 }
 
-fieldset.module h2 + .form-row {
-  padding-top: 14px;
-}
-
-/*
- * The save bar.
- *
- * `position: sticky` was tried and removed: inside a floated form the sticky
- * box lands at the bottom of the form's content area, i.e. in the middle of the
- * page, floating over the fields above it. The plain bar at the foot of the
- * form is where Django puts it, and where the eye expects it.
- */
-.submit-row {
+.ss-shortcut {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: 999px;
   background: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(16, 16, 40, 0.04);
-  padding: 12px 16px;
-  margin-top: 20px;
+  color: var(--ss-ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ss-shortcut:hover {
+  border-color: var(--ss-brand);
+  background: var(--ss-brand-soft);
+  color: var(--ss-brand-dark);
+  text-decoration: none;
 }
 
 /* ------------------------------------------------------------------ */
-/* Inline formsets (the choices under a question)                     */
+/* 8. Inlines                                                         */
 /* ------------------------------------------------------------------ */
 
 .inline-group {
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fff;
-  margin-bottom: 20px;
+  margin: 0 0 18px;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow);
+  overflow-x: auto;
 }
 
-.inline-group h2 {
-  background: #fbfbfe;
-  border-bottom: 1px solid var(--hairline-color);
-  color: var(--body-loud-color);
-  font-size: 0.8125rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 11px 16px;
+.inline-group .inline-related {
+  margin: 0;
 }
 
-.tabular.inline-related table {
+.inline-related > fieldset.module {
+  margin: 0;
   border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.inline-related .inline-heading {
+  margin: 0;
+  padding: 13px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--ss-line);
+  background: #fbfbfe;
+  color: var(--ss-ink);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inline-related table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
 .inline-related thead th {
-  background: #fbfbfe;
-  color: var(--body-quiet-color);
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--border-color);
   padding: 9px 12px;
+  border-bottom: 1px solid var(--ss-line);
+  background: #fbfbfe;
+  color: var(--ss-faint);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
 }
 
-.inline-related tbody td {
+.inline-related tbody td,
+.inline-related tbody th {
   padding: 9px 12px;
-  border-bottom: 1px solid var(--hairline-color);
+  border-bottom: 1px solid #f4f4fa;
   vertical-align: middle;
 }
 
@@ -651,17 +1054,18 @@ fieldset.module h2 + .form-row {
   border-bottom: 0;
 }
 
-/* The "this one is the answer" checkbox gets the size its importance deserves. */
-.inline-related tbody td input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--primary);
-  cursor: pointer;
+.inline-related tbody input[type="text"],
+.inline-related tbody input[type="url"],
+.inline-related tbody input[type="number"],
+.inline-related tbody select {
+  padding: 7px 9px;
+  font-size: 0.8125rem;
 }
 
-/* The answers inline no longer exposes `position` — it is assigned on save in
-   the order the rows are written, so a stray number above each field would be
-   noise the editor cannot edit. */
+.inline-related tbody input.vIntegerField {
+  max-width: 84px;
+}
+
 /*
  * The first cell of an inline row holds the object's name and its "Change"
  * link — the only way to the row's own page (a section's classes live there,
@@ -674,7 +1078,7 @@ fieldset.module h2 + .form-row {
  */
 .inline-group .inline-related tbody td.original {
   width: 1%;
-  padding: 8px 10px;
+  padding: 9px 12px;
   white-space: nowrap;
 }
 
@@ -693,256 +1097,908 @@ fieldset.module h2 + .form-row {
   display: inline-block;
   padding: 4px 10px;
   border-radius: 999px;
-  background: var(--selected-bg);
-  color: var(--link-fg);
+  background: var(--ss-brand-soft);
+  color: var(--ss-brand-dark);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.4;
   text-decoration: none;
 }
 
-.inline-group .inline-related tbody td.original p a.inlinechangelink:hover,
-.inline-group .inline-related tbody td.original p a.inlineviewlink:hover {
-  background: #e6e3ff;
+.inline-group .inline-related tbody td.original p a:hover {
+  background: #e2deff;
+  text-decoration: none;
 }
 
-/* The header cell above them ships empty (Django's own admin has the same),
-   so nothing labels the column; the pill text is the label. */
-
-.add-row a {
-  display: inline-block;
-  margin: 4px 16px 14px;
-  padding: 7px 14px;
-  border: 1px dashed var(--border-color);
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--link-fg);
-}
-
-.add-row a:hover {
-  border-color: var(--primary);
-  border-style: solid;
-  background: var(--selected-bg);
-  color: var(--link-hover-color);
-}
-
-/* ------------------------------------------------------------------ */
-/* Filters, search, actions                                           */
-/* ------------------------------------------------------------------ */
-
-#changelist-filter {
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: #fff;
-  overflow: hidden;
-}
-
-#changelist-filter h2 {
+.inline-related .add-row td {
+  padding: 10px 14px;
+  border-top: 1px solid var(--ss-line);
   background: #fbfbfe;
-  border-bottom: 1px solid var(--hairline-color);
+}
+
+.inline-related .add-row a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px dashed var(--ss-line-strong);
+  border-radius: 999px;
+  /* Django draws its green plus sprite on every `.addlink`; this one is text. */
+  background: none;
+  color: var(--ss-brand);
   font-size: 0.75rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.inline-related .add-row a::before {
+  content: "+";
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--body-quiet-color);
-  padding: 11px 14px;
-  margin: 0;
 }
 
-#changelist-filter h3 {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--body-fg);
-  padding: 10px 14px 6px;
-  margin: 0;
+.inline-related .add-row a:hover {
+  border-style: solid;
+  border-color: var(--ss-brand);
+  background: var(--ss-brand-soft);
+  text-decoration: none;
 }
 
-#changelist-filter ul {
-  padding: 0 14px 10px;
-  margin: 0;
+/* The empty template row Django clones for "Add another". */
+.inline-related tr.empty-form {
+  display: none;
 }
 
-#changelist-filter li {
-  list-style: none;
-  padding: 3px 0;
-  font-size: 0.875rem;
+.inline-related tr.has_original .inline-deletelink {
+  display: none;
 }
 
-#changelist-filter li.selected a {
-  font-weight: 700;
-  color: var(--link-selected-fg);
+.inline-deletelink {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  background-size: 22px;
+  opacity: 0.5;
 }
 
-#toolbar {
-  background: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin: 0 0 16px;
+.inline-deletelink:hover {
+  opacity: 1;
 }
 
-#toolbar form input[type="text"],
-#searchbar {
-  width: min(360px, 100%);
-}
+/* ------------------------------------------------------------------ */
+/* 9. Lists                                                           */
+/* ------------------------------------------------------------------ */
 
 .object-tools {
-  margin-top: -34px;
+  display: flex;
+  gap: 8px;
+  float: right;
+  margin: 0 0 14px 12px;
+  padding: 0;
+  list-style: none;
+}
+
+/* Sit beside the page title rather than under it. */
+body.change-list .object-tools {
+  margin-top: -48px;
+}
+
+body.change-form #content > h2 + #content-main .object-tools {
+  margin-top: -46px;
+}
+
+.object-tools li {
+  margin: 0;
 }
 
 .object-tools a,
 .object-tools a:link,
 .object-tools a:visited {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border: 1px solid var(--ss-line-strong);
   border-radius: 999px;
-  background: var(--primary);
+  background: #fff;
+  color: var(--ss-ink-soft);
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0;
-  padding: 8px 15px;
+  text-transform: none;
+  text-decoration: none;
 }
 
 .object-tools a:hover {
-  background: var(--default-button-hover-bg);
+  border-color: var(--ss-brand);
+  background: var(--ss-brand-soft);
+  color: var(--ss-brand-dark);
 }
 
-/* ------------------------------------------------------------------ */
-/* Messages and calendar                                              */
-/* ------------------------------------------------------------------ */
+.object-tools a.addlink {
+  border-color: var(--ss-brand);
+  background: var(--ss-brand);
+  color: #fff;
+}
 
-ul.messagelist li {
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  margin-bottom: 8px;
-  padding: 12px 16px;
+.object-tools a.addlink:hover {
+  background: var(--ss-brand-dark);
+  border-color: var(--ss-brand-dark);
+}
+
+.object-tools a.addlink::before,
+.object-tools a.addlink::after,
+.object-tools a.historylink::before {
+  content: none;
+}
+
+#changelist {
+  display: flex;
+  flex-direction: column;
+  /* Django sets `align-items: flex-start`; in a column that shrink-wraps each
+     child to its content and the table pushed the page 130px sideways. */
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 14px;
+  background: transparent;
+  border: 0;
+}
+
+.changelist-form-container {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow);
+  overflow: hidden;
+}
+
+/* Search ------------------------------------------------------------- */
+
+#toolbar {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ss-line);
+  background: var(--ss-surface);
+}
+
+#toolbar form,
+#toolbar form > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+#toolbar form > div {
+  width: 100%;
+}
+
+#toolbar label {
+  display: none;
+}
+
+#toolbar #searchbar {
+  flex: 1 1 auto;
+  max-width: 380px;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 9px 12px;
   font-size: 0.875rem;
 }
 
+#toolbar input[type="submit"] {
+  flex: 0 0 auto;
+}
+
+/* Bulk actions -------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ss-line);
+  background: #fbfbfe;
+  color: var(--ss-muted);
+  font-size: 0.8125rem;
+}
+
+.actions label {
+  color: var(--ss-muted);
+  font-size: 0.8125rem;
+}
+
+.actions select {
+  width: auto;
+  max-width: 260px;
+  padding: 7px 10px;
+  font-size: 0.8125rem;
+}
+
+.actions .action-counter {
+  color: var(--ss-faint);
+  font-size: 0.75rem;
+}
+
+.actions .question {
+  display: none;
+}
+
+/* The table ----------------------------------------------------------- */
+
+/*
+ * A wide list scrolls inside its card rather than turning the page sideways.
+ * The scrollbar and the inner shadow are there so it looks scrollable instead
+ * of cut off.
+ */
+#changelist .results {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c7c7dd transparent;
+  box-shadow: inset -16px 0 14px -16px rgba(20, 20, 50, 0.5);
+}
+
+#changelist .results::-webkit-scrollbar {
+  height: 10px;
+}
+
+#changelist .results::-webkit-scrollbar-thumb {
+  border: 3px solid #fff;
+  border-radius: 999px;
+  background: #c7c7dd;
+}
+
+#result_list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8438rem;
+}
+
+#result_list thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ss-line);
+  background: #f7f7fd;
+  color: var(--ss-faint);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  /* "DURATION MINUTES" should wrap onto a second line in the header rather
+     than claim 155px of a table that only has 1075px to give. */
+  max-width: 112px;
+}
+
+#result_list thead th a,
+#result_list thead th a:link,
+#result_list thead th a:visited {
+  color: inherit;
+  text-decoration: none;
+}
+
+#result_list thead th a:hover {
+  color: var(--ss-brand);
+}
+
+/*
+ * The sort controls are two floating divs; inside a sticky header cell they
+ * escaped and drew a stray triangle above the table. Pin them to the corner of
+ * the header cell and only show the number when sorting on several columns.
+ */
+#result_list .sortoptions {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  transform: translateY(-50%);
+  float: none;
+}
+
+#result_list th.sorted .text {
+  padding-right: 30px;
+}
+
+#result_list .sortoptions .sortpriority {
+  color: var(--ss-faint);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+#result_list tbody th,
+#result_list tbody td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #f3f3fa;
+  color: var(--ss-ink-soft);
+  vertical-align: middle;
+}
+
+#result_list tbody th {
+  min-width: 170px;
+  max-width: 420px;
+  color: var(--ss-ink);
+  font-weight: 600;
+  white-space: normal;
+}
+
+/*
+ * Body cells may wrap; headings do not. A list with eight columns is wider
+ * than the page at 1440px if every cell is nowrap, which pushed the last two
+ * columns out of sight. Dates and numbers never wrap (below).
+ */
+#result_list tbody td {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+
+#result_list tbody tr:hover th,
+#result_list tbody tr:hover td {
+  background: #faf9ff;
+}
+
+#result_list tbody tr.selected th,
+#result_list tbody tr.selected td {
+  background: var(--ss-brand-soft);
+}
+
+/* Django adds `.nowrap` to many-to-one columns and to dates. Relation names
+   wrap harmlessly and are what pushed the table past the page; a timestamp
+   broken over two lines is unreadable, so it keeps its own line. */
+#result_list tbody td.nowrap {
+  white-space: normal;
+}
+
+#result_list tbody td.field-updated_at,
+#result_list tbody td.field-created_at,
+#result_list tbody td.field-published_at,
+#result_list tbody td.field-opens_at,
+#result_list tbody td.field-closes_at {
+  white-space: nowrap;
+}
+
+#result_list tbody td.field-series,
+#result_list tbody td.field-course,
+#result_list tbody td.field-testseries,
+#result_list tbody td.field-owner {
+  min-width: 118px;
+}
+
+/* A "Today 20:41" stamp on two lines reads as two facts. */
+#result_list th.column-last_edited,
+#result_list td.field-last_edited,
+#result_list td.field-updated {
+  white-space: nowrap;
+  width: 1%;
+}
+
+/* A tick box in a 114px column is a hole in the table. */
+#result_list th.column-is_published,
+#result_list td.field-is_published,
+#result_list td.field-is_pinned,
+#result_list td.field-is_protected,
+#result_list td.field-is_completed,
+#result_list td.field-answered,
+#result_list td.field-marked_for_review {
+  width: 1%;
+  padding-right: 18px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* base.css stripes rows; the cards below are cleaner without it. */
+#result_list tbody tr {
+  background: transparent;
+}
+
+#result_list tbody th a {
+  color: var(--ss-ink);
+  font-weight: 650;
+}
+
+#result_list tbody th a:hover {
+  color: var(--ss-brand);
+}
+
+#result_list .action-checkbox {
+  width: 34px;
+  padding-right: 0;
+}
+
+#result_list td.action-checkbox input {
+  margin: 0;
+}
+
+/* A coloured dot for boolean columns keeps the eye on the row, not the words. */
+#result_list td.field-is_published,
+#result_list td.field-is_protected {
+  color: var(--ss-muted);
+}
+
+/* Pagination --------------------------------------------------------- */
+
+.paginator {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ss-line);
+  background: var(--ss-surface);
+  color: var(--ss-muted);
+  font-size: 0.8125rem;
+}
+
+.paginator a,
+.paginator .this-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: var(--ss-radius-sm);
+  color: var(--ss-ink-soft);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.paginator a:hover {
+  border-color: var(--ss-brand);
+  color: var(--ss-brand-dark);
+  text-decoration: none;
+}
+
+.paginator .this-page {
+  border-color: var(--ss-brand);
+  background: var(--ss-brand);
+  color: #fff;
+}
+
+.paginator input[type="submit"] {
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* 10. Filters                                                        */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Filters as a chip row above the table.
+ *
+ * Django puts them in a 240px column beside the list, which on a wide list of
+ * quizzes squeezes eight columns into 780px and cuts the last two off. Above
+ * the table they cost one line, the table gets the whole width, and each list
+ * opens only when asked.
+ */
+#changelist-filter {
+  order: -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  /* Django sizes this column with `flex: 0 0 240px`; in a column layout that
+     is a fixed 240px *height*, which is why the chip row floated in a tall
+     empty box. */
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow);
+}
+
+/* The word "Filter" and the "Show counts" heading are scaffolding. */
+#changelist-filter > h2,
+#changelist-filter-extra-actions h3 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ss-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+#changelist-filter > h2 {
+  display: none;
+}
+
+#changelist-filter details {
+  flex: 0 1 auto;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: 999px;
+  background: #fff;
+}
+
+#changelist-filter details[open] {
+  flex: 1 1 100%;
+  border-color: var(--ss-line);
+  border-radius: var(--ss-radius-sm);
+}
+
+#changelist-filter details summary {
+  position: relative;
+  display: block;
+  padding: 6px 30px 6px 14px;
+  color: var(--ss-ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  text-transform: capitalize;
+  /* `display: block` as well as `list-style: none`: Chrome still drew the
+     marker triangle inside these chips without it. */
+  list-style: none;
+  cursor: pointer;
+}
+
+#changelist-filter details summary::-webkit-details-marker {
+  display: none;
+}
+
+#changelist-filter details summary::after {
+  content: "▾";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ss-faint);
+  font-size: 0.6875rem;
+}
+
+#changelist-filter details[open] summary {
+  border-bottom: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius-sm) var(--ss-radius-sm) 0 0;
+  background: #fbfbfe;
+}
+
+#changelist-filter details[open] summary::after {
+  content: "▴";
+  color: var(--ss-brand);
+}
+
+#changelist-filter ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  list-style: none;
+}
+
+#changelist-filter li a {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #f5f5fc;
+  color: var(--ss-ink-soft);
+  font-size: 0.8125rem;
+  text-decoration: none;
+}
+
+#changelist-filter li a:hover {
+  background: #ecebff;
+  color: var(--ss-brand-dark);
+  text-decoration: none;
+}
+
+#changelist-filter li.selected a {
+  background: var(--ss-brand);
+  color: #fff;
+  font-weight: 650;
+}
+
+#changelist-filter-extra-actions {
+  order: 10;
+  margin-left: auto;
+  padding: 0;
+}
+
+#changelist-filter-extra-actions a {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/* 11. Buttons, messages, login                                       */
+/* ------------------------------------------------------------------ */
+
+input[type="submit"],
+input[type="button"],
+button,
+.button,
+a.button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ss-ink-soft);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+input[type="submit"]:hover,
+input[type="button"]:hover,
+button:hover,
+.button:hover {
+  border-color: var(--ss-brand);
+  background: var(--ss-brand-soft);
+  color: var(--ss-brand-dark);
+}
+
+input[type="submit"].default,
+input[type="submit"][name="_save"],
+input[type="submit"][name="_continue"],
+.default {
+  border-color: var(--ss-brand);
+  background: var(--ss-brand);
+  color: #fff;
+}
+
+input[type="submit"].default:hover,
+input[type="submit"][name="_save"]:hover,
+input[type="submit"][name="_continue"]:hover {
+  border-color: var(--ss-brand-dark);
+  background: var(--ss-brand-dark);
+  color: #fff;
+}
+
+/* A destructive action is quiet until you mean it. */
+.submit-row a.deletelink,
+.submit-row a.deletelink:link,
+.submit-row a.deletelink:visited {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border: 1px solid #f0c9c9;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ss-danger);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.submit-row a.deletelink:hover {
+  border-color: var(--ss-danger);
+  background: #fdf2f2;
+  color: var(--ss-danger);
+}
+
+.submit-row a.closelink {
+  display: none;
+}
+
+/* Messages ----------------------------------------------------------- */
+
+ul.messagelist {
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+ul.messagelist li {
+  margin: 0 0 8px;
+  padding: 11px 16px 11px 42px;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius-sm);
+  background-color: var(--ss-surface);
+  color: var(--ss-ink);
+  font-size: 0.875rem;
+  background-repeat: no-repeat;
+  background-position: 14px 50%;
+  background-size: 16px;
+}
+
 ul.messagelist li.success {
-  border-color: #b6e2c6;
+  border-color: #bfe8cf;
+  background-color: var(--message-success-bg);
+  background-image: url("../admin/img/icon-yes.svg");
 }
 
 ul.messagelist li.warning {
   border-color: #f0d9a8;
+  background-color: var(--message-warning-bg);
+  background-image: url("../admin/img/icon-alert.svg");
 }
 
 ul.messagelist li.error {
-  border-color: #f0bcc5;
+  border-color: #f2c4c4;
+  background-color: var(--message-error-bg);
+  background-image: url("../admin/img/icon-no.svg");
 }
 
-/* ------------------------------------------------------------------ */
-/* Sidebar                                                            */
-/* ------------------------------------------------------------------ */
-
-#nav-sidebar {
-  background: #fff;
-  border-right: 1px solid var(--hairline-color);
-}
-
-/* base.css paints every `.module caption` with --header-bg / --header-link-color
-   (white on near-black for the old table headers). In this pale sidebar that
-   was white on white — the app names were invisible. */
-#nav-sidebar .module caption {
-  display: block;
-  background: transparent;
-  color: #8a8aa3;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-align: left;
-  padding: 14px 16px 6px;
-}
-
-#nav-sidebar .module caption a,
-#nav-sidebar .module caption a:link {
-  color: inherit;
-}
-
-#nav-sidebar .module th {
-  font-size: 0.8125rem;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--body-fg);
-  background: transparent;
-  font-weight: 400;
-}
-
-/* The green plus tiles fight the plain links in this list. */
-#nav-sidebar .addlink::before,
-#nav-sidebar .addlink img {
-  display: none;
-}
-
-#nav-sidebar .addlink {
-  color: var(--body-quiet-color);
-  font-size: 0.75rem;
-}
-
-#nav-sidebar .module td a {
-  font-size: 0.875rem;
-  color: var(--body-fg);
-  border-radius: 6px;
-}
-
-#nav-sidebar .current-model a {
-  color: var(--link-fg);
-  font-weight: 700;
-}
-
-/* ------------------------------------------------------------------ */
-/* Login                                                              */
-/* ------------------------------------------------------------------ */
+/* Login -------------------------------------------------------------- */
 
 .login #container {
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 20px 50px rgba(16, 16, 40, 0.12);
-  overflow: hidden;
-  margin-top: 9vh;
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 50% -10%, #e9e6ff 0%, var(--ss-bg) 55%);
 }
 
 .login #header {
-  border-radius: 0;
+  background: transparent;
+  min-height: 0;
+  padding: 24px;
+}
+
+.login #header #branding #site-name a {
+  color: var(--ss-ink);
+}
+
+.login #branding .ss-admin-tag {
+  background: var(--ss-brand-soft);
+  color: var(--ss-brand-dark);
+}
+
+.login #user-tools,
+.login .theme-toggle {
+  display: none;
 }
 
 .login #content {
-  padding: 28px 32px 32px;
+  display: block;
+  max-width: 400px;
+  margin: 6vh auto 0;
+  padding: 0 20px 60px;
+  background: transparent;
+}
+
+.login #content-main {
+  float: none;
+  padding: 26px 26px 22px;
+  border: 1px solid var(--ss-line);
+  border-radius: 18px;
+  background: var(--ss-surface);
+  box-shadow: 0 2px 4px rgba(20, 20, 50, 0.04), 0 24px 60px -40px rgba(20, 20, 50, 0.5);
+}
+
+.login #content-main h1 {
+  font-size: 1.25rem;
+  margin-bottom: 14px;
 }
 
 .login .form-row {
-  padding: 0 0 16px;
-  border-bottom: 0;
+  padding: 8px 0;
+  border: 0;
+}
+
+.login .form-row .flex-container {
+  display: block;
+}
+
+.login .form-row label {
+  display: block;
+  width: auto;
+  padding: 0 0 6px;
+  font-size: 0.8125rem;
+}
+
+.login .form-row input {
+  width: 100%;
+  max-width: none;
 }
 
 .login .submit-row {
-  position: static;
+  margin: 14px 0 0;
   padding: 0;
-  margin: 0;
-  box-shadow: none;
   border: 0;
   background: transparent;
+  box-shadow: none;
 }
 
 .login .submit-row input {
   width: 100%;
-  padding: 12px 16px;
+  min-height: 44px;
   font-size: 0.9375rem;
 }
 
+.login .password-reset-link {
+  display: block;
+  margin-top: 12px;
+  font-size: 0.8125rem;
+}
+
 /* ------------------------------------------------------------------ */
-/* Small screens                                                      */
+/* 12. Autocomplete lookups                                           */
 /* ------------------------------------------------------------------ */
 
+.select2-container--admin-autocomplete .select2-selection--single,
+.select2-container--admin-autocomplete .select2-selection--multiple {
+  min-height: 38px;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: var(--ss-radius-sm);
+  background: #fff;
+}
+
+.select2-container--admin-autocomplete .select2-selection--single .select2-selection__rendered {
+  line-height: 36px;
+  color: var(--ss-ink);
+  font-size: 0.875rem;
+}
+
+.select2-container--admin-autocomplete .select2-selection--single .select2-selection__arrow {
+  height: 36px;
+}
+
+.select2-container--admin-autocomplete.select2-container--focus .select2-selection--single,
+.select2-container--admin-autocomplete.select2-container--open .select2-selection--single {
+  border-color: var(--ss-brand);
+  box-shadow: 0 0 0 3px rgba(91, 91, 246, 0.16);
+}
+
+/* The pencil / plus / eye links beside a related field. */
+.related-widget-wrapper {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 560px;
+}
+
+.form-row .related-widget-wrapper select,
+.form-row .related-widget-wrapper .select2-container {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.related-widget-wrapper-link {
+  flex: 0 0 auto;
+  opacity: 0.75;
+}
+
+.related-widget-wrapper-link:hover {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* 13. Small screens                                                  */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 1024px) {
+  #content {
+    padding: 20px 20px 64px;
+  }
+
+  div.breadcrumbs {
+    padding: 9px 20px;
+  }
+
+  body.dashboard #content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 767px) {
-  /* The header's tools ("Welcome, admin. View site / Change password / LOG
-     OUT" + theme toggle) do not wrap on their own and pushed the page 200px
-     wider than a 390px screen. */
   #header {
     display: block;
     height: auto;
-    padding: 8px 14px 10px;
+    padding: 10px 16px 12px;
   }
 
   #site-name {
@@ -954,288 +2010,107 @@ ul.messagelist li.error {
     flex-wrap: wrap;
     align-items: center;
     gap: 2px 8px;
-    margin-top: 4px;
     width: auto;
-    font-size: 0.8125rem;
-    line-height: 1.5;
+    max-width: 100%;
+    margin-top: 4px;
+    margin-left: 0;
+    font-size: 0.75rem;
+    line-height: 1.6;
     text-align: left;
   }
 
-  #user-tools form {
-    display: inline-flex;
-    margin: 0;
+  /* `Welcome, admin.` ate half the row and pushed "Log out" out of the bar. */
+  #user-tools .welcome-msg {
+    display: none;
   }
 
   #content {
-    padding: 16px 14px;
+    padding: 18px 14px 84px;
   }
 
   div.breadcrumbs {
     padding: 9px 14px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  body.change-form #content > h2 {
+    font-size: 1.25rem;
   }
 
   .ss-workflows {
     grid-template-columns: 1fr;
   }
 
-  .object-tools {
-    margin-top: 0;
-    margin-bottom: 12px;
+  /* Stack labels above their fields; a 190px label column leaves nothing. */
+  .form-row .flex-container {
+    display: block;
+  }
+
+  .form-row label {
+    display: block;
+    width: auto;
+    padding: 0 0 6px;
+  }
+
+  .form-row input[type="text"],
+  .form-row input[type="url"],
+  .form-row input[type="email"],
+  .form-row input[type="number"],
+  .form-row input[type="password"],
+  .form-row select,
+  .form-row textarea {
+    max-width: none;
+  }
+
+  .form-row .help {
+    padding-left: 0;
+  }
+
+  .submit-row input,
+  .submit-row a.deletelink {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  body.change-list .object-tools,
+  body.change-form #content > h2 + #content-main .object-tools {
     float: none;
+    margin: 0 0 12px;
   }
 
-  .submit-row {
-    position: static;
+  .object-tools a {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 
-  /* 16px stops iOS from zooming the page when a field is focused. */
+  /* 16px stops iOS zooming the page when a field is focused. */
   input[type="text"],
   input[type="password"],
   input[type="email"],
   input[type="url"],
   input[type="number"],
+  input[type="search"],
   select,
   textarea {
     font-size: 16px;
   }
-}
 
-/* ------------------------------------------------------------------ */
-/* Navigation rail: grouped by job                                     */
-/* ------------------------------------------------------------------ */
-
-/* Django's rail is a flat list of every model. The groups below come from
-   courses/templatetags/admin_nav.py, the same list the console home uses, so a
-   model is found in the same place in both. */
-
-#nav-sidebar {
-  padding-bottom: 24px;
-}
-
-#nav-sidebar .ss-nav-group {
-  margin: 0 0 2px;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-#nav-sidebar .ss-nav-group caption {
-  padding: 14px 14px 5px;
-  color: #8a8aa3;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-align: left;
-  background: transparent;
-}
-
-#nav-sidebar .ss-nav-group table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-#nav-sidebar .ss-nav-group th {
-  padding: 0;
-  font-weight: 400;
-  text-align: left;
-  background: transparent;
-}
-
-#nav-sidebar .ss-nav-group th a {
-  display: block;
-  padding: 8px 14px;
-  border-radius: 8px;
-  color: var(--body-fg);
-  font-size: 0.875rem;
-  line-height: 1.35;
-}
-
-#nav-sidebar .ss-nav-group th a:hover {
-  background: var(--selected-row);
-  color: var(--link-hover-color);
-}
-
-#nav-sidebar .ss-nav-group tr.current-model th a {
-  background: var(--selected-bg);
-  color: var(--link-fg);
-  font-weight: 700;
-}
-
-/* The green plus tile beside every link was noise; one quiet affordance
-   appears on hover instead. */
-#nav-sidebar .ss-nav-add {
-  display: inline-block;
-  width: 20px;
-  padding: 0;
-  color: #a6a6bd;
-  font-size: 1rem;
-  font-weight: 700;
-  text-align: center;
-  text-decoration: none;
-}
-
-#nav-sidebar .ss-nav-group tr:hover .ss-nav-add {
-  color: var(--link-fg);
-}
-
-#nav-filter {
-  margin: 10px 12px 12px;
-  width: calc(100% - 24px);
-  padding: 8px 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 0.8125rem;
-}
-
-/* ------------------------------------------------------------------ */
-/* "Add to this batch" shortcuts                                      */
-/* ------------------------------------------------------------------ */
-
-/* Shown on a saved batch or section: the next action that needs this id. */
-.ss-shortcuts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-.ss-shortcut {
-  display: inline-block;
-  padding: 7px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: #fff;
-  color: var(--link-fg);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.ss-shortcut:hover {
-  border-color: var(--primary);
-  background: var(--selected-bg);
-  color: var(--link-hover-color);
-}
-
-/* ------------------------------------------------------------------ */
-/* Autocomplete lookups                                               */
-/* ------------------------------------------------------------------ */
-
-/* The stock widget is a select turned search box; these are its two parts. */
-.select2-container--admin-autocomplete .select2-selection--single {
-  height: 38px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: #fff;
-}
-
-.select2-container--admin-autocomplete .select2-selection--single .select2-selection__rendered {
-  line-height: 36px;
-  color: var(--body-fg);
-  font-size: 0.875rem;
-}
-
-.select2-container--admin-autocomplete .select2-selection--single .select2-selection__arrow {
-  height: 36px;
-}
-
-.select2-container--admin-autocomplete .select2-selection--multiple {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  min-height: 38px;
-}
-
-/* Related-object links (the pencil / + / eye icons) sit on one line. */
-.related-widget-wrapper {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* ------------------------------------------------------------------ */
-/* Inline tables that carry real fields                               */
-/* ------------------------------------------------------------------ */
-
-/*
- * The classes-in-a-section inline has five columns and a URL field, which is
- * wider than the column it sits in at 1440px — the last header was cut to
- * "POSITIO". The URL inputs shrink and the wrapper scrolls rather than clipping.
- */
-.inline-group {
-  overflow-x: auto;
-}
-
-.inline-related .vURLField,
-.inline-related input[type="url"] {
-  width: 100%;
-  min-width: 180px;
-}
-
-.inline-related table {
-  width: 100%;
-}
-
-.inline-related td input[type="text"],
-.inline-related td input[type="number"] {
-  max-width: 100%;
-}
-
-/* Inline rows use a plain URL box (see FolderLessonInlineForm), so the row is
-   one line high; the stock widget's 28em cap is what cut it off. */
-.inline-related td input[type="url"] {
-  max-width: none;
-  font-size: 0.8125rem;
-}
-
-/* The classes table stays legible when it does need to scroll. */
-.inline-group .tabular::-webkit-scrollbar {
-  height: 10px;
-}
-
-/* Text and URL inputs in an inline row fill the cell they are in; number and
-   checkbox cells stay narrow so the wide fields get the space. */
-.inline-related td input.vTextField,
-.inline-related td input.vURLField {
-  width: 100%;
-  min-width: 110px;
-  box-sizing: border-box;
-}
-
-.inline-related td.field-title {
-  min-width: 180px;
-}
-
-.inline-related td.field-video_url,
-.inline-related td.field-file_url {
-  min-width: 240px;
-}
-
-.inline-related td input.vIntegerField {
-  width: 76px;
+  #result_list thead th,
+  #result_list tbody td {
+    padding: 10px 12px;
+  }
 }
 
 /*
- * nav_sidebar.js only hides <tr>s when the filter has no match, which left the
- * group captions behind as empty headings. A group with nothing visible in it
- * is now hidden too. (The script sets an inline `display: none` on each row,
- * so this reads exactly the state it produced.)
- */
-#nav-sidebar .ss-nav-group:not(:has(tr:not([style*="none"]))) {
-  display: none;
-}
-
-/* ------------------------------------------------------------------ */
-/* The rail on a phone: a drawer, not a hidden list                    */
-/* ------------------------------------------------------------------ */
-
-/*
- * Django's nav_sidebar.css hides both the rail and its toggle below 768px, so
- * the console had no navigation at all on a phone — every page was a dead end
- * except the browser's Back button. Here the same rail slides in from the left
- * and the toggle becomes a button you can reach with a thumb.
+ * The rail on a phone: a drawer, not a hidden list.
  *
- * `.main >` is on every selector because Django ships these rules as bare ids;
- * one class more wins without an !important.
+ * Django's nav_sidebar.css hides both the rail and its toggle below 768px, so
+ * the console had no navigation at all on a phone. Here the same rail slides
+ * in from the left and the toggle becomes a button you can reach with a thumb.
+ * `.main >` is on each selector because Django ships these rules as bare ids;
+ * one class more wins without !important.
  */
 @media (max-width: 767px) {
   .main > #nav-sidebar {
@@ -1245,7 +2120,7 @@ ul.messagelist li.error {
     bottom: 0;
     left: 0;
     z-index: 60;
-    width: min(320px, 86vw);
+    width: min(310px, 86vw);
     max-height: 100vh;
     margin-left: 0;
     padding-bottom: 24px;
@@ -1265,27 +2140,25 @@ ul.messagelist li.error {
     display: flex;
     position: fixed;
     top: auto;
-    left: 12px;
-    bottom: 16px;
+    left: 14px;
+    bottom: 18px;
     z-index: 70;
     width: 46px;
     height: 46px;
     border: 0;
     border-radius: 50%;
-    background: var(--primary);
-    color: var(--primary-fg);
+    background: var(--ss-brand);
+    color: #fff;
     font-size: 1.375rem;
     line-height: 1;
-    box-shadow: 0 6px 18px rgba(15, 17, 40, 0.28);
+    box-shadow: 0 8px 20px rgba(40, 40, 110, 0.32);
   }
 
-  /* Room at the end of the page so the button never sits on the last row of
-     Save buttons. */
+  /* Room at the foot of the page so the button never covers the Save row. */
   #content {
-    padding-bottom: 76px;
+    padding-bottom: 84px;
   }
 
-  /* While the drawer is open the page behind it stays put. */
   body:has(.main.shifted) {
     overflow: hidden;
   }

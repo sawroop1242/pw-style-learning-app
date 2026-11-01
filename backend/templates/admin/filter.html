@@ -1,0 +1,19 @@
+{% load i18n %}
+{% comment %}
+    One filter, as a chip.
+
+    Django's own version opens the list and prefixes the label with "By", which
+    is a sentence: on a list page with three filters that is three open panels
+    stacked in a 240px column. Here the label is the field's own name and the
+    list opens only when you ask for it (see #changelist-filter in
+    staff/admin.css).
+{% endcomment %}
+<details data-filter-title="{{ title }}">
+  <summary>{{ title }}</summary>
+  <ul>
+  {% for choice in choices %}
+    <li{% if choice.selected %} class="selected"{% endif %}>
+    <a href="{{ choice.query_string|iriencode }}">{{ choice.display }}</a></li>
+  {% endfor %}
+  </ul>
+</details>

@@ -654,3 +654,69 @@ class AdminStructureTests(AdminTestDataMixin, TestCase):
                 checked += 1
 
         self.assertEqual(checked, 3)
+
+
+class AdminPresentationTests(AdminTestDataMixin, TestCase):
+    """Small things a person reads on every screen.
+
+    None of these are permission rules, so none of the earlier tests noticed
+    them: a list titled "Select quiz to change", a 26-character timestamp per
+    row, a ten-row textarea around a two-line blurb.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.quiz = Quiz.objects.create(
+            title="Mock 1", series=None, course=cls.own_course, duration_minutes=60,
+            timing_mode="timed", is_published=True,
+        )
+
+    def test_a_list_is_titled_after_what_it_holds(self):
+        """Including the lists Django owns, which our ModelAdmins never see."""
+        self.client.force_login(self.main_admin)
+
+        for url_name, heading in (
+            ("admin:courses_quiz_changelist", "<h1>Quizzes</h1>"),
+            ("admin:courses_course_changelist", "<h1>Courses</h1>"),
+            ("admin:courses_question_changelist", "<h1>Questions</h1>"),
+            ("admin:auth_user_changelist", "<h1>Users</h1>"),
+        ):
+            with self.subTest(url_name=url_name):
+                response = self.client.get(reverse(url_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, heading, html=False)
+                # "Select quiz to change" is the phrase being retired. (Django's
+                # select-all checkbox label legitimately starts with "Select".)
+                self.assertNotIn(b" to change", response.content)
+
+    def test_the_updated_column_is_a_short_stamp(self):
+        from courses.admin import QuizAdmin
+
+        model_admin = QuizAdmin(Quiz, admin.site)
+        stamp = model_admin.last_edited(self.quiz)
+
+        # Django's own rendering of updated_at is "Nov. 1, 2026, 8:41 p.m.",
+        # which is the widest cell in the list.
+        self.assertLessEqual(len(stamp), 14)
+        self.assertNotIn(",", stamp)
+
+    def test_long_text_fields_ask_for_four_lines(self):
+        self.client.force_login(self.main_admin)
+
+        response = self.client.get(reverse("admin:courses_course_change", args=[self.own_course.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'rows="4"')
+        self.assertNotContains(response, 'rows="10"')
+
+    def test_a_new_batch_starts_out_owned_by_whoever_is_signed_in(self):
+        # Sub-admins never see the owner field; for them save_model assigns it.
+        self.client.force_login(self.main_admin)
+
+        response = self.client.get(reverse("admin:courses_course_add"))
+
+        self.assertEqual(response.status_code, 200)
+        # The owner picker is pre-selected, so a batch cannot be saved with no
+        # owner by simply not touching that field.
+        self.assertContains(response, f'<option value="{self.main_admin.pk}" selected>')

@@ -55,7 +55,7 @@
     <h3>{% translate "My actions" %}</h3>
     {% get_admin_log 10 as admin_log for_user user %}
     {% if not admin_log %}
-      <p>{% translate "None available" %}</p>
+      <p>{% translate "Nothing yet. Edits you make will show up here." %}</p>
     {% else %}
       <ul class="actionlist">
         {% for entry in admin_log %}
