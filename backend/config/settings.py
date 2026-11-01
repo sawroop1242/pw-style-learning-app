@@ -75,6 +75,8 @@ INSTALLED_APPS = [
     "corsheaders",
     "accounts",
     "courses",
+    # Cloudflare R2 storage targets: per-sub-admin accounts and buckets.
+    "objectstore",
 ]
 
 MIDDLEWARE = [
@@ -153,6 +155,24 @@ STORAGES = {
     "staticfiles": {"BACKEND": STATICFILES_STORAGE_BACKEND},
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Cloudflare R2 storage -------------------------------------------------
+# Credentials for storage targets are encrypted before they touch the database.
+# `R2_CREDENTIAL_KEYS` is a comma-separated list of urlsafe-base64 32-byte keys
+# (generate one with `python manage.py r2_rotate_key --new-key`). The first key
+# encrypts; every key is tried when decrypting, so a key can be rotated without
+# a downtime window. With no keys configured, a key is derived from SECRET_KEY —
+# fine for development, and changing SECRET_KEY then makes stored tokens
+# unreadable, which is why production should set the variable explicitly.
+R2_CREDENTIAL_KEYS = [
+    key.strip() for key in os.getenv("R2_CREDENTIAL_KEYS", "").split(",") if key.strip()
+]
+# A connection test must never hold a request open. Eight seconds is longer
+# than a healthy R2 round-trip and shorter than a user's patience.
+R2_REQUEST_TIMEOUT = float(os.getenv("R2_REQUEST_TIMEOUT", "8"))
+# Signed URLs are a fallback for private buckets; a public custom domain or the
+# r2.dev subdomain (set per bucket) is preferred.
+R2_SIGNED_URL_TTL = int(os.getenv("R2_SIGNED_URL_TTL", "900"))
 
 CORS_ALLOWED_ORIGINS = [
     origin.strip()

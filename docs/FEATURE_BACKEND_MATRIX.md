@@ -119,6 +119,7 @@ worse than no bell.
 | 7.1 | Course, folder, lesson, PDF, quiz, question authoring | Django admin + `/api/staff/*` | full CRUD, publish/unpublish | connected |
 | 7.2 | Access-code issuing | `/api/staff/access-codes/` | create, revoke | connected |
 | 7.3 | CSV question import | `/api/staff/import-jobs/` | schema, template, validate, confirm, export | connected |
+| 7.4 | Cloudflare R2 storage accounts and buckets | Django admin → Storage | `objectstore` app; `manage.py r2_check` | connected — multiple Cloudflare accounts, several buckets each, encrypted tokens, read-only connection test, audited. Uploads are **not** wired yet (see `docs/FEATURE_SPEC_R2_STORAGE.md` §1a) |
 
 ---
 

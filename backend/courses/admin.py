@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from accounts.models import Role
+from accounts.roles import is_main_admin, is_staff_role, user_role
 from courses import csv_import
 from courses.models import (
     AccessCode,
@@ -37,25 +38,6 @@ from courses.models.access import generate_access_code
 
 User = get_user_model()
 
-
-def user_role(user):
-    profile = getattr(user, "profile", None)
-    return profile.role if profile else None
-
-
-def is_main_admin(user):
-    # A Django superuser is an administrator by definition. `createsuperuser`
-    # sets no Profile role, and without this line that account could sign in to
-    # the console and then be refused every model page with a 403.
-    if not user.is_authenticated:
-        return False
-    return user.is_superuser or user_role(user) == Role.MAIN_ADMIN
-
-
-def is_staff_role(user):
-    if not user.is_authenticated:
-        return False
-    return user.is_superuser or user_role(user) in {Role.MAIN_ADMIN, Role.SUB_ADMIN}
 
 
 class CompactTextareaMixin:
