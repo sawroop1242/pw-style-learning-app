@@ -17,6 +17,37 @@ from django.core.checks import Warning, register
 
 SMTP_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
+# backend path -> the setting that must hold its key
+API_BACKENDS = {
+    "accounts.mail_backends.BrevoEmailBackend": "BREVO_API_KEY",
+    "accounts.mail_backends.ResendEmailBackend": "RESEND_API_KEY",
+}
+
+# The console (development) and the test backends print or collect the message
+# locally; they never hand anything to a provider, so provider rules do not
+# apply to them.
+LOCAL_BACKENDS = {
+    "django.core.mail.backends.console.EmailBackend",
+    "django.core.mail.backends.locmem.EmailBackend",
+    "django.core.mail.backends.dummy.EmailBackend",
+    "django.core.mail.backends.filebased.EmailBackend",
+}
+
+
+def backend_label(backend):
+    """`django.core.mail.backends.console.EmailBackend` -> `console`.
+
+    Django's own backends are all named `<module>.EmailBackend`, so the class
+    name carries no information there; the module does.
+    """
+    parts = backend.split(".")
+    name = parts[-1]
+    if name.endswith("EmailBackend"):
+        name = name[: -len("EmailBackend")]
+    if not name and len(parts) > 1:
+        name = parts[-2]
+    return name.lower()
+
 
 def delivery_problem():
     """Return a short sentence if reset mail cannot be delivered, else None.
@@ -25,14 +56,34 @@ def delivery_problem():
     the deploy log (`manage.py check`) and the front page of the admin, where
     somebody about to send their first reset code will see it.
     """
-    if getattr(settings, "EMAIL_BACKEND", "") == SMTP_BACKEND and not getattr(
-        settings, "EMAIL_HOST", ""
-    ).strip():
+    backend = getattr(settings, "EMAIL_BACKEND", "")
+    if backend == SMTP_BACKEND and not getattr(settings, "EMAIL_HOST", "").strip():
         return (
             "Email delivery is not configured: EMAIL_HOST is empty, so password-reset "
             "codes cannot be sent. Add EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, "
-            "EMAIL_HOST_PASSWORD and DEFAULT_FROM_EMAIL, then run "
+            "EMAIL_HOST_PASSWORD and DEFAULT_FROM_EMAIL — or set BREVO_API_KEY to "
+            "send through Brevo instead — then run "
             "manage.py check_email --to you@example.com."
+        )
+    if backend in API_BACKENDS:
+        key_name = API_BACKENDS[backend]
+        if not (getattr(settings, key_name, "") or "").strip():
+            return (
+                f"Email delivery is not configured: {key_name} is empty, so "
+                "password-reset codes cannot be sent. Add the key in the hosting "
+                "environment, then run manage.py check_email --to you@example.com."
+            )
+    if (
+        backend in LOCAL_BACKENDS
+        and getattr(settings, "ENVIRONMENT", "development") in {"production", "staging"}
+    ):
+        # A deployed app on a backend that only prints or collects messages
+        # accepts every reset request and delivers none of them.
+        short = backend_label(backend)
+        return (
+            f"Email delivery is not configured: EMAIL_BACKEND is the {short} backend, which sends "
+            "nothing outside this machine, so password-reset codes never leave the "
+            "app. Set BREVO_API_KEY (or the SMTP settings) in the hosting environment."
         )
     return None
 
@@ -40,9 +91,11 @@ def delivery_problem():
 @register()
 def email_delivery_configured(app_configs, **kwargs):
     """Warn when password-reset mail cannot possibly be delivered."""
+    backend = getattr(settings, "EMAIL_BACKEND", "")
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or ""
     problems = []
 
-    if delivery_problem():
+    if backend == SMTP_BACKEND and not getattr(settings, "EMAIL_HOST", "").strip():
         problems.append(
             Warning(
                 "EMAIL_HOST is empty, so Django will try to deliver mail through "
@@ -50,26 +103,61 @@ def email_delivery_configured(app_configs, **kwargs):
                 hint=(
                     "Password-reset codes are emailed, so without a host the reset "
                     "flow cannot work. Set EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, "
-                    "EMAIL_HOST_PASSWORD and DEFAULT_FROM_EMAIL, then run "
+                    "EMAIL_HOST_PASSWORD and DEFAULT_FROM_EMAIL — or set BREVO_API_KEY "
+                    "and let the HTTPS backend do it — then run "
                     "`python manage.py check_email --to you@example.com` to prove it."
                 ),
                 id="accounts.W001",
             )
         )
 
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or ""
-    # Only meaningful when something is actually being handed to a provider: the
-    # console backend used in development prints the message to the terminal and
-    # does not care what the sender looks like.
-    if getattr(settings, "EMAIL_BACKEND", "") == SMTP_BACKEND and (
+    if backend in API_BACKENDS:
+        key_name = API_BACKENDS[backend]
+        if not (getattr(settings, key_name, "") or "").strip():
+            problems.append(
+                Warning(
+                    f"{backend.rsplit('.', 1)[-1]} is selected but {key_name} is empty, "
+                    "so every password-reset email will fail.",
+                    hint=(
+                        f"Add {key_name} to the hosting environment. `manage.py "
+                        "check_email` explains which provider it belongs to."
+                    ),
+                    id="accounts.W003",
+                )
+            )
+
+    # Only meaningful when something is handed to a real provider: the console
+    # backend prints the letter to the terminal and does not care what the
+    # sender looks like.
+    if backend not in LOCAL_BACKENDS and (
         "@studyspace.local" in from_email or from_email.endswith(".local>")
     ):
         problems.append(
             Warning(
                 f"DEFAULT_FROM_EMAIL is still the placeholder ({from_email!r}), which "
                 "real mail providers reject.",
-                hint="Set DEFAULT_FROM_EMAIL to a mailbox on a domain you can send from.",
+                hint=(
+                    "Set DEFAULT_FROM_EMAIL to a mailbox the provider has verified — "
+                    "for Brevo that is the address you confirmed in its dashboard; for "
+                    "Resend it must be on a verified domain."
+                ),
                 id="accounts.W002",
+            )
+        )
+
+    if (
+        backend in LOCAL_BACKENDS
+        and getattr(settings, "ENVIRONMENT", "development") in {"production", "staging"}
+    ):
+        problems.append(
+            Warning(
+                f"EMAIL_BACKEND is the {backend_label(backend)} backend in a deployed "
+                "environment, so password-reset mail is never sent.",
+                hint=(
+                    "Set BREVO_API_KEY (simplest) or the EMAIL_HOST/EMAIL_HOST_USER/"
+                    "EMAIL_HOST_PASSWORD trio in the hosting environment."
+                ),
+                id="accounts.W004",
             )
         )
 

@@ -131,8 +131,27 @@ last audit: email_failed {'email_sent': False}
 
 ## What the owner still has to do
 
-Email cannot be *delivered* from the deployment until real SMTP credentials
-exist in Vercel. In **Project → Settings → Environment Variables** (Production):
+Email cannot be *delivered* from the deployment until a provider knows who is
+sending. There are two ways to give it that.
+
+### Fastest: one API key (Brevo, free 300/day)
+
+1. Create a Brevo account, add your own address under **Senders**, click the
+   confirmation link it mails you.
+2. **SMTP & API → API Keys → Generate**, copy the key.
+3. Vercel → Settings → Environment Variables:
+   `BREVO_API_KEY` (encrypted) and `DEFAULT_FROM_EMAIL=StudySpace <your address>`.
+4. Redeploy, then `python manage.py check_email --to you@example.com`.
+
+No host, no port, no app password: `EMAIL_BACKEND` switches itself to
+`accounts.mail_backends.BrevoEmailBackend` when the key is present. Resend works
+the same way via `RESEND_API_KEY`, but it only delivers to the account owner's
+address until a domain is verified, so Brevo is the practical choice for
+students.
+
+### Or: SMTP credentials
+
+In **Project → Settings → Environment Variables** (Production):
 
 | Variable | Value |
 | --- | --- |

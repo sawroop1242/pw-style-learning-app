@@ -71,6 +71,7 @@ Requirements:
 - Use a clear password-reset email containing the OTP, expiry, and a warning not to share it. Do not include the user's password or private data.
 - Log delivery failures safely without OTPs or credentials. Define a safe retry/queue strategy if delivery fails.
 - Use console/locmem email backends only in development/tests, not as an accidental production fallback. Production configuration should fail clearly if required email settings are absent when password-reset email is enabled.
+- SMTP is not the only acceptable transport. A provider HTTPS API (Brevo, Resend) configured with a single environment key satisfies this section and is preferred where outbound port 587 is blocked: `accounts.mail_backends` implements both, selected by `BREVO_API_KEY` / `RESEND_API_KEY`, and the same `EMAIL_TIMEOUT` and failure handling apply. Whichever transport is used, the sender must be one the provider has verified.
 - Respect provider sending limits and anti-abuse policies; do not rotate arbitrary third-party accounts to evade limits.
 
 ### 5a. What the implementation does when mail cannot be delivered
