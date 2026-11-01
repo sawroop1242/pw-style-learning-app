@@ -175,11 +175,25 @@ class AccessCodeAdminTests(AdminTestDataMixin, TestCase):
     def test_sub_admin_cannot_create_code_for_foreign_course(self):
         self.client.force_login(self.sub_admin)
         url = reverse("admin:courses_accesscode_add")
-        response = self.client.get(url)
-        # The course dropdown must only offer owned courses.
-        self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Other Course")
-        self.assertContains(response, "Own Course")
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+        # The batch picker is an autocomplete, so its options are not in the
+        # page — they come from the admin's autocomplete view. That view reads
+        # the model admin's own queryset, so it is where the scoping now has to
+        # hold: it must never offer a batch this sub-admin does not own.
+        search = self.client.get(
+            reverse("admin:autocomplete"),
+            {
+                "app_label": "courses",
+                "model_name": "accesscode",
+                "field_name": "course",
+                "term": "",
+            },
+        )
+        self.assertEqual(search.status_code, 200)
+        labels = [row["text"] for row in search.json()["results"]]
+        self.assertIn(self.own_course.title, labels)
+        self.assertNotIn(self.other_course.title, labels)
 
     def test_grant_add_is_disabled(self):
         from courses.models import CourseAccessGrant
@@ -462,3 +476,181 @@ class AdminWorkflowTests(AdminTestDataMixin, TestCase):
 
         self.assertContains(response, "Open the recording")
         self.assertContains(response, self.lesson.video_url)
+
+
+class AdminStructureTests(AdminTestDataMixin, TestCase):
+    """The parent pages own their children.
+
+    The complaint behind this was structural, not visual: building a batch meant
+    hopping between six flat model lists and re-picking the parent from a
+    dropdown each time. These tests hold the new arrangement in place — a
+    section page holds its own classes and PDFs, and the "add" links carry the
+    parent id so nothing has to be picked twice.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.folder = CourseFolder.objects.create(
+            course=cls.own_course, title="Mechanics", position=1
+        )
+        cls.lesson = Lesson.objects.create(
+            course=cls.own_course,
+            folder=cls.folder,
+            title="Units",
+            video_url="https://embed.vcdn.me/embed/28c4af9f-d817-460a-80ab-9a09f8c47c69",
+            duration_minutes=52,
+            position=1,
+        )
+
+    def test_a_section_page_holds_its_own_classes_and_notes(self):
+        self.client.force_login(self.sub_admin)
+
+        response = self.client.get(reverse("admin:courses_coursefolder_change", args=[self.folder.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Classes in this section")
+        self.assertContains(response, "Notes and PDFs")
+        # The existing class is editable there, not just linked to.
+        self.assertContains(response, "Units")
+
+    def test_a_batch_page_holds_its_own_sections(self):
+        self.client.force_login(self.sub_admin)
+
+        response = self.client.get(reverse("admin:courses_course_change", args=[self.own_course.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sections (folders of classes)")
+        self.assertContains(response, "Mechanics")
+
+    def test_a_class_added_inside_a_section_lands_in_the_sections_batch(self):
+        """The section knows its batch; the inline must not ask for it again."""
+        self.client.force_login(self.sub_admin)
+
+        response = self.client.post(
+            reverse("admin:courses_coursefolder_change", args=[self.folder.pk]),
+            {
+                "course": self.own_course.pk,
+                "title": "Mechanics",
+                "description": "",
+                "position": 1,
+                "lessons-TOTAL_FORMS": 1,
+                "lessons-INITIAL_FORMS": 1,
+                "lessons-MIN_NUM_FORMS": 0,
+                "lessons-MAX_NUM_FORMS": 1000,
+                "lessons-0-id": self.lesson.pk,
+                "lessons-0-title": "Units",
+                "lessons-0-video_url": self.lesson.video_url,
+                "lessons-0-duration_minutes": 52,
+                "lessons-0-position": 1,
+                "lessons-0-is_published": "on",
+                "pdfs-TOTAL_FORMS": 0,
+                "pdfs-INITIAL_FORMS": 0,
+                "pdfs-MIN_NUM_FORMS": 0,
+                "pdfs-MAX_NUM_FORMS": 1000,
+                "_continue": "Save and continue editing",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.lesson.refresh_from_db()
+        self.assertEqual(self.lesson.course_id, self.own_course.pk)
+        self.assertEqual(self.lesson.title, "Units")
+
+    def test_the_add_links_carry_the_parent_id(self):
+        self.client.force_login(self.sub_admin)
+
+        response = self.client.get(reverse("admin:courses_course_change", args=[self.own_course.pk]))
+
+        # "+ Add a class" lands on a form whose batch is already chosen.
+        self.assertContains(
+            response,
+            f"{reverse('admin:courses_lesson_add')}?course={self.own_course.pk}",
+            html=False,
+        )
+        self.assertContains(response, f"{reverse('admin:courses_coursefolder_add')}?course={self.own_course.pk}")
+
+        folder_page = self.client.get(reverse("admin:courses_coursefolder_change", args=[self.folder.pk]))
+        self.assertContains(folder_page, f"{reverse('admin:courses_lesson_add')}?folder={self.folder.pk}")
+
+    def test_the_lesson_form_arrives_with_the_batch_prefilled(self):
+        self.client.force_login(self.sub_admin)
+
+        response = self.client.get(reverse("admin:courses_lesson_add"), {"course": self.own_course.pk})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["adminform"].form["course"].value(), self.own_course.pk)
+
+        from_folder = self.client.get(reverse("admin:courses_lesson_add"), {"folder": self.folder.pk})
+
+        form = from_folder.context["adminform"].form
+        self.assertEqual(form["course"].value(), self.own_course.pk)
+        self.assertEqual(form["folder"].value(), self.folder.pk)
+
+    def test_the_navigation_rail_is_grouped_by_job(self):
+        """The rail is grouped the same way the console home is.
+
+        Both read `WORKFLOWS` in courses/templatetags/admin_nav.py, so a model
+        is in the same place in the rail as on the home cards. Checked on a
+        model list rather than the home, because the rail is on every page.
+        """
+        self.client.force_login(self.main_admin)
+
+        response = self.client.get(reverse("admin:courses_lesson_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        for title in (
+            "Batches and lessons",
+            "Tests and questions",
+            "Access and enrolment",
+            "Announcements and reports",
+            "Learner activity",
+            "People and permissions",
+        ):
+            self.assertContains(response, title)
+
+        # The rail is still the shape nav_sidebar.js filters on — one row per
+        # model with the link inside a `th[scope=row]`. Filtering hides rows;
+        # a group with nothing left is hidden by the script.
+        rows = response.content.count(b'<th scope="row">')
+        self.assertGreater(rows, 20)
+        self.assertIn(b'<th scope="row">', response.content)
+        self.assertContains(response, '<a href="/admin/courses/course/">Courses</a>', html=False)
+
+        # A sub-admin only sees the groups they can act on, so the rail is
+        # scoped by permission like everything else.
+        self.client.force_login(self.sub_admin)
+        scoped = self.client.get(reverse("admin:courses_lesson_changelist"))
+        self.assertContains(scoped, "Batches and lessons")
+        self.assertNotContains(scoped, "People and permissions")
+
+    def test_every_publishable_list_page_opens_and_offers_publish(self):
+        """Bulk publish is declared once, in PublishableAdmin.
+
+        `@admin.action` only marks a method — it has to be named in `actions`
+        to be registered. Missing that made the Course and Quiz list pages
+        raise KeyError and 500, which no test caught because every other test
+        logged in as a sub-admin who could not open them.
+        """
+        from courses.admin import PublishableAdmin
+
+        self.client.force_login(self.main_admin)
+        request = self.request_for(self.main_admin)
+
+        checked = 0
+        for model, model_admin in admin.site._registry.items():
+            if not isinstance(model_admin, PublishableAdmin):
+                continue
+            with self.subTest(model=model.__name__):
+                response = self.client.get(
+                    reverse(f"admin:{model._meta.app_label}_{model._meta.model_name}_changelist")
+                )
+                # Rendering the list is the part that used to 500.
+                self.assertEqual(response.status_code, 200)
+                # The action is registered, so it can be picked in the dropdown
+                # (an empty list page renders no dropdown at all).
+                self.assertIn("publish_selected", model_admin.get_actions(request))
+                checked += 1
+
+        self.assertEqual(checked, 3)

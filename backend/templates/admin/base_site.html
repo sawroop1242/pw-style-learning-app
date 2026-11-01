@@ -21,6 +21,16 @@
 
 {% block bodyclass %}ss-admin {{ block.super }}{% endblock %}
 
+{% block extrahead %}
+  {{ block.super }}
+  {% comment %}
+    On a phone the navigation rail is a drawer; this gives the toggle the
+    behaviour the CSS expects (see staff/mobile_nav.js and the mobile block in
+    staff/admin.css). Deferred, so it runs after Django's own nav_sidebar.js.
+  {% endcomment %}
+  <script src="{% static 'staff/mobile_nav.js' %}" defer></script>
+{% endblock %}
+
 {% block branding %}
   <div id="site-name">
     <a href="{% url 'admin:index' %}">StudySpace<span class="ss-admin-tag">admin</span></a>

@@ -1,0 +1,51 @@
+{% load i18n admin_nav %}
+{% comment %}
+    The navigation rail, grouped by the job rather than by the app.
+
+    Django's own rail lists every registered model under its app: twenty-five
+    flat links, alphabetically, so "Lessons" sits between "Csv import jobs" and
+    "Notes". This version shows the same six groups as the console home, so the
+    way you find something on the home page is the way you find it here.
+
+    This is a fragment: admin/base.html includes it inside its own
+    `{% block nav-sidebar %}`. It is not a page and must not extend anything.
+
+    The markup keeps Django's shape — `.module > table > tr > th[scope=row]` —
+    because admin/js/nav_sidebar.js filters on `th[scope=row] a` and toggles the
+    grandparent <tr>. Restyling the rail is fine; changing its shape is not.
+{% endcomment %}
+
+<button class="sticky toggle-nav-sidebar" id="toggle-nav-sidebar" aria-label="{% translate 'Toggle navigation' %}"></button>
+<nav class="sticky" id="nav-sidebar" aria-label="{% translate 'Sidebar' %}">
+  <input type="search" id="nav-filter"
+         placeholder="{% translate 'Start typing to filter…' %}"
+         aria-label="{% translate 'Filter navigation items' %}">
+  {% workflow_groups available_apps as groups %}
+  {% for group in groups %}
+    <div class="module ss-nav-group" data-group="{{ group.key }}">
+      <table>
+        <caption>{{ group.title }}</caption>
+        <tbody>
+          {% for model in group.models %}
+            <tr class="model-{{ model.slug }}{% if model.is_current %} current-model{% endif %}">
+              <th scope="row">
+                {% if model.url %}
+                  <a href="{{ model.url }}"{% if model.is_current %} aria-current="page"{% endif %}>{{ model.name }}</a>
+                {% else %}
+                  {{ model.name }}
+                {% endif %}
+              </th>
+              {% if model.add_url %}
+                <td><a href="{{ model.add_url }}" class="addlink ss-nav-add" aria-label="{% blocktranslate with name=model.name %}Add {{ name }}{% endblocktranslate %}">+</a></td>
+              {% else %}
+                <td></td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% empty %}
+    <p>{% translate 'You don’t have permission to view or edit anything.' %}</p>
+  {% endfor %}
+</nav>

@@ -662,10 +662,52 @@ fieldset.module h2 + .form-row {
 /* The answers inline no longer exposes `position` — it is assigned on save in
    the order the rows are written, so a stray number above each field would be
    noise the editor cannot edit. */
-.inline-related tbody td.original,
-.inline-related tbody td.original p {
-  display: none;
+/*
+ * The first cell of an inline row holds the object's name and its "Change"
+ * link — the only way to the row's own page (a section's classes live there,
+ * not here). The name repeats the Title beside it, so only the link is shown,
+ * as a compact button.
+ *
+ * Selectors carry `.inline-group` because forms.css positions this paragraph
+ * absolutely (`height: 1.1em`, `overflow: visible`) to float the object name
+ * above the first field; left alone it printed over the Title input.
+ */
+.inline-group .inline-related tbody td.original {
+  width: 1%;
+  padding: 8px 10px;
+  white-space: nowrap;
 }
+
+.inline-group .inline-related tbody td.original p {
+  position: static;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  font-size: 0;
+  line-height: 1;
+}
+
+.inline-group .inline-related tbody td.original p a.inlinechangelink,
+.inline-group .inline-related tbody td.original p a.inlineviewlink {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--selected-bg);
+  color: var(--link-fg);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.inline-group .inline-related tbody td.original p a.inlinechangelink:hover,
+.inline-group .inline-related tbody td.original p a.inlineviewlink:hover {
+  background: #e6e3ff;
+}
+
+/* The header cell above them ships empty (Django's own admin has the same),
+   so nothing labels the column; the pill text is the label. */
 
 .add-row a {
   display: inline-block;
@@ -894,8 +936,34 @@ ul.messagelist li.error {
 /* ------------------------------------------------------------------ */
 
 @media (max-width: 767px) {
+  /* The header's tools ("Welcome, admin. View site / Change password / LOG
+     OUT" + theme toggle) do not wrap on their own and pushed the page 200px
+     wider than a 390px screen. */
   #header {
-    padding: 10px 14px;
+    display: block;
+    height: auto;
+    padding: 8px 14px 10px;
+  }
+
+  #site-name {
+    font-size: 1rem;
+  }
+
+  #user-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    margin-top: 4px;
+    width: auto;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    text-align: left;
+  }
+
+  #user-tools form {
+    display: inline-flex;
+    margin: 0;
   }
 
   #content {
@@ -929,5 +997,304 @@ ul.messagelist li.error {
   select,
   textarea {
     font-size: 16px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Navigation rail: grouped by job                                     */
+/* ------------------------------------------------------------------ */
+
+/* Django's rail is a flat list of every model. The groups below come from
+   courses/templatetags/admin_nav.py, the same list the console home uses, so a
+   model is found in the same place in both. */
+
+#nav-sidebar {
+  padding-bottom: 24px;
+}
+
+#nav-sidebar .ss-nav-group {
+  margin: 0 0 2px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#nav-sidebar .ss-nav-group caption {
+  padding: 14px 14px 5px;
+  color: #8a8aa3;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  background: transparent;
+}
+
+#nav-sidebar .ss-nav-group table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+#nav-sidebar .ss-nav-group th {
+  padding: 0;
+  font-weight: 400;
+  text-align: left;
+  background: transparent;
+}
+
+#nav-sidebar .ss-nav-group th a {
+  display: block;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: var(--body-fg);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+#nav-sidebar .ss-nav-group th a:hover {
+  background: var(--selected-row);
+  color: var(--link-hover-color);
+}
+
+#nav-sidebar .ss-nav-group tr.current-model th a {
+  background: var(--selected-bg);
+  color: var(--link-fg);
+  font-weight: 700;
+}
+
+/* The green plus tile beside every link was noise; one quiet affordance
+   appears on hover instead. */
+#nav-sidebar .ss-nav-add {
+  display: inline-block;
+  width: 20px;
+  padding: 0;
+  color: #a6a6bd;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+#nav-sidebar .ss-nav-group tr:hover .ss-nav-add {
+  color: var(--link-fg);
+}
+
+#nav-filter {
+  margin: 10px 12px 12px;
+  width: calc(100% - 24px);
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* "Add to this batch" shortcuts                                      */
+/* ------------------------------------------------------------------ */
+
+/* Shown on a saved batch or section: the next action that needs this id. */
+.ss-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.ss-shortcut {
+  display: inline-block;
+  padding: 7px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--link-fg);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ss-shortcut:hover {
+  border-color: var(--primary);
+  background: var(--selected-bg);
+  color: var(--link-hover-color);
+}
+
+/* ------------------------------------------------------------------ */
+/* Autocomplete lookups                                               */
+/* ------------------------------------------------------------------ */
+
+/* The stock widget is a select turned search box; these are its two parts. */
+.select2-container--admin-autocomplete .select2-selection--single {
+  height: 38px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.select2-container--admin-autocomplete .select2-selection--single .select2-selection__rendered {
+  line-height: 36px;
+  color: var(--body-fg);
+  font-size: 0.875rem;
+}
+
+.select2-container--admin-autocomplete .select2-selection--single .select2-selection__arrow {
+  height: 36px;
+}
+
+.select2-container--admin-autocomplete .select2-selection--multiple {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  min-height: 38px;
+}
+
+/* Related-object links (the pencil / + / eye icons) sit on one line. */
+.related-widget-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Inline tables that carry real fields                               */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The classes-in-a-section inline has five columns and a URL field, which is
+ * wider than the column it sits in at 1440px — the last header was cut to
+ * "POSITIO". The URL inputs shrink and the wrapper scrolls rather than clipping.
+ */
+.inline-group {
+  overflow-x: auto;
+}
+
+.inline-related .vURLField,
+.inline-related input[type="url"] {
+  width: 100%;
+  min-width: 180px;
+}
+
+.inline-related table {
+  width: 100%;
+}
+
+.inline-related td input[type="text"],
+.inline-related td input[type="number"] {
+  max-width: 100%;
+}
+
+/* Inline rows use a plain URL box (see FolderLessonInlineForm), so the row is
+   one line high; the stock widget's 28em cap is what cut it off. */
+.inline-related td input[type="url"] {
+  max-width: none;
+  font-size: 0.8125rem;
+}
+
+/* The classes table stays legible when it does need to scroll. */
+.inline-group .tabular::-webkit-scrollbar {
+  height: 10px;
+}
+
+/* Text and URL inputs in an inline row fill the cell they are in; number and
+   checkbox cells stay narrow so the wide fields get the space. */
+.inline-related td input.vTextField,
+.inline-related td input.vURLField {
+  width: 100%;
+  min-width: 110px;
+  box-sizing: border-box;
+}
+
+.inline-related td.field-title {
+  min-width: 180px;
+}
+
+.inline-related td.field-video_url,
+.inline-related td.field-file_url {
+  min-width: 240px;
+}
+
+.inline-related td input.vIntegerField {
+  width: 76px;
+}
+
+/*
+ * nav_sidebar.js only hides <tr>s when the filter has no match, which left the
+ * group captions behind as empty headings. A group with nothing visible in it
+ * is now hidden too. (The script sets an inline `display: none` on each row,
+ * so this reads exactly the state it produced.)
+ */
+#nav-sidebar .ss-nav-group:not(:has(tr:not([style*="none"]))) {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* The rail on a phone: a drawer, not a hidden list                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Django's nav_sidebar.css hides both the rail and its toggle below 768px, so
+ * the console had no navigation at all on a phone — every page was a dead end
+ * except the browser's Back button. Here the same rail slides in from the left
+ * and the toggle becomes a button you can reach with a thumb.
+ *
+ * `.main >` is on every selector because Django ships these rules as bare ids;
+ * one class more wins without an !important.
+ */
+@media (max-width: 767px) {
+  .main > #nav-sidebar {
+    display: block;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    width: min(320px, 86vw);
+    max-height: 100vh;
+    margin-left: 0;
+    padding-bottom: 24px;
+    overflow-y: auto;
+    visibility: hidden;
+    transform: translateX(-100%);
+    transition: transform 0.18s ease, visibility 0.18s ease;
+    box-shadow: 10px 0 30px rgba(15, 17, 40, 0.18);
+  }
+
+  .main.shifted > #nav-sidebar {
+    visibility: visible;
+    transform: translateX(0);
+  }
+
+  .main > #toggle-nav-sidebar {
+    display: flex;
+    position: fixed;
+    top: auto;
+    left: 12px;
+    bottom: 16px;
+    z-index: 70;
+    width: 46px;
+    height: 46px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--primary-fg);
+    font-size: 1.375rem;
+    line-height: 1;
+    box-shadow: 0 6px 18px rgba(15, 17, 40, 0.28);
+  }
+
+  /* Room at the end of the page so the button never sits on the last row of
+     Save buttons. */
+  #content {
+    padding-bottom: 76px;
+  }
+
+  /* While the drawer is open the page behind it stays put. */
+  body:has(.main.shifted) {
+    overflow: hidden;
+  }
+
+  body:has(.main.shifted)::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(15, 17, 40, 0.38);
   }
 }
