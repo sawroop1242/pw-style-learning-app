@@ -55,6 +55,12 @@ WORKFLOWS = [
         ["courses.accesscode", "courses.courseaccessgrant"],
     ),
     (
+        "storage",
+        "Storage and media",
+        "The Cloudflare R2 accounts and buckets that batch covers and note PDFs go into.",
+        ["objectstore.r2account", "objectstore.r2bucket"],
+    ),
+    (
         "messages",
         "Announcements and reports",
         "Notices on the feed, and the questions a learner flagged.",
