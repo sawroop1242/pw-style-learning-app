@@ -41,6 +41,15 @@ class EmailBackendError(RuntimeError):
     """
 
 
+class ProbeUnavailable(EmailBackendError):
+    """The read-only check was refused but sending may still work.
+
+    Resend keys can be created with "sending access" only; those keys get a 401
+    on `/domains` and a 200 on `/emails`. Treating that as a broken deployment
+    would tell the operator to fix something that is not broken.
+    """
+
+
 class _ApiEmailBackend(BaseEmailBackend):
     """Shared plumbing: build one JSON request per message, post it, report.
 
@@ -58,6 +67,7 @@ class _ApiEmailBackend(BaseEmailBackend):
         self.api_key = getattr(settings, self.key_setting, "") or ""
         self.api_key = self.api_key.strip()
         self.timeout = getattr(settings, "EMAIL_TIMEOUT", None) or 10
+        self.probe_note = ""
 
     # -- connection protocol ------------------------------------------------
     def open(self):
@@ -71,7 +81,13 @@ class _ApiEmailBackend(BaseEmailBackend):
             raise EmailBackendError(
                 f"{self.key_setting} is empty, so {self.provider} cannot be used."
             )
-        self._request(self.probe_url, method="GET")
+        self.probe_note = ""
+        try:
+            self._request(self.probe_url, method="GET", probe=True)
+        except ProbeUnavailable as error:
+            # A send-only key. Nothing is wrong, but the key cannot be read
+            # back, so the honest answer is "send a real message to be sure".
+            self.probe_note = str(error)
         return True
 
     def close(self):
@@ -119,7 +135,7 @@ class _ApiEmailBackend(BaseEmailBackend):
     def _headers(self):
         return {}
 
-    def _request(self, url, *, method="POST", payload=None):
+    def _request(self, url, *, method="POST", payload=None, probe=False):
         data = None
         headers = {
             "Accept": "application/json",
@@ -135,9 +151,12 @@ class _ApiEmailBackend(BaseEmailBackend):
                 return response.status, response.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as error:
             detail = error.read().decode("utf-8", "replace")[:300]
-            raise EmailBackendError(
+            message = (
                 f"{self.provider} refused the request (HTTP {error.code}): {detail}"
-            ) from None
+            )
+            if probe and error.code in (401, 403):
+                raise ProbeUnavailable(message) from None
+            raise EmailBackendError(message) from None
         except urllib.error.URLError as error:
             raise EmailBackendError(
                 f"could not reach {self.provider} ({error.reason})"

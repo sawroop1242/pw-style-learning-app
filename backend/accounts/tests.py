@@ -10,6 +10,7 @@ from unittest.mock import patch
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.mail import EmailMessage
 from django.core.cache import cache
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -1495,3 +1496,53 @@ class CheckEmailApiCommandTests(TestCase):
         with self.assertRaises(CommandError) as caught:
             call_command("check_email")
         self.assertIn("BREVO_API_KEY", str(caught.exception))
+
+
+@override_settings(
+    EMAIL_BACKEND="accounts.mail_backends.ResendEmailBackend",
+    RESEND_API_KEY="re-send-only-key",
+    DEFAULT_FROM_EMAIL="StudySpace <onboarding@resend.dev>",
+    EMAIL_TIMEOUT=3,
+)
+class SendOnlyKeyTests(TestCase):
+    """A key restricted to sending must not be reported as a broken deployment.
+
+    Resend lets a key be created with "sending access" only; such a key is
+    refused on `/domains` but accepted on `/emails`. Treating the refusal as
+    fatal would send the operator chasing a problem that does not exist.
+    """
+
+    def test_a_refused_probe_does_not_stop_the_message(self):
+        from io import StringIO
+
+        out = StringIO()
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.side_effect = [
+                _http_error("https://api.resend.com/domains", 401, b'{"message":"restricted key"}'),
+                _FakeHttpResponse(status=200),
+            ]
+            call_command("check_email", "--to", "owner@example.com", stdout=out)
+
+        text = out.getvalue()
+        self.assertIn("sending is the real test", text)
+        self.assertIn("Resend accepted the message", text)
+        self.assertNotIn("accepted the credentials", text)
+
+    def test_the_backend_records_the_note_instead_of_raising(self):
+        from accounts.mail_backends import ResendEmailBackend
+
+        backend = ResendEmailBackend()
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.side_effect = _http_error("https://api.resend.com/domains", 403)
+            self.assertTrue(backend.open())
+        self.assertIn("403", backend.probe_note)
+
+    def test_a_bad_key_on_a_real_send_still_fails_loudly(self):
+        from accounts.mail_backends import EmailBackendError, ResendEmailBackend
+
+        with patch("accounts.mail_backends.urllib.request.urlopen") as urlopen:
+            urlopen.side_effect = _http_error("https://api.resend.com/emails", 401)
+            with self.assertRaises(EmailBackendError):
+                ResendEmailBackend().send_messages(
+                    [EmailMessage("s", "b", "StudySpace <a@b.c>", ["x@y.z"])]
+                )

@@ -44,11 +44,18 @@ def user_role(user):
 
 
 def is_main_admin(user):
-    return user.is_authenticated and user_role(user) == Role.MAIN_ADMIN
+    # A Django superuser is an administrator by definition. `createsuperuser`
+    # sets no Profile role, and without this line that account could sign in to
+    # the console and then be refused every model page with a 403.
+    if not user.is_authenticated:
+        return False
+    return user.is_superuser or user_role(user) == Role.MAIN_ADMIN
 
 
 def is_staff_role(user):
-    return user.is_authenticated and user_role(user) in {Role.MAIN_ADMIN, Role.SUB_ADMIN}
+    if not user.is_authenticated:
+        return False
+    return user.is_superuser or user_role(user) in {Role.MAIN_ADMIN, Role.SUB_ADMIN}
 
 
 class CompactTextareaMixin:

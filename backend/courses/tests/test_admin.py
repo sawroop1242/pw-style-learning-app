@@ -67,6 +67,26 @@ class AdminAccessTests(AdminTestDataMixin, TestCase):
             and (response.status_code == 403 or response.url == target)
         )
 
+    def test_a_superuser_without_a_profile_role_can_open_a_changelist(self):
+        """`createsuperuser` sets no Profile role, and that must not lock it out.
+
+        The console decided access from Profile.role alone, so an account made
+        with Django's own command could sign in and then be refused every model
+        page with a 403 — no message, no clue.
+        """
+        boss = User.objects.create_user(
+            "boss", "boss@example.com", "TestPass123!", is_superuser=True, is_staff=True
+        )
+        self.client.force_login(boss)
+
+        self.assertEqual(self.client.get("/admin/").status_code, 200)
+        self.assertEqual(self.client.get("/admin/courses/quiz/").status_code, 200)
+
+    def test_a_student_is_still_refused_a_changelist(self):
+        self.client.force_login(self.student)
+
+        self.assertIn(self.client.get("/admin/courses/quiz/").status_code, (302, 403))
+
     def test_sub_admin_can_access_admin_index(self):
         self.client.force_login(self.sub_admin)
         response = self.client.get("/admin/")
