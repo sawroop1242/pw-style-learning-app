@@ -971,7 +971,12 @@ class EmailDeliveryFailureTests(TestCase):
 
     @patch("accounts.views.AuthViewSet._send_otp_email")
     def test_forgot_password_email_failure(self, mock_send):
-        """Test forgot password handles email failure gracefully."""
+        """A code that was never delivered must not stay live in the table.
+
+        It used to be kept: the row said "active reset" while the person had no
+        mail to prove it, and the console listed a code nobody could use. The
+        attempt is still recorded, in AuditEvent.
+        """
         mock_send.side_effect = Exception("SMTP error")
         client = APIClient()
         user = User.objects.create_user("testuser", "test@example.com", "SecurePass123!")
@@ -979,8 +984,10 @@ class EmailDeliveryFailureTests(TestCase):
         response = client.post("/api/auth/forgot-password/", {"email": "test@example.com"})
         # Should still return generic success (no enumeration)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # OTP should still be created
-        self.assertTrue(PasswordResetOTP.objects.filter(user=user).exists())
+        # ...but no live code is left behind.
+        self.assertFalse(
+            PasswordResetOTP.objects.filter(user=user, consumed_at__isnull=True).exists()
+        )
         # Audit event should show email_failed
         audit = AuditEvent.objects.filter(
             action="password_reset_requested", target_id=str(user.id)
@@ -1062,3 +1069,145 @@ class AuthRouteAliasTests(TestCase):
         for path in ("/api/auth/change-password/", "/api/auth/change_password/"):
             response = self.client.post(path, {})
             self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED, path)
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "otp-delivery-tests",
+        }
+    },
+)
+class OTPDeliveryTests(TestCase):
+    """What the reset mail says, and what happens when it cannot be sent.
+
+    The deployment ran with no SMTP host while every one of these requests
+    answered "a code has been sent"; the tests below pin the two things that
+    were wrong about that — the code stayed in the table, and nothing anywhere
+    said the mail had failed.
+    """
+
+    forgot_url = "/api/auth/forgot-password/"
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.client = APIClient()
+        self.user = User.objects.create_user("mailer", "mailer@example.com", "SecurePass123!")
+
+    @override_settings(OTP_EXPIRY_MINUTES=3)
+    def test_the_email_quotes_the_configured_expiry(self):
+        self.client.post(self.forgot_url, {"email": "mailer@example.com"})
+
+        body = mail.outbox[0].body
+        self.assertIn("expires in 3 minutes", body)
+        # The row and the letter must agree, or the letter is lying.
+        otp = PasswordResetOTP.objects.get(user=self.user, consumed_at__isnull=True)
+        remaining = otp.expires_at - timezone.now()
+        self.assertLess(remaining, timedelta(minutes=3, seconds=5))
+        self.assertGreater(remaining, timedelta(minutes=2, seconds=55))
+
+    def test_an_address_shared_by_two_accounts_is_not_reset(self):
+        """`User.email` is not unique; `.get()` used to make this a 500.
+
+        Two logins can carry the same address (registration only checks the
+        username). Picking one at random would let whoever holds the mailbox
+        reset an account they may not own, so the request is answered with the
+        generic message and recorded instead.
+        """
+        twin = User.objects.create_user("mailer2", "mailer@example.com", "SecurePass123!")
+
+        response = self.client.post(self.forgot_url, {"email": "mailer@example.com"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(
+            PasswordResetOTP.objects.filter(user__in=[self.user, twin]).exists()
+        )
+        audit = AuditEvent.objects.filter(outcome="ambiguous_email").last()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.metadata.get("accounts"), 2)
+
+    def test_verifying_with_a_shared_address_is_a_400_not_a_500(self):
+        User.objects.create_user("mailer2", "mailer@example.com", "SecurePass123!")
+
+        response = self.client.post(
+            "/api/auth/verify-otp/",
+            {
+                "email": "mailer@example.com",
+                "otp": "123456",
+                "new_password": "Another!2026",
+                "new_password_confirm": "Another!2026",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class EmailConfigurationCheckTests(TestCase):
+    """`manage.py check` has to notice a deployment that cannot send mail."""
+
+    def run_checks(self):
+        from django.core.checks import run_checks
+
+        return run_checks()
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        EMAIL_HOST="",
+        DEFAULT_FROM_EMAIL="StudySpace <noreply@studyspace.local>",
+    )
+    def test_smtp_without_a_host_is_reported(self):
+        ids = {issue.id for issue in self.run_checks()}
+        self.assertIn("accounts.W001", ids)
+        self.assertIn("accounts.W002", ids)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        EMAIL_HOST="smtp.example.com",
+        DEFAULT_FROM_EMAIL="StudySpace <codes@example.com>",
+    )
+    def test_a_configured_host_raises_nothing(self):
+        ids = {issue.id for issue in self.run_checks()}
+        self.assertNotIn("accounts.W001", ids)
+        self.assertNotIn("accounts.W002", ids)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend",
+        DEFAULT_FROM_EMAIL="StudySpace <noreply@studyspace.local>",
+    )
+    def test_the_console_backend_is_not_treated_as_a_broken_deployment(self):
+        ids = {issue.id for issue in self.run_checks()}
+        self.assertNotIn("accounts.W001", ids)
+        self.assertNotIn("accounts.W002", ids)
+
+
+class CheckEmailCommandTests(TestCase):
+    """`manage.py check_email` is how an operator proves the transport works."""
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        EMAIL_HOST="",
+    )
+    def test_it_refuses_to_pretend_when_the_host_is_missing(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        with self.assertRaises(CommandError):
+            call_command("check_email")
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_it_can_send_a_test_message(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command("check_email", "--to", "operator@example.com", stdout=out)
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["operator@example.com"])
+        self.assertIn("message handed to the server", out.getvalue())

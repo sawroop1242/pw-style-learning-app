@@ -22,6 +22,13 @@
 
 {% block content %}
 <div id="content-main">
+  {% email_delivery_problem as email_problem %}
+  {% if email_problem %}
+    <div class="ss-alert" role="status">
+      <strong>Password-reset codes cannot be sent.</strong>
+      <p>{{ email_problem }}</p>
+    </div>
+  {% endif %}
   {% workflow_cards app_list as workflow_cards %}
   <div class="ss-workflows">
     {% for card in workflow_cards %}

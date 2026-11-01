@@ -181,3 +181,15 @@ def workflow_groups(context, app_list):
     a number nobody reads in the sidebar.
     """
     return build_cards(app_list, context.get("request"), with_counts=False)
+
+
+@register.simple_tag
+def email_delivery_problem():
+    """A sentence for the console home when reset mail cannot be delivered.
+
+    Returns "" when the transport looks usable, so the template can ask
+    ``{% if problem %}`` without a second setting lookup of its own.
+    """
+    from accounts.checks import delivery_problem
+
+    return delivery_problem() or ""

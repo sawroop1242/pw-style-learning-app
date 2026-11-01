@@ -241,6 +241,10 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "StudySpace <noreply@studyspace.local>")
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+# A provider that stops answering must not hold a password-reset request open
+# until the platform kills the function: the code is generated inside that
+# request, so a 30s hang is 30s of a locked worker doing nothing.
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
 
 # Validate mutually incompatible TLS/SSL settings
 if EMAIL_USE_TLS and EMAIL_USE_SSL:
