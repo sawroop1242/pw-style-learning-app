@@ -248,13 +248,23 @@ class AuthViewSet(viewsets.GenericViewSet):
         key = settings.SECRET_KEY.encode()
         return hmac.new(key, otp.encode(), hashlib.sha256).hexdigest()
 
+    def _otp_expiry_minutes(self):
+        return getattr(settings, "OTP_EXPIRY_MINUTES", 10)
+
     def _send_otp_email(self, user, otp):
-        """Send OTP email to user."""
+        """Send the reset code.
+
+        The expiry in the body comes from ``OTP_EXPIRY_MINUTES``: it used to be
+        the literal string "10 minutes" while the database row expired on the
+        setting, so lowering the setting would have mailed a lie.
+        """
+        minutes = self._otp_expiry_minutes()
         subject = "Your StudySpace Password Reset Code"
         message = (
             f"Hello {user.username},\n\n"
             f"Your password reset code is: {otp}\n\n"
-            f"This code expires in 10 minutes and can only be used once.\n"
+            f"This code expires in {minutes} minute{'s' if minutes != 1 else ''} "
+            f"and can only be used once.\n"
             f"Do not share this code with anyone.\n\n"
             f"If you did not request this, please ignore this email.\n\n"
             f"— StudySpace Team"
@@ -279,10 +289,11 @@ class AuthViewSet(viewsets.GenericViewSet):
             "message": "If an account with that email exists, a password reset code has been sent."
         }
 
-        # Find user (case-insensitive)
-        try:
-            user = User.objects.get(email__iexact=email)
-        except User.DoesNotExist:
+        # Find user (case-insensitive). `User.email` is not unique, so this is a
+        # filter, not a get(): two accounts sharing an address used to raise
+        # MultipleObjectsReturned and turn the endpoint into a 500.
+        matches = list(User.objects.filter(email__iexact=email).order_by("id")[:2])
+        if not matches:
             # Log audit for non-existent account attempt (without revealing)
             AuditEvent.objects.create(
                 action="password_reset_requested",
@@ -292,6 +303,22 @@ class AuthViewSet(viewsets.GenericViewSet):
                 metadata={"email_found": False},
             )
             return Response(response_data)
+
+        if len(matches) > 1:
+            # Which account would we reset? Sending a code to an address that
+            # owns two logins would hand it to whichever row was read first.
+            logger.warning("password reset requested for an address shared by two accounts")
+            AuditEvent.objects.create(
+                actor=matches[0],
+                action="password_reset_requested",
+                target_type="user",
+                target_id=str(matches[0].id),
+                outcome="ambiguous_email",
+                metadata={"email_found": True, "email_sent": False, "accounts": len(matches)},
+            )
+            return Response(response_data)
+
+        user = matches[0]
 
         # Invalidate any existing unconsumed OTPs for this user/purpose
         PasswordResetOTP.objects.filter(
@@ -303,8 +330,8 @@ class AuthViewSet(viewsets.GenericViewSet):
         otp_hash = self._hash_otp(otp)
 
         # Create OTP record (configurable expiry and max attempts)
-        expires_at = timezone.now() + timedelta(minutes=getattr(settings, "OTP_EXPIRY_MINUTES", 10))
-        PasswordResetOTP.objects.create(
+        expires_at = timezone.now() + timedelta(minutes=self._otp_expiry_minutes())
+        otp_record = PasswordResetOTP.objects.create(
             user=user,
             purpose=PasswordResetOTP.Purpose.PASSWORD_RESET,
             otp_hash=otp_hash,
@@ -316,10 +343,21 @@ class AuthViewSet(viewsets.GenericViewSet):
         try:
             self._send_otp_email(user, otp)
             email_sent = True
-        except Exception as e:
-            logger.error(f"Failed to send password reset email to {user.email}: {e}")
+        except Exception as error:  # noqa: BLE001 - any transport failure
+            # Do not keep a live code that was never delivered: it would show in
+            # the OTP table as an active reset nobody can complete. The audit
+            # event below is the record that the attempt happened.
+            otp_record.delete()
             email_sent = False
-            # Still return generic success to prevent enumeration
+            logger.error(
+                "password reset email could not be sent for user %s (%s): %s",
+                user.pk,
+                type(error).__name__,
+                error,
+            )
+            # Still return the generic success message: the response must not
+            # tell an attacker whether the address exists or the mail server is
+            # down.
 
         AuditEvent.objects.create(
             actor=user,
@@ -348,14 +386,15 @@ class AuthViewSet(viewsets.GenericViewSet):
         otp = serializer.validated_data["otp"]
         new_password = serializer.validated_data["new_password"]
 
-        # Find user
-        try:
-            user = User.objects.get(email__iexact=email)
-        except User.DoesNotExist:
+        # Find user. Same non-unique address caveat as forgot-password: an
+        # address shared by two accounts cannot say which one is resetting.
+        matches = list(User.objects.filter(email__iexact=email).order_by("id")[:2])
+        if len(matches) != 1:
             return Response(
                 {"detail": "Invalid or expired reset code."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        user = matches[0]
 
         # Find and lock the active OTP so two concurrent requests cannot both
         # consume the same code or race past the attempt limit.

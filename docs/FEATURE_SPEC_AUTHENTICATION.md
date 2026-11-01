@@ -73,6 +73,36 @@ Requirements:
 - Use console/locmem email backends only in development/tests, not as an accidental production fallback. Production configuration should fail clearly if required email settings are absent when password-reset email is enabled.
 - Respect provider sending limits and anti-abuse policies; do not rotate arbitrary third-party accounts to evade limits.
 
+### 5a. What the implementation does when mail cannot be delivered
+
+The reset code is generated, stored and mailed inside one request. If the
+transport is missing or refusing, the endpoint still answers with the generic
+message (it must not tell an attacker that the address exists or that the mail
+server is down), so the failure has to be visible somewhere else:
+
+- `manage.py check` emits **accounts.W001** when the SMTP backend has no
+  `EMAIL_HOST`, and **accounts.W002** when `DEFAULT_FROM_EMAIL` is still the
+  `.local` placeholder. `tools/vercel-build.sh` runs `manage.py check`, so this
+  lands in every deploy log.
+- `manage.py check_email [--to you@example.com]` opens the configured transport
+  and, with `--to`, sends a real message. It exits non-zero when the transport
+  cannot be reached, which makes it usable as a post-deploy step.
+- The admin console home shows a banner with the same finding, so the person
+  about to send the first code sees it without reading logs.
+- When the send raises, the OTP row is **deleted**: a code that was never
+  delivered must not sit in the table looking like an active reset. The attempt
+  is recorded as `AuditEvent(action="password_reset_requested",
+  outcome="email_failed")`.
+- The expiry quoted in the letter comes from `OTP_EXPIRY_MINUTES`, so the text
+  and the database row cannot disagree.
+- `EMAIL_TIMEOUT` (default 10s) bounds a hanging provider: the code is generated
+  inside the request, so a hung SMTP connection holds the request open.
+- A request for an address shared by two accounts is answered generically and
+  recorded as `outcome="ambiguous_email"`; it is not delivered to either account.
+
+Do not claim delivery in the UI. The frontend copy is "If that email has an
+account, a code is on its way", which is true in both cases.
+
 ## 6. API and frontend expectations
 Adapt endpoint names to existing conventions, but document equivalent operations for:
 - Registration (username, email, password, confirmation).
