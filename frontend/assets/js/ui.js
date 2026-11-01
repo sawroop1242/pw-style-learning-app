@@ -45,6 +45,7 @@ const ICONS = {
   lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
   unlock: '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 6.8-1.2"/>',
   download: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M4.5 19.5h15"/>',
+  'arrow-up-right': '<path d="M8 16 16.5 7.5"/><path d="M9.5 7.5h7v7"/>',
   smartphone: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M10.5 18.5h3"/>',
   apple: '<path d="M15.5 3.5c.2 1.5-.5 2.8-1.3 3.7-.9 1-2.1 1.6-3.3 1.5-.2-1.4.5-2.8 1.3-3.7.9-.9 2.3-1.5 3.3-1.5z"/><path d="M18.5 16.6c-.6 1.4-1 2-1.8 3.2-1.1 1.6-2.7 3.6-4.6 3.6-1.7 0-2.2-1.1-4.5-1.1s-2.8 1.1-4.5 1.1c-1.9 0-3.4-1.8-4.5-3.4C-2.6 16-3 10.2-.6 7.7 1.2 5.9 3.4 5.2 5.4 5.2c1.9 0 3.1 1.1 4.7 1.1 1.5 0 2.5-1.1 4.7-1.1 1.8 0 3.7.6 4.8 2-2.9 1.7-2.3 5.9 1 8.4z" transform="scale(.92) translate(1.5 -1.2)"/>',
   playstore: '<path d="M4.5 3.2 15 12 4.5 20.8c-.3-.2-.5-.6-.5-1V4.2c0-.4.2-.8.5-1z"/><path d="m15 12 3.4 3.4 2.4-1.4c.6-.4.6-1.6 0-2L18.4 10.6z"/><path d="M4.5 3.2 18.4 10.6M4.5 20.8 18.4 13.4"/>',
@@ -561,9 +562,17 @@ export function batchCard(course) {
       ? '<span class="badge badge-paid">Unlocked</span>'
       : '<span class="badge badge-paid">Paid</span>';
 
+  // A pasted cover URL wins; without one the card keeps its subject colour and
+  // initials, so an image is never required to publish a batch.
+  const art = course.image
+    ? `<img class="batch-cover-img" src="${esc(course.image)}" alt="" loading="lazy" decoding="async"
+         onerror="this.remove()">`
+    : '';
+
   return `
     <article class="batch-card">
       <a class="batch-cover ${thumbTone(course.subject)}" href="course.html?slug=${encodeURIComponent(course.slug)}" aria-label="${esc(course.title)}">
+        ${art}
         ${badge}
         <span class="cover-tag">${esc(course.subject || 'Batch')}</span>
         <span class="cover-faces">

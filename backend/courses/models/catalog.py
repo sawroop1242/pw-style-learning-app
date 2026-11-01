@@ -146,6 +146,42 @@ class Lesson(TimeStampedModel):
         return f"{self.course}: {self.title}"
 
 
+def viewer_url_for(file_url, embed_url=""):
+    """The URL to put in the reader's ``<iframe>``.
+
+    Two rules, both learned from real providers:
+
+    * an editor-supplied embed link wins, because only they know which URL a
+      host actually serves for embedding;
+    * otherwise the link is framed as it is. A PDF URL frames itself, and a
+      host's share page (pdfhost's ``/v/<id>`` is one) is already that host's
+      reader — wrapping it in Google's viewer only puts one viewer inside
+      another, which is what the pdfhost link did.
+
+    The single rewrite is Google Drive, whose ``/view`` page refuses framing
+    but whose ``/preview`` does not. The reader always offers "open in a new
+    tab" as well, because a host can start sending ``X-Frame-Options: DENY``
+    at any time and no amount of URL guessing survives that.
+    """
+    if (embed_url or "").strip():
+        return embed_url.strip()
+
+    url = (file_url or "").strip()
+    if not url:
+        return ""
+
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ""
+    path = parsed.path or ""
+
+    if hostname.endswith("drive.google.com") or hostname.endswith("docs.google.com"):
+        if "/view" in path:
+            return url.replace("/view", "/preview")
+    return url
+
+
 class PdfResource(TimeStampedModel):
     """Chapter PDF attached to a folder. Protected resources are only served
     through grant-checked API paths in later milestones."""
@@ -156,6 +192,15 @@ class PdfResource(TimeStampedModel):
     title = models.CharField(max_length=180)
     description = models.TextField(blank=True)
     file_url = models.URLField()
+    embed_url = models.URLField(
+        blank=True,
+        help_text=(
+            "Optional. Paste the link the host gives for embedding, if it has "
+            "one. Leave it blank and the file link is shown as it is — a PDF "
+            "opens in the browser's viewer, and a share page such as pdfhost's "
+            "/v/… opens in that site's reader."
+        ),
+    )
     position = models.PositiveIntegerField(default=0)
     is_published = models.BooleanField(default=False)
     is_protected = models.BooleanField(
@@ -171,6 +216,10 @@ class PdfResource(TimeStampedModel):
     @property
     def course(self):
         return self.folder.course
+
+    @property
+    def viewer_url(self):
+        return viewer_url_for(self.file_url, self.embed_url)
 
     def __str__(self):
         return f"{self.course}: {self.title}"

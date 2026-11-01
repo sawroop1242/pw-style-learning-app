@@ -48,12 +48,14 @@ async function loadLessons() {
   const host = $('#today-grid');
   if (!host) return;
   try {
-    const payload = await getJson('/lessons/?page_size=4&ordering=position');
+    // "Today's classes": published today, in a batch this learner joined.
+    // One read, and the empty state is honest — a quiet day is not an error.
+    const payload = await getJson('/lessons/?added=today&has_video=1&page_size=6');
     const list = rows(payload);
     fill(host, list.map((lesson) => lessonCard(lesson)).join(''), {
-      empty: 'No lessons published yet',
-      emptyBody: 'Lessons appear here as soon as your faculty publishes them.',
-      actionLabel: 'Browse batches',
+      empty: 'Nothing new today',
+      emptyBody: 'Classes added today to a batch you joined show up here. Older ones are inside the batch.',
+      actionLabel: 'Open my batches',
       actionHref: 'courses.html',
       iconName: 'play'
     });

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <meta name="api-base" content="/api">
+  <title>Notes reader | StudySpace</title>
+  <meta name="description" content="Read a chapter PDF inside the app instead of downloading it.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/screens.css">
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body class="reader-page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <div class="container">
+      <div class="player-shell reader-shell">
+        <div class="player-top">
+          <a class="icon-btn" href="downloads.html" aria-label="Back to notes"><svg><use href="#i-arrow-left"/></svg></a>
+          <h1 id="reader-title">Note</h1>
+          <a class="icon-btn" id="reader-external" href="#" target="_blank" rel="noopener" aria-label="Open in a new tab" hidden>
+            <svg><use href="#i-arrow-up-right"/></svg>
+          </a>
+        </div>
+
+        <p class="reader-sub tiny muted" id="reader-sub"></p>
+
+        <div class="reader-frame-wrap" id="reader-wrap">
+          <iframe id="reader-frame" class="reader-frame" title="PDF reader" hidden></iframe>
+          <div class="reader-fallback" id="reader-fallback" hidden>
+            <strong id="reader-fallback-title">Loading…</strong>
+            <p id="reader-fallback-body"></p>
+            <a class="btn btn-primary btn-sm" id="reader-open" href="#" target="_blank" rel="noopener">Open the PDF</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div id="site-tabbar"></div>
+  <script type="module" src="assets/js/reader.js"></script>
+</body>
+</html>

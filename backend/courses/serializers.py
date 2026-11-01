@@ -44,21 +44,39 @@ class PdfResourceSerializer(serializers.ModelSerializer):
     course, so a protected chapter cannot be fetched from a public payload."""
 
     file_url = serializers.SerializerMethodField()
+    viewer_url = serializers.SerializerMethodField()
     is_locked = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    course_slug = serializers.SerializerMethodField()
 
     class Meta:
         model = PdfResource
         fields = [
-            "id", "folder", "title", "description", "file_url", "position",
-            "is_published", "is_protected", "is_locked"
+            "id", "folder", "title", "description", "file_url", "embed_url",
+            "viewer_url", "position", "is_published", "is_protected", "is_locked",
+            "course", "course_slug",
         ]
         read_only_fields = ["id"]
+
+    def get_course(self, obj):
+        """Which batch this note belongs to — the locked state links there."""
+        return getattr(obj.folder, "course_id", None)
+
+    def get_course_slug(self, obj):
+        course = getattr(obj.folder, "course", None)
+        return getattr(course, "slug", "")
 
     def get_file_url(self, obj):
         course = getattr(obj.folder, "course", None)
         if obj.is_protected and not policy.can_read_media(_request_user(self), course):
             return None
         return obj.file_url
+
+    def get_viewer_url(self, obj):
+        """The frameable URL for the in-app reader, or None when locked."""
+        if self.get_file_url(obj) is None:
+            return None
+        return obj.viewer_url
 
     def get_is_locked(self, obj):
         return self.get_file_url(obj) is None
@@ -148,8 +166,8 @@ class StaffPdfResourceSerializer(serializers.ModelSerializer):
     class Meta:
         model = PdfResource
         fields = [
-            "id", "folder", "title", "description", "file_url", "position",
-            "is_published", "is_protected"
+            "id", "folder", "title", "description", "file_url", "embed_url",
+            "position", "is_published", "is_protected"
         ]
         read_only_fields = ["id"]
 
@@ -176,6 +194,7 @@ class CourseListSerializer(serializers.ModelSerializer):
     folder_count = serializers.SerializerMethodField()
     quiz_count = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
+    is_enrolled = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -183,7 +202,7 @@ class CourseListSerializer(serializers.ModelSerializer):
             "id", "title", "slug", "description", "subject", "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",
-            "has_access", "created_at", "updated_at"
+            "has_access", "is_enrolled", "created_at", "updated_at"
         ]
 
     def get_lesson_count(self, course):
@@ -206,7 +225,11 @@ class CourseListSerializer(serializers.ModelSerializer):
 
     def get_has_access(self, course):
         """Whether the caller may consume the batch, not merely see it."""
-        return policy.can_access_course(_request_user(self), course)
+        return policy.can_consume_course(_request_user(self), course)
+
+    def get_is_enrolled(self, course):
+        """Whether the caller has joined — the flag the Enrol button reads."""
+        return policy.is_enrolled(_request_user(self), course)
 
 
 class CourseDetailSerializer(serializers.ModelSerializer):
@@ -219,6 +242,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     folder_count = serializers.IntegerField(source="folders.count", read_only=True)
     quiz_count = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
+    is_enrolled = serializers.SerializerMethodField()
     folders = serializers.SerializerMethodField()
     faculty = serializers.SerializerMethodField()
 
@@ -228,7 +252,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             "id", "title", "slug", "description", "subject", "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",
-            "has_access", "folders", "faculty", "created_at", "updated_at"
+            "has_access", "is_enrolled", "folders", "faculty", "created_at", "updated_at"
         ]
 
     def get_quiz_count(self, course):
@@ -238,7 +262,10 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         return course.quizzes.filter(is_published=True).count()
 
     def get_has_access(self, course):
-        return policy.can_access_course(_request_user(self), course)
+        return policy.can_consume_course(_request_user(self), course)
+
+    def get_is_enrolled(self, course):
+        return policy.is_enrolled(_request_user(self), course)
 
     def get_folders(self, course):
         folders = course.folders.all().prefetch_related("lessons", "pdf_resources")

@@ -1403,3 +1403,65 @@ body.is-paused .exam-layout { visibility: hidden; }
   .chart-single { flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
   .chart-single-score { font-size: 34px; }
 }
+
+/* ---------------------------------------------------------------- */
+/* PDF reader                                                        */
+/* ---------------------------------------------------------------- */
+
+.reader-shell {
+  padding-bottom: 24px;
+}
+
+.reader-sub {
+  margin: 2px 0 12px;
+}
+
+.reader-frame-wrap {
+  position: relative;
+  min-height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: #0b0b16;
+  overflow: hidden;
+}
+
+.reader-frame {
+  display: block;
+  width: 100%;
+  height: 74vh;
+  border: 0;
+  background: #ffffff;
+}
+
+.reader-frame[hidden] {
+  display: none;
+}
+
+.reader-fallback {
+  display: grid;
+  gap: 10px;
+  place-items: center;
+  text-align: center;
+  padding: 48px 22px;
+  max-width: 46ch;
+  margin: 0 auto;
+}
+
+.reader-fallback[hidden] {
+  display: none;
+}
+
+.reader-fallback p {
+  color: var(--text-muted);
+}
+
+@media (max-width: 767px) {
+  .reader-frame {
+    height: 68vh;
+  }
+
+  .reader-frame-wrap {
+    min-height: 64vh;
+    border-radius: var(--r-md);
+  }
+}

@@ -38,7 +38,7 @@ function pdfRow(pdf) {
       </span>
       ${
         pdf.file_url
-          ? `<a class="dl-action" href="${esc(pdf.file_url)}" target="_blank" rel="noopener" aria-label="Open ${esc(pdf.title)}">${icon('download')}</a>`
+          ? `<a class="dl-action" href="pdf.html?pdf=${pdf.id}" aria-label="Read ${esc(pdf.title)}">${icon('book')}</a>`
           : '<span class="badge badge-outline">Locked</span>'
       }
     </div>`;

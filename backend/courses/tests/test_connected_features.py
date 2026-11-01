@@ -542,7 +542,17 @@ class LessonVideoTests(ConnectedFeatureData):
         self.lesson.video_url = self.VIDEO
         self.lesson.save(update_fields=["video_url"])
 
-    def test_a_free_lesson_serves_its_video_to_a_guest(self):
+    def test_a_free_lesson_serves_its_video_only_after_enrolment(self):
+        """A guest is not enrolled, so the recording is not theirs to fetch."""
+        guest = self.client.get(f"/api/lessons/{self.lesson.id}/")
+        self.assertEqual(guest.status_code, 404)
+
+        from courses.models import CourseAccessGrant
+
+        CourseAccessGrant.objects.create(
+            user=self.student, course=self.lesson.course, granted_by=self.student
+        )
+        self.client.force_authenticate(self.student)
         response = self.client.get(f"/api/lessons/{self.lesson.id}/")
 
         self.assertEqual(response.status_code, 200)
