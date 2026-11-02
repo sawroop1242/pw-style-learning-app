@@ -16,7 +16,6 @@ const PAGES = [
   ['courses.html', ['core', 'content', 'ui', 'courses']],
   ['course.html', ['core', 'content', 'ui', 'course'], '?slug=jee-main-2027'],
   ['tests.html', ['core', 'content', 'ui', 'tests']],
-  ['downloads.html', ['core', 'content', 'ui', 'downloads']],
   ['community.html', ['core', 'content', 'ui', 'community']],
   ['profile.html', ['core', 'content', 'ui', 'profile']],
   ['dashboard.html', ['core', 'content', 'ui', 'dashboard']],
@@ -134,10 +133,10 @@ async function inspect(page, mods, query, opts, label) {
   }
 
   console.log('\nWith an empty catalogue');
-  for (const page of ['index.html', 'courses.html', 'tests.html', 'downloads.html', 'community.html']) {
+  for (const page of ['index.html', 'courses.html', 'tests.html', 'community.html']) {
     const mods = PAGES.find((row) => row[0] === page)[1];
     const { doc, errors } = await boot(page, mods, { fetcher: makeStub({ empty: true }), seedStorage: SIGNED_IN });
-    const empty = Boolean(doc.querySelector('#course-empty .empty-state, #test-empty .empty-state, #trending-grid .empty-state, #announcement-list .empty-state, #list-lectures .empty-state'));
+    const empty = Boolean(doc.querySelector('#course-empty .empty-state, #test-empty .empty-state, #trending-grid .empty-state, #announcement-list .empty-state'));
     const problems = [];
     if (!empty) problems.push('no empty state');
     if (errors.length) problems.push(errors[0].slice(0, 160));

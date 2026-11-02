@@ -89,14 +89,15 @@ The study-planner spec calls for in-app reminders ("provide in-app reminders
 when notifications are unavailable or denied"). A bell that never opens is
 worse than no bell.
 
-## 5. Downloads and community
+## 5. Notes and community
 
 | # | Feature | Screen | Endpoint | Verdict |
 |---|---|---|---|---|
-| 5.1 | Lecture list (only lessons with a recording) | `downloads.html` | `GET /api/lessons/?has_video=1` | connected |
+| 5.1 | Class list inside a batch | `course.html` | `GET /api/courses/<slug>/` (folders and their lessons) | connected — the batch page is the only place a class is listed |
 | 5.1a | "Today's classes" on the home screen | `index.html` | `GET /api/lessons/?added=today&has_video=1` | connected — today's uploads in the batches the learner joined; a quiet day is an empty state, not an error |
-| 5.2 | Chapter PDFs | `downloads.html`, `pdf.html` | `GET /api/pdfs/` | connected — the row opens the reader, never a raw file download |
-| 5.3 | Papers | `downloads.html` | `GET /api/quizzes/` | connected |
+| 5.2 | Chapter PDFs | `player.html` (Notes tab), `pdf.html` | `GET /api/pdfs/?course=`, `GET /api/pdfs/<id>/` | connected — the reader shows the document; no screen offers a file download |
+| 5.3 | Papers | `tests.html` | `GET /api/quizzes/` | connected |
+| 5.3a | The former Downloads screen | — | — | **removed** (run 30): page, module, nav entry, profile row, quick tile, home rail link, `.dl-*` styles and service-worker entries deleted; its lists live on the batch page and in the class player |
 | 5.4 | Offline "saved" list | — | none by design (the PWA caches the shell, never student data) | documented |
 | 5.5 | Announcement feed | `community.html` | `GET /api/community/` | connected |
 | 5.6 | Batch-only feed | `community.html` | `?course=` | connected |

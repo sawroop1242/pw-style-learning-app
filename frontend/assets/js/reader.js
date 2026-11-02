@@ -12,7 +12,7 @@
 import { $, esc, getJson, qsParam } from './core.js';
 import { mountChrome, icon, errorState, wireRetry } from './ui.js';
 
-mountChrome('downloads');
+mountChrome('courses');
 
 const id = qsParam('pdf');
 
@@ -25,8 +25,8 @@ function showProblem(title, body, href, label) {
   $('#reader-fallback-title').textContent = title;
   $('#reader-fallback-body').textContent = body;
   const open = $('#reader-open');
-  open.href = href || 'downloads.html';
-  open.textContent = label || 'Back to notes';
+  open.href = href || 'courses.html';
+  open.textContent = label || 'My batches';
   if (!href) {
     open.removeAttribute('target');
     open.removeAttribute('rel');
@@ -35,7 +35,7 @@ function showProblem(title, body, href, label) {
 
 async function load() {
   if (!id) {
-    showProblem('No note selected', 'Open a note from the batch page or from Notes & media.', '', 'Back to notes');
+    showProblem('No note selected', 'Open a note from the batch it belongs to.', '', 'My batches');
     return;
   }
 

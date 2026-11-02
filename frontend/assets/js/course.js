@@ -188,16 +188,16 @@ function lessonRow(lesson) {
 function pdfRow(pdf) {
   const locked = pdf.is_locked || !pdf.file_url;
   return `
-    <div class="dl-row">
-      <span class="dl-thumb">${icon('note')}</span>
-      <span class="dl-main">
+    <div class="pdf-row">
+      <span class="pdf-thumb">${icon('note')}</span>
+      <span class="pdf-main">
         <strong>${esc(pdf.title)}</strong>
         <small>${esc(pdf.description || 'PDF notes')}${locked ? ' · locked' : ''}</small>
       </span>
       ${
         locked
           ? '<span class="badge badge-outline">Locked</span>'
-          : `<a class="dl-action" href="pdf.html?pdf=${pdf.id}" aria-label="Read ${esc(pdf.title)}">${icon('book')}</a>`
+          : `<a class="pdf-action" href="pdf.html?pdf=${pdf.id}" aria-label="Read ${esc(pdf.title)}">${icon('book')}</a>`
       }
     </div>`;
 }

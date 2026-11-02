@@ -470,8 +470,8 @@
 .note-row small,
 .doubt-row small { font-size: var(--text-2xs); color: var(--text-subtle); }
 
-/* ============================== DOWNLOADS ============================== */
-.dl-row {
+/* ============================== PDF ROWS ============================== */
+.pdf-row {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -480,8 +480,8 @@
   border: 1px solid var(--border);
   border-radius: var(--r-md);
 }
-.dl-row + .dl-row { margin-top: 8px; }
-.dl-thumb {
+.pdf-row + .pdf-row { margin-top: 8px; }
+.pdf-thumb {
   width: 44px;
   height: 44px;
   flex: 0 0 auto;
@@ -491,11 +491,11 @@
   background: rgba(91, 91, 246, 0.16);
   color: var(--violet-400);
 }
-.dl-thumb svg { width: 20px; height: 20px; }
-.dl-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
-.dl-main strong { font-size: var(--text-sm); font-weight: 600; color: var(--text-strong); }
-.dl-main small { font-size: var(--text-2xs); color: var(--text-subtle); }
-.dl-action {
+.pdf-thumb svg { width: 20px; height: 20px; }
+.pdf-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.pdf-main strong { font-size: var(--text-sm); font-weight: 600; color: var(--text-strong); }
+.pdf-main small { font-size: var(--text-2xs); color: var(--text-subtle); }
+.pdf-action {
   width: 38px;
   height: 38px;
   flex: 0 0 auto;
@@ -505,8 +505,8 @@
   background: var(--violet-600);
   color: var(--text-invert);
 }
-.dl-action:hover { background: var(--violet-700); }
-.dl-action svg { width: 17px; height: 17px; }
+.pdf-action:hover { background: var(--violet-700); }
+.pdf-action svg { width: 17px; height: 17px; }
 
 /* ============================== PROFILE ================================ */
 .profile-head {

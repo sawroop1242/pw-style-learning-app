@@ -30,7 +30,7 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     console.log('\nshell');
     const { window, doc, errors } = await open('index.html', ['core', 'content', 'ui', 'home']);
 
-    check('six sidebar links', doc.querySelectorAll('.sidebar .side-link').length === 6, String(doc.querySelectorAll('.sidebar .side-link').length));
+    check('five sidebar links', doc.querySelectorAll('.sidebar .side-link').length === 5, String(doc.querySelectorAll('.sidebar .side-link').length));
     check('Home is the current page', doc.querySelector('.side-link[aria-current="page"]').textContent.trim() === 'Home');
     check('four bottom tabs', doc.querySelectorAll('.tabbar a').length === 4);
     check(

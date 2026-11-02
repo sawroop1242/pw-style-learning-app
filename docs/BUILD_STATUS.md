@@ -1239,9 +1239,9 @@ and faculty identities are our own — no third-party logo, photography or wordi
 | App splash | `splash.html` | Brand mark, tagline, three value lines, *Get started* / *I already have an account* / continue as guest. No forced timer — a redirect nobody asked for is an accessibility problem. |
 | Khazana | `khazana.html` + `khazana.js` | Twelve subject tiles with real chapter and lecture counts, a running total, and the free batches pulled from the catalogue. **Removed in Run 9** — the page, its module, nav entry, tab, home rail, fixtures and styles no longer exist. |
 | Class player | `player.html` + `player.js` | Stage with transport, Chapters / Notes / Doubts tabs (arrow-key navigable), per-chapter lock and done states, Prev / Next. |
-| Downloads | `downloads.html` + `downloads.js` | Lectures / Notes / Tests tabs with per-item actions. |
+| Downloads *(removed in run 30)* | `downloads.html` + `downloads.js` | Lectures / Notes / Tests tabs. **Deleted outright** — the page, its module, the nav entry, the profile row, the home quick tile, the home rail link, the `.dl-*` styles and the service-worker entries are gone; those lists live on the batch page and in the class player. |
 | Community | `community.html` + `community.js` | Discussion and Announcement tab strips, posts with like / reply / share, compose FAB. `#announcements` deep-links to the announcements tab. |
-| Profile | `profile.html` + `profile.js` | Avatar, identity from the session, three stats, five-row menu, sign-out that calls the real `auth.logout()`. |
+| Profile | `profile.html` + `profile.js` | Avatar, identity from the session, three stats, a four-row menu (Downloads removed in run 30), sign-out that calls the real `auth.logout()`. |
 | Batch details | `course.html` + `course.js` | Pastel cover band with abstract mentor chips, "with Hindi Books" pill, *Enroll Now* / *Share*, five tabs (Overview · Class Schedule · Subjects · Teachers · FAQs), "About this batch" resource checklist, sticky facts rail and a phone-only sticky purchase bar. |
 | Batches | `courses.html` | All / My Batches / Favorite Batches tab strip over the existing filters. |
 | Test Series | `tests.html` | All / Attempted / Bookmarked tab strip; cards now read *200 Questions · 200 Marks* with a *Start Test* button. |
@@ -1252,7 +1252,7 @@ and faculty identities are our own — no third-party logo, photography or wordi
 - **Coloured subject tiles** for the Khazana grid, one tint per subject. *Retired with Khazana in Run 9; the subject-tint tokens were deleted with it.*
 - **Solid violet active state** in the sidebar, matching the board's selected row.
 - **Top bar** now carries search, notifications and the avatar *(the Khazana link was removed in Run 9)*.
-- Home was reordered to the board's rhythm: greeting → hero → quick tiles → Today's Classes → Recommended Batches → Khazana → Tests → announcements / community → poster → FAQ. *The Khazana band was removed in Run 9; the quick tile now points at Downloads.*
+- Home was reordered to the board's rhythm: greeting → hero → quick tiles → Today's Classes → Recommended Batches → Khazana → Tests → announcements / community → poster → FAQ. *The Khazana band was removed in Run 9; the quick tile that pointed at Downloads was removed in run 30.*
 
 ### Deliberate omissions
 
@@ -1260,7 +1260,7 @@ and faculty identities are our own — no third-party logo, photography or wordi
   Inventing faces for people who do not exist, or reusing someone else's, is not acceptable.
 - **No "LIVE NOW" that is not live.** The class strip reads its state from `TODAY_CLASSES`, where a
   class is only marked live while it is in its window.
-- **Community, downloads and player have no API yet.** They render bundled sample content and say so
+- **Community and player have no API yet.** They render bundled sample content and say so
   when you act on a control, rather than pretending a post was saved.
 - **My Batches** reuses the catalogue: there is no enrolment endpoint to read from.
 
@@ -1800,7 +1800,7 @@ API answered, the fixtures were still what the visitor saw. That is now gone.
 | `tests.html` | `/quizzes/` + `/quiz-attempts/`; tabs All / Attempted / Open for you |
 | `test-player.js` | paper from `/quizzes/<id>/`, attempt from `/quizzes/start/`, autosave and submit with `X-Attempt-Token` for guests. **No client answer key, so no local scoring** |
 | `dashboard.js` | `/courses/?mine=1`, `/progress/`, `/quiz-attempts/`, `/quizzes/`, `/notes/`, `/study-tasks/`; a guest is asked to sign in instead of shown someone else's numbers |
-| `downloads.js` | lessons, `/pdfs/` and papers the account can open |
+| ~~`downloads.js`~~ | **deleted in run 30** — lessons, `/pdfs/` and papers are reached from `course.html` and `player.js` |
 | `community.html` | announcements only — `/community/` is read-only, so the like/reply/compose controls are gone |
 | `profile.js` | `/auth/me/`, with counts from the API |
 | `player.js` | `/lessons/<id>/`; a lesson with no `video_url` says "no recording published" instead of showing a fake timestamp |

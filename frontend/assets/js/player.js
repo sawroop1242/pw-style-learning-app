@@ -220,8 +220,8 @@ function renderNotes(lesson) {
     host.innerHTML = emptyState({
       title: 'No notes for this section',
       body: 'The faculty has not uploaded notes to this section yet.',
-      actionLabel: 'All downloads',
-      actionHref: 'downloads.html',
+      actionLabel: 'My batches',
+      actionHref: 'courses.html',
       iconName: 'note'
     });
     return;
@@ -229,15 +229,15 @@ function renderNotes(lesson) {
   host.innerHTML = files
     .map(
       (file) => `
-      <div class="dl-row">
-        <span class="dl-thumb">${icon('note')}</span>
-        <span class="dl-main">
+      <div class="pdf-row">
+        <span class="pdf-thumb">${icon('note')}</span>
+        <span class="pdf-main">
           <strong>${esc(file.title)}</strong>
           <small>${esc(file.description || 'PDF notes')}</small>
         </span>
         ${
           file.file_url
-            ? `<a class="dl-action" href="pdf.html?pdf=${file.id}" aria-label="Read ${esc(file.title)}">${icon('book')}</a>`
+            ? `<a class="pdf-action" href="pdf.html?pdf=${file.id}" aria-label="Read ${esc(file.title)}">${icon('book')}</a>`
             : '<span class="badge badge-outline">Locked</span>'
         }
       </div>`

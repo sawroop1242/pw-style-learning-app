@@ -1,7 +1,7 @@
 """Guest test attempts, the public announcement feed and the PDF library.
 
 The front end reads nothing but the API, so the three things a page needed and
-the API did not yet serve live here: announcements, downloadable notes, and a
+the API did not yet serve live here: announcements, chapter notes, and a
 test window a visitor can actually sit without an account.
 """
 
