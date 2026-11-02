@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -30,18 +31,15 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 "Must include 'username_or_email' and 'password'."
             )
 
-        # Try to find user by username or email (case-insensitive)
+        # Case-insensitive lookup. `first()` rather than `get()`: the database
+        # index added in migration 0002 makes duplicates impossible from now
+        # on, but a database restored from before it must answer "wrong
+        # password" rather than a 500 from MultipleObjectsReturned.
         user = None
         if "@" in username_or_email:
-            try:
-                user = User.objects.get(email__iexact=username_or_email)
-            except User.DoesNotExist:
-                pass
+            user = User.objects.filter(email__iexact=username_or_email).order_by("id").first()
         if user is None:
-            try:
-                user = User.objects.get(username__iexact=username_or_email)
-            except User.DoesNotExist:
-                pass
+            user = User.objects.filter(username__iexact=username_or_email).order_by("id").first()
 
         if user is None or not user.check_password(password):
             raise serializers.ValidationError(
@@ -117,17 +115,36 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        """Create user with validated data."""
+        """Create the account, answering a race with a validation error.
+
+        The uniqueness checks in ``validate_username``/``validate_email`` are a
+        courtesy: two requests can pass them at the same moment, and the
+        database index is what actually decides. Without this, the loser of
+        that race would get a 500 for doing nothing wrong.
+        """
         validated_data.pop("password_confirm")
-        user = User.objects.create_user(
-            username=validated_data["username"],
-            email=validated_data["email"],
-            password=validated_data["password"],
-        )
+        try:
+            user = User.objects.create_user(
+                username=validated_data["username"],
+                email=validated_data["email"],
+                password=validated_data["password"],
+            )
+        except IntegrityError as error:
+            raise serializers.ValidationError(self._collision_message(error)) from error
         # Ensure profile is created with student role
         from .models import Profile
         Profile.objects.get_or_create(user=user)
         return user
+
+    @staticmethod
+    def _collision_message(error):
+        """Turn an index violation into the field-level message a form shows."""
+        detail = str(error).lower()
+        if "email" in detail:
+            return {"email": "A user with that email address already exists."}
+        if "username" in detail:
+            return {"username": "A user with that username already exists."}
+        return "An account with those details already exists."
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
