@@ -382,6 +382,10 @@ export const adaptCourse = (row = {}) => ({
   isEnrolled: row.is_enrolled === true,
   image: row.image_url || '',
   telegram: row.telegram_url || '',
+  telegramHandle: row.telegram_handle || '',
+  // A ready-to-send t.me link, built on the server so the batch name and
+  // number in the draft are the same text the admin previewed.
+  telegramDm: row.telegram_dm || '',
   position: Number(row.position ?? 0),
   // Only the detail endpoint nests these; a grid row leaves them empty.
   faculty: Array.isArray(row.faculty) ? row.faculty : []

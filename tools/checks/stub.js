@@ -23,6 +23,9 @@ const COURSES = [
     pricing_mode: 'paid',
     price: '4499.00',
     has_access: false,
+    telegram_handle: '@studyspace_access',
+    telegram_dm:
+      'https://t.me/studyspace_access?text=Hi%21+I+want+an+access+code+for+the+batch+%22JEE+Main+2027+Complete+Batch%22+%28batch+%231+%C2%B7+jee-main-2027%29.',
     lesson_count: 5,
     quiz_count: 2,
     folder_count: 2,
@@ -226,9 +229,12 @@ const json = (body, status = 200) =>
  * @param {object} opts
  *   signedIn  — answer /auth/me/ and the personal endpoints
  *   empty     — serve an empty catalogue (the "nothing published" path)
+ *   noTelegram — every batch is served without a Telegram handle, so the
+ *               "Get code" button has nothing to point at
  */
-function makeStub({ signedIn = false, empty = false } = {}) {
-  const pick = (rows) => (empty ? [] : rows);
+function makeStub({ signedIn = false, empty = false, noTelegram = false } = {}) {
+  const pick = (rows) =>
+    (empty ? [] : noTelegram ? rows.map((row) => ({ ...row, telegram_dm: '', telegram_handle: '' })) : rows);
   // Read receipts are the one piece of inbox state the real server persists,
   // so the stub keeps them too; otherwise "mark all read" could never clear.
   const readKeys = new Set();
@@ -261,7 +267,8 @@ function makeStub({ signedIn = false, empty = false } = {}) {
 
     const courseDetail = path.match(/^\/courses\/(\d+)\/$/);
     if (courseDetail) {
-      const course = COURSES.find((row) => row.id === Number(courseDetail[1]));
+      // `pick` so `--empty` / `noTelegram` reach the detail endpoint too.
+      const course = pick(COURSES).find((row) => row.id === Number(courseDetail[1]));
       if (!course) return json({ detail: 'Not found.' }, 404);
       return json({
         ...course,

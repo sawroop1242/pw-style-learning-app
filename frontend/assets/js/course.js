@@ -140,6 +140,11 @@ function renderPurchase() {
             ? `<button class="btn btn-primary btn-lg" type="button" data-enroll>Enrol — free</button>`
             : `<button class="btn btn-accent btn-lg" type="button" data-redeem>Redeem access code</button>`
       }
+      ${
+        !open && !isFree && current.telegramDm
+          ? `<a class="btn btn-primary btn-lg" href="${esc(current.telegramDm)}" target="_blank" rel="noopener" data-get-code>${icon('message')} Get code</a>`
+          : ''
+      }
       <button class="btn btn-ghost btn-lg" data-share>${icon('share')} Share</button>
     </div>
     ${
@@ -149,7 +154,11 @@ function renderPurchase() {
           ? '<p class="tiny subtle" style="margin-top:12px">Enrolled. Classes and notes are open on this account.</p>'
           : current.hasAccess
           ? '<p class="tiny subtle" style="margin-top:12px">Unlocked on this account. No card payment is taken on this platform.</p>'
-          : `<p class="tiny subtle" style="margin-top:12px">${money(current.price)} · unlocks with an access code, no card payment</p>`
+          : `<p class="tiny subtle" style="margin-top:12px">${money(current.price)} · ${
+              current.telegramDm
+                ? `message ${esc(current.telegramHandle || 'the teacher')} on Telegram for a code, then redeem it here. No card payment is taken.`
+                : 'unlocks with an access code from your institute, no card payment'
+            }</p>`
     }`;
 
   const mobile = $('#mobile-buy');
@@ -164,7 +173,11 @@ function renderPurchase() {
           ? `<a class="btn btn-primary btn-sm" href="#panel-curriculum">Start learning</a>`
           : isFree
             ? `<button class="btn btn-primary btn-sm" type="button" data-enroll>Enrol free</button>`
-            : `<button class="btn btn-accent btn-sm" type="button" data-redeem>Redeem code</button>`
+            : `${
+                current.telegramDm
+                  ? `<a class="btn btn-primary btn-sm" href="${esc(current.telegramDm)}" target="_blank" rel="noopener" data-get-code>${icon('message')} Get code</a>`
+                  : ''
+              }<button class="btn btn-accent btn-sm" type="button" data-redeem>Redeem code</button>`
       }`;
   }
 }
@@ -387,7 +400,11 @@ function renderAside() {
       ${
         current.free || current.hasAccess
           ? `<a class="btn btn-primary btn-block" style="margin-top:var(--sp-4)" href="#panel-curriculum">Class schedule</a>`
-          : `<button class="btn btn-accent btn-block" style="margin-top:var(--sp-4)" type="button" data-redeem>Redeem code</button>`
+          : `${
+              current.telegramDm
+                ? `<a class="btn btn-primary btn-block" style="margin-top:var(--sp-4)" href="${esc(current.telegramDm)}" target="_blank" rel="noopener" data-get-code>${icon('message')} Get code</a>`
+                : ''
+            }<button class="btn btn-accent btn-block" style="margin-top:${current.telegramDm ? '10px' : 'var(--sp-4)'}" type="button" data-redeem>Redeem code</button>`
       }
     </div>`;
 }
@@ -471,6 +488,20 @@ function wireRedeem() {
   const open = () => {
     modal.classList.add('is-open');
     document.body.classList.add('is-locked');
+    // The "message the teacher" row is built here, not in the markup: on a
+    // batch with no Telegram username there is nothing to link to, and an
+    // empty row would be a dead end.
+    const ask = $('#redeem-ask');
+    if (ask) {
+      ask.hidden = !current.telegramDm;
+      if (current.telegramDm) {
+        ask.innerHTML = `
+          <span class="alert alert-info" style="margin:0">
+            ${icon('message')}
+            <span>No code yet? <a class="link strong" href="${esc(current.telegramDm)}" target="_blank" rel="noopener">Message ${esc(current.telegramHandle || 'your teacher')} on Telegram</a> — the chat opens with this batch already named.</span>
+          </span>`;
+      }
+    }
     setTimeout(() => $('#code-input')?.focus(), 60);
   };
   const close = () => {
@@ -479,6 +510,11 @@ function wireRedeem() {
   };
 
   document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-get-code]')) {
+      // Opening Telegram is all this button does; it must never be mistaken
+      // for a redeem, so it is handled before the redeem branch.
+      return;
+    }
     if (event.target.closest('[data-redeem]')) {
       if (!isSignedIn()) {
         location.href = `login.html?next=${encodeURIComponent(`course.html?slug=${current.slug}`)}`;

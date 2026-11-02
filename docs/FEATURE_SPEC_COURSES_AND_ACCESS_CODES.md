@@ -40,6 +40,9 @@ Each course should support, using appropriate existing models/fields:
 - Title, stable slug/ID, description, subject/category, cover image URL, creator/owner, publication status, ordering, and timestamps.
 - Pricing mode: **free** or **paid**. Free courses must have a zero price; paid courses must have a positive configured price and currency. Validate this invariant server-side.
 - Provider Telegram contact, such as a normalized Telegram username (for example, `@provider_name`) and/or a validated `https://t.me/...` URL. Display a clear “Contact provider on Telegram to get an access code” action on paid-course details. Do not imply the app can verify Telegram conversations or payments.
+  - **Implemented (run 31).** The handle is stored with or without the `@` and is validated as a real Telegram username (4–32 characters, starting with a letter); an unusable one is refused in the admin, because a dead button is worse than none.
+  - The API builds the link, not the browser: `telegram_dm` is `https://t.me/<username>?text=…` with the **batch title, number and slug** pre-typed, so a provider running several batches can tell the requests apart. The admin shows that exact draft before saving.
+  - The paid batch page shows **Get code** (primary, opens the chat in a new tab) beside **Redeem access code**, on desktop, in the sticky phone bar and in the side panel; the redeem dialog carries the same link under “No code yet?”. A batch with no usable handle shows no Get code button and no promise of a chat.
 - Course detail view must show title, image, description, subject, free/paid label, price where paid, provider Telegram contact, and access status.
 - A draft/unpublished course is visible only to its owner and authorized staff. Students see published courses only.
 
