@@ -27,6 +27,9 @@ class Course(TimeStampedModel):
     description = models.TextField(blank=True)
     subject = models.CharField(max_length=80, default="General", db_index=True)
     image_url = models.URLField(blank=True)
+    #: R2 object key for a cover uploaded through the admin. The URL is signed
+    #: at read time; storing the key means the link never outlives its access.
+    image_key = models.CharField(max_length=255, blank=True)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -246,7 +249,11 @@ class PdfResource(TimeStampedModel):
     )
     title = models.CharField(max_length=180)
     description = models.TextField(blank=True)
-    file_url = models.URLField()
+    file_url = models.URLField(blank=True)
+    #: R2 object key for a PDF uploaded through the admin (see
+    #: ``objectstore.uploads``). When set, the learner is given a short-lived
+    #: signed URL instead of a permanent link.
+    file_key = models.CharField(max_length=255, blank=True)
     embed_url = models.URLField(
         blank=True,
         help_text=(
