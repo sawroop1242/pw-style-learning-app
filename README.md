@@ -22,13 +22,30 @@ A mobile-first learning platform with a dark, app-style PWA frontend (desktop si
 cd backend
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+# exact, hash-verified versions (CI installs this same file)
+pip install --require-hashes -r ../requirements.lock
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver 0.0.0.0:8000
 ```
 
 Open `/admin/` to manage content and `/api/` for API routes.
+
+`requirements.txt` holds the ranges a human edits; `requirements.lock` is the
+pinned, hashed resolution of them. Change the ranges, then:
+
+```bash
+pip install pip-tools
+pip-compile --generate-hashes --strip-extras -o requirements.lock requirements.txt
+```
+
+CI's *Dependency lock is current* job recompiles the file and fails if the two
+disagree, so a bump without its lock cannot merge.
+
+The API describes itself: `GET /api/schema/` (staff only) returns OpenAPI 3, and
+clients may pin a version with `Accept: application/json; version=1.0`. The
+default is `1.0`, so existing clients are already on it; a breaking change ships
+as `2.0` and old clients keep answering in `1.0`.
 
 ## Frontend
 

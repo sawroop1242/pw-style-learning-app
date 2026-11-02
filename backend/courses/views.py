@@ -1345,8 +1345,12 @@ class CsvImportJobViewSet(viewsets.ModelViewSet):
         )
         return response
 
-    @action(detail=False, methods=["get"])
-    def schema(self, request):
+    # Not named ``schema``: that attribute belongs to ``APIView`` and holds the
+    # schema generator, so an action of the same name shadows it — the OpenAPI
+    # generator then refuses to introspect this view at all. ``url_path`` keeps
+    # the published URL exactly as it was.
+    @action(detail=False, methods=["get"], url_path="schema")
+    def column_contract(self, request):
         """The column contract, for a form or a help panel."""
         return Response(
             {

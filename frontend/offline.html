@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b0b16">
   <title>You are offline — StudySpace</title>
-  <meta name="description" content="StudySpace needs a connection for new lessons, tests and notes. Pages you already opened stay available offline.">
+  <meta name="description" content="StudySpace keeps the app shell on your device, not your lessons. Notes, tests and results need a connection.">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/tokens.css">
   <link rel="stylesheet" href="assets/css/base.css">
@@ -26,15 +26,17 @@
       </span>
       <h1>You are offline</h1>
       <p>
-        Pages you have already visited still open from this device, but new lessons,
-        tests and notes need a connection.
+        The app itself still opens, but nothing on this device is a copy of your
+        batch: lessons, notes, tests and results are fetched live and need a
+        connection. Nothing is downloaded for offline study.
       </p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-primary" type="button" id="retry">Try again</button>
         <a class="btn btn-ghost" href="index.html">Go to home</a>
       </div>
       <p class="offline-note">
-        Batch pages you have already opened stay readable from this device.
+        Reconnect to continue where you left off — your progress is saved on
+        the server, not here.
       </p>
     </div>
   </main>

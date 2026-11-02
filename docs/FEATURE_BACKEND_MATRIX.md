@@ -157,3 +157,16 @@ URL, today's classes) appears only for a learner with an active
 
 Each gap is covered by a backend test that asserts the response **and** a DOM
 test that asserts the screen uses it.
+
+## Deliberately out of scope
+
+These are absences by decision, not unfinished work. Nothing in the product may
+advertise them, and a UI that implies them is a copy defect.
+
+| Area | What exists | What does not, and why |
+|---|---|---|
+| Community | A read-only announcements feed (`CommunityPost`, staff-authored, pinned or newest first) | Comments, replies, threads, likes and student posts. A discussion feature needs moderation, reporting and retention rules before it may hold student words; none of that is built |
+| Analytics | Counts on the admin index (batches, lessons, tests) and per-attempt scores | Enrolment funnels, revenue, retention cohorts, watch time. There is no payment gateway, so revenue numbers would be invented |
+| Offline | A service worker that caches the app shell so a page opens without a connection | Downloaded lessons, notes or tests. API responses are never cached — student data on a lost device is a privacy problem, and the offline page says so |
+| Payments | Access codes and free enrolment | Card/UPI checkout, invoices, refunds. Adding a gateway is a separate decision with its own compliance work |
+| Email/SMS/WhatsApp | Password-reset email through the configured backend; in-app reminders | Outbound campaigns, delivery receipts, WhatsApp notifications. Reminders are opt-in and best-effort by design |

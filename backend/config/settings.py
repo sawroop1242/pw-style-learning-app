@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "drf_spectacular",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
@@ -82,6 +83,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Before everything else that can log: an id has to exist by the time any
+    # other layer has something to say about the request.
+    "config.middleware.RequestIdMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -178,6 +182,23 @@ R2_REQUEST_TIMEOUT = float(os.getenv("R2_REQUEST_TIMEOUT", "8"))
 # r2.dev subdomain (set per bucket) is preferred.
 R2_SIGNED_URL_TTL = int(os.getenv("R2_SIGNED_URL_TTL", "900"))
 
+# The OpenAPI schema at /api/schema/ is generated from the same serializers the
+# API uses, so it cannot drift from the code without the tests noticing.
+SPECTACULAR_SETTINGS = {
+    "TITLE": "StudySpace API",
+    "DESCRIPTION": (
+        "Batches, lessons, notes, tests and results for a coaching academy. "
+        "Every write is scoped to the caller's own tenant; staff endpoints live "
+        "under /api/staff/."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": "/api",
+    "SORT_OPERATIONS": False,
+}
+
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
@@ -259,6 +280,14 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle"
     ],
+    # The API is versioned in the header, not the path: every existing client
+    # calling /api/courses/ is already "1.0" by default, so a URL change here
+    # would break them for no benefit. A breaking change ships as 2.0 and old
+    # clients keep the default they were built against.
+    "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.AcceptHeaderVersioning",
+    "DEFAULT_VERSION": "1.0",
+    "ALLOWED_VERSIONS": ["1.0"],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_THROTTLE_RATES": {
         # Per-IP ceiling for anonymous reads. Raise it if a whole campus shares
         # one address; auth endpoints add their own tighter, scoped limits.

@@ -43,7 +43,7 @@ function paint(host, list, empty) {
     ? list.map(postCard).join('')
     : emptyState({
         title: 'No announcements yet',
-        body: 'Notices from your faculty appear here as soon as they are posted.',
+        body: 'Notices from your academy appear here as soon as a teacher posts one.',
         iconName: 'message',
         ...empty
       });

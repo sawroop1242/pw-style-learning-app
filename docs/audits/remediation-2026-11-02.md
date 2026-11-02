@@ -31,12 +31,12 @@ claim, not a fix.
 |---|---|---|
 | 6.1 Frontend CI missing | **Fixed** | `.github/workflows/frontend-checks.yml`; a frontend-only PR now runs `check`, `a11y`, `interact`, `css` |
 | 6.2 CI does not exercise PostgreSQL | **Fixed** | `postgres` job in `backend-checks.yml`; migrations + full suite. It caught a real defect in its first run |
-| 6.3 Dependencies not reproducibly locked | **Open** | Ranges only; a `pip-compile` lock with hashes is the next step |
+| 6.3 Dependencies not reproducibly locked | **Fixed** | `requirements.lock` (hashes, 462) is what CI installs; the `lock` job recompiles and diffs it |
 | 6.4 "Offline learning" is offline shell support | **Fixed — wording** | The PWA caches the shell, not API data, deliberately; product copy should say so |
-| 6.5 Community is an announcement feed | **Open — scope** | Read-only by design; discussions are a separate milestone |
-| 6.6 Admin analytics scope | **Open — scope** | No enrolment/revenue/retention analytics exist; do not advertise them |
-| 6.7 No API schema or versioning | **Open** | `/api/v1/` + OpenAPI schema before third-party clients |
-| 6.8 Observability gaps | **Open — partial** | Health probes and `manage.py check` exist; request ids, error tracking and alerts do not |
+| 6.5 Community is an announcement feed | **Fixed — scope** | Read-only by design; the audit now lives in `docs/FEATURE_BACKEND_MATRIX.md` → *Deliberately out of scope*, and the page copy no longer says "student discussion" |
+| 6.6 Admin analytics scope | **Fixed — scope** | Recorded in *Deliberately out of scope*; the admin index counts rows, not revenue |
+| 6.7 No API schema or versioning | **Fixed** | `/api/schema/` (OpenAPI 3, staff-only) + `AcceptHeaderVersioning`, default `1.0`; `config/tests.py::ApiSchemaTests`, `ApiVersionTests` |
+| 6.8 Observability gaps | **Fixed in-process** | `X-Request-ID` on every response, 5xx/slow-request log lines carrying it, uncaught exceptions logged with it — `config/tests.py::RequestIdTests`. Still missing: an external error tracker and alerts |
 
 ## What each fix actually did
 
