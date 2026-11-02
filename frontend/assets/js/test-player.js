@@ -34,7 +34,7 @@ const state = {
   test: null,               // { id, title, exam, kind, duration, instructions }
   questions: [],            // normalised questions
   sections: [],             // [{ name, questions }]
-  answers: new Map(),       // questionId → choiceId
+  answers: new Map(),       // questionId → [choiceId, …] (one entry for single choice)
   marked: new Set(),        // questionIds
   visited: new Set(),
   current: 0,
@@ -207,9 +207,17 @@ function applySaved(saved) {
   state.deadline = saved.deadline ?? state.startedAt + state.durationMinutes * 60000;
   state.current = clamp(Number(saved.current) || 0, 0, Math.max(0, state.questions.length - 1));
 
-  for (const [id, choice] of Object.entries(saved.answers || {})) {
+  for (const [id, saved_choice] of Object.entries(saved.answers || {})) {
     const numeric = Number(id);
-    if (state.questions.some((q) => q.id === numeric)) state.answers.set(numeric, choice);
+    const question = state.questions.find((q) => q.id === numeric);
+    if (!question) continue;
+    // Older builds stored one choice per question; a multiple-choice answer is
+    // a list. Accept either, and keep only options the paper actually offers.
+    const offered = new Set(question.options.map((option) => option.id));
+    const list = (Array.isArray(saved_choice) ? saved_choice : [saved_choice])
+      .map((value) => (Number.isNaN(Number(value)) ? value : Number(value)))
+      .filter((value) => offered.has(value));
+    if (list.length) state.answers.set(numeric, list);
   }
   for (const id of saved.marked || []) state.marked.add(Number(id));
   for (const id of saved.visited || []) state.visited.add(Number(id));
@@ -651,7 +659,11 @@ function renderQuestion({ focus = false } = {}) {
 
   bankQuestionTime();
 
-  const chosen = state.answers.get(q.id);
+  // An answer is always a list: one option for single-choice and true/false,
+  // any number for multiple_choice. Everything downstream (palette, autosave,
+  // submit, resume) works on the list.
+  const chosen = state.answers.get(q.id) || [];
+  const multi = q.type === 'multiple_choice';
   const marked = state.marked.has(q.id);
   const number = state.current + 1;
 
@@ -671,13 +683,17 @@ function renderQuestion({ focus = false } = {}) {
     <p class="qpanel-label">Question:</p>
     <p class="qpanel-text" id="qpanel-text">${esc(q.prompt)}</p>
 
-    <div class="qpanel-options" role="radiogroup" aria-labelledby="qpanel-text">
+    <p class="qpanel-instruction" id="qpanel-instruction">
+      ${multi ? 'Choose every option that applies.' : 'Choose the one correct option.'}
+    </p>
+
+    <div class="qpanel-options" role="${multi ? 'group' : 'radiogroup'}" aria-labelledby="qpanel-text qpanel-instruction">
       ${q.options
         .map(
           (option, i) => `
-        <label class="qoption ${chosen === option.id ? 'is-selected' : ''}">
-          <input type="radio" name="answer" value="${esc(option.id)}" data-choice="${esc(option.id)}"
-                 ${chosen === option.id ? 'checked' : ''}>
+        <label class="qoption ${chosen.includes(option.id) ? 'is-selected' : ''}">
+          <input type="${multi ? 'checkbox' : 'radio'}" name="answer" value="${esc(option.id)}" data-choice="${esc(option.id)}"
+                 ${chosen.includes(option.id) ? 'checked' : ''}>
           <span class="qoption-key" aria-hidden="true"></span>
           <span class="qoption-text">${esc(option.text)}</span>
         </label>`
@@ -686,10 +702,10 @@ function renderQuestion({ focus = false } = {}) {
     </div>
 
     <footer class="qpanel-foot">
-      <span class="qpanel-state ${marked ? 'is-marked' : chosen !== undefined ? 'is-answered' : ''}">
-        ${marked ? icon('flag') + ' Marked for review' : chosen !== undefined ? icon('check') + ' Answered' : 'Not answered'}
+      <span class="qpanel-state ${marked ? 'is-marked' : chosen.length ? 'is-answered' : ''}">
+        ${marked ? icon('flag') + ' Marked for review' : chosen.length ? icon('check') + ' Answered' : 'Not answered'}
       </span>
-      <span class="qpanel-hint">Press 1–${q.options.length} to answer, ← → to move</span>
+      <span class="qpanel-hint">Press 1–${q.options.length} to ${multi ? 'toggle' : 'answer'}, ← → to move</span>
     </footer>`;
 
   if (focus) $('#qpanel').focus({ preventScroll: true });
@@ -701,24 +717,68 @@ function renderQuestion({ focus = false } = {}) {
   persist();
 }
 
+/** Apply one option click, honouring the question's type. */
+function chooseOption(question, choiceId, { toggle = false } = {}) {
+  const multi = question.type === 'multiple_choice';
+  const current = state.answers.get(question.id) || [];
+  let next;
+  if (multi) {
+    // A checkbox toggles: selecting a second option adds it, selecting a
+    // selected one removes it. Clearing the last one means unanswered.
+    next = current.includes(choiceId)
+      ? current.filter((id) => id !== choiceId)
+      : [...current, choiceId];
+  } else {
+    // A radio replaces: choosing again is a no-op rather than a deselect,
+    // which is what a real radio group does.
+    next = toggle || current[0] !== choiceId ? [choiceId] : current;
+  }
+  if (next.length) state.answers.set(question.id, next);
+  else state.answers.delete(question.id);
+  return next;
+}
+
+/** Repaint the option rows and the answered badge without re-rendering. */
+function paintAnswerState(question) {
+  const chosen = state.answers.get(question.id) || [];
+  $$('#qpanel .qoption').forEach((label) => {
+    const field = label.querySelector('[data-choice]');
+    const value = Number(field?.value);
+    const selected = chosen.includes(Number.isNaN(value) ? field?.value : value);
+    if (field) field.checked = selected;
+    label.classList.toggle('is-selected', selected);
+  });
+  const stateNode = $('#qpanel .qpanel-state');
+  if (stateNode) {
+    const marked = state.marked.has(question.id);
+    stateNode.className = `qpanel-state ${marked ? 'is-marked' : chosen.length ? 'is-answered' : ''}`;
+    stateNode.innerHTML = marked
+      ? `${icon('flag')} Marked for review`
+      : chosen.length
+        ? `${icon('check')} Answered`
+        : 'Not answered';
+  }
+}
+
 $('#qpanel').addEventListener('change', (e) => {
   const input = e.target.closest('[data-choice]');
   if (!input) return;
   const q = currentQuestion();
   const raw = input.value;
   const choice = Number.isNaN(Number(raw)) ? raw : Number(raw);
-  state.answers.set(q.id, choice);
+  // `input.checked` is authoritative: a checkbox that was just unticked must
+  // be removed even if our copy said it was selected.
+  if (q.type === 'multiple_choice' && !input.checked) {
+    const current = state.answers.get(q.id) || [];
+    const next = current.filter((id) => id !== choice);
+    if (next.length) state.answers.set(q.id, next);
+    else state.answers.delete(q.id);
+  } else {
+    chooseOption(q, choice);
+  }
 
   /* Toggle classes in place: a full re-render would drop keyboard focus. */
-  $$('#qpanel .qoption').forEach((label) => {
-    const field = label.querySelector('[data-choice]');
-    label.classList.toggle('is-selected', field?.checked ?? false);
-  });
-  const stateNode = $('#qpanel .qpanel-state');
-  if (stateNode) {
-    stateNode.className = `qpanel-state is-answered`;
-    stateNode.innerHTML = `${icon('check')} Answered`;
-  }
+  paintAnswerState(q);
 
   renderPalette();
   saveAnswer(q.id);
@@ -747,6 +807,7 @@ $('#prev-btn').addEventListener('click', () => goTo(state.current - 1));
 
 $('#clear-btn').addEventListener('click', () => {
   const q = currentQuestion();
+  // One control clears the whole response, however many options it holds.
   state.answers.delete(q.id);
   renderQuestion();
   renderPalette();
@@ -900,7 +961,7 @@ function saveAnswer(questionId) {
           method: 'POST',
           body: {
             question_id: q.id,
-            choice_ids: choice === undefined ? [] : [choice],
+            choice_ids: choice || [],
             marked_for_review: state.marked.has(q.id)
           },
           guestToken: state.guestToken || undefined
@@ -964,8 +1025,19 @@ function startTimer() {
 /* Pause, full screen, report, instructions                           */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Pause is a curtain, not a stopwatch.
+ *
+ * The deadline is the server's: autosave and submit compare against
+ * `QuizAttempt.deadline`, and no client value can move it. Pretending the clock
+ * stopped here — which this used to do by adding the pause duration to the
+ * local deadline — left the candidate watching time they did not have, and
+ * every save in that window was rejected. So the screen is hidden and the
+ * clock keeps running, and the card says so.
+ */
 function pauseExam() {
   if (state.paused || state.mode !== 'exam' || state.submitted) return;
+  // The closed curtain counts as time on the question: it was open for it.
   bankQuestionTime();
   state.paused = true;
   state.pauseStartedAt = Date.now();
@@ -977,17 +1049,21 @@ function pauseExam() {
   const veil = $('#pause-veil');
   if (veil) veil.hidden = false;
   document.body.classList.add('is-paused');
+
+  // Untimed practice has no server deadline, so nothing is running out.
+  const note = $('#pause-clock-note');
+  if (note) {
+    note.textContent = state.test?.kind === 'Practice'
+      ? 'This practice paper is untimed, so nothing is running out.'
+      : 'The clock is still running: the server keeps the official deadline, so this break counts against your time.';
+  }
+
   $('#resume-btn')?.focus();
   persist();
 }
 
 function resumeExam() {
   if (!state.paused) return;
-  const pausedFor = Date.now() - (state.pauseStartedAt || Date.now());
-  // Push the local deadline by the pause duration so the candidate keeps the
-  // time they did not use. A scheduled, server-scored test still expires on
-  // the server's own deadline.
-  state.deadline += pausedFor;
   state.paused = false;
   state.pauseStartedAt = null;
   state.activeId = currentQuestion()?.id ?? null;
@@ -996,7 +1072,15 @@ function resumeExam() {
   const veil = $('#pause-veil');
   if (veil) veil.hidden = true;
   document.body.classList.remove('is-paused');
+
+  // No deadline adjustment: the clock jumps straight to the real remaining
+  // time, and an attempt that expired behind the curtain is submitted now —
+  // which is what the server would do anyway.
   startTimer();
+  if (remainingSeconds() <= 0) {
+    submitAttempt(true);
+    return;
+  }
   $('#pause-btn')?.focus();
   persist();
 }
@@ -1202,13 +1286,14 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     goTo(state.current - 1);
   } else if (/^[1-6]$/.test(e.key)) {
-    const option = currentQuestion()?.options[Number(e.key) - 1];
+    const question = currentQuestion();
+    const option = question?.options[Number(e.key) - 1];
     if (!option) return;
     e.preventDefault();
-    state.answers.set(currentQuestion().id, option.id);
-    renderQuestion();
+    chooseOption(question, option.id, { toggle: true });
+    paintAnswerState(question);
     renderPalette();
-    saveAnswer(currentQuestion().id);
+    saveAnswer(question.id);
   }
 });
 
@@ -1224,7 +1309,7 @@ async function submitAttempt(auto) {
 
   const answers = state.questions.map((q) => ({
     question_id: q.id,
-    choice_ids: state.answers.has(q.id) ? [state.answers.get(q.id)] : [],
+    choice_ids: state.answers.get(q.id) || [],
     marked_for_review: state.marked.has(q.id)
   }));
 

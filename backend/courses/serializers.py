@@ -341,6 +341,33 @@ class QuizSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
+    def validate_timing_mode(self, value):
+        """Refuse a mode that would promise a clock the platform does not run.
+
+        ``section_timed`` and ``total_and_section`` need a section entity with
+        its own duration and navigation policy; without one an attempt runs
+        untimed while the page implies otherwise.
+        """
+        if value in Quiz.UNSUPPORTED_TIMING_MODES:
+            raise serializers.ValidationError(Quiz.SECTION_TIMING_MESSAGE)
+        return value
+
+    def validate(self, attrs):
+        """A timed paper without a duration is the same broken promise.
+
+        `Quiz.clean()` says so, but a `ModelSerializer` does not call it, and a
+        timed paper with no duration starts an attempt with no deadline.
+        """
+        timing = attrs.get("timing_mode", getattr(self.instance, "timing_mode", None))
+        duration = attrs.get(
+            "duration_minutes", getattr(self.instance, "duration_minutes", None)
+        )
+        if timing == Quiz.TimingMode.TIMED and not duration:
+            raise serializers.ValidationError(
+                {"duration_minutes": "Timed papers need a total duration."}
+            )
+        return attrs
+
     def _question_count(self, quiz):
         annotated = getattr(quiz, "question_total", None)
         if annotated is not None:

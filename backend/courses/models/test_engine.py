@@ -100,11 +100,26 @@ class Quiz(TimeStampedModel):
         ordering = ["id"]
         verbose_name_plural = "quizzes"
 
+    #: Modes that promise per-section clocks. There is no ``Section`` entity
+    #: with a duration, order or navigation policy, so an attempt started in
+    #: one of these would silently run untimed — the misleading timer the spec
+    #: forbids. They are refused until the model exists; the choices stay so
+    #: historical rows keep their value.
+    UNSUPPORTED_TIMING_MODES = {
+        "section_timed",
+        "total_and_section",
+    }
+
+    SECTION_TIMING_MESSAGE = (
+        "Section timing is not available yet: a paper cannot have per-section "
+        "clocks until sections have their own duration, order and navigation "
+        "rules. Use 'timed' (one clock for the whole paper) or 'untimed'."
+    )
+
     def clean(self):
-        if (
-            self.timing_mode in {self.TimingMode.TIMED, self.TimingMode.TOTAL_AND_SECTION}
-            and not self.duration_minutes
-        ):
+        if self.timing_mode in self.UNSUPPORTED_TIMING_MODES:
+            raise ValidationError({"timing_mode": self.SECTION_TIMING_MESSAGE})
+        if self.timing_mode == self.TimingMode.TIMED and not self.duration_minutes:
             raise ValidationError(
                 {"duration_minutes": "Timed quizzes require a total duration."}
             )

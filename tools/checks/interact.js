@@ -288,12 +288,25 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     await wait(150);
     check('mark for review paints the palette', [...doc.querySelectorAll('.pal-btn')].some((b) => b.classList.contains('is-marked')));
 
+    const savedDeadline = () =>
+      JSON.parse(window.sessionStorage.getItem('studyspace.attempt') || '{}').deadline;
+    const deadlineBeforePause = savedDeadline();
     click(window, doc.querySelector('#pause-btn'));
     await wait(120);
     check('pause shows the veil', !doc.querySelector('#pause-veil').hidden);
+    check(
+      'the pause card says the clock keeps running',
+      /clock is still running/i.test(doc.querySelector('#pause-clock-note').textContent),
+      doc.querySelector('#pause-clock-note').textContent
+    );
     click(window, doc.querySelector('#resume-btn'));
     await wait(120);
     check('resume hides the veil', doc.querySelector('#pause-veil').hidden);
+    check(
+      'pausing does not extend the deadline the server will enforce',
+      savedDeadline() === deadlineBeforePause,
+      `${deadlineBeforePause} -> ${savedDeadline()}`
+    );
 
     click(window, doc.querySelector('#instructions-btn'));
     await wait(120);
@@ -342,6 +355,83 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     );
     check('the frozen options are the ones offered', doc.querySelectorAll('.qoption').length === 2, String(doc.querySelectorAll('.qoption').length));
     check('the frozen section is used', [...doc.querySelectorAll('#section-tabs .exam-tab')].some((tab) => /Frozen section/.test(tab.textContent)));
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  /* ------------------- multiple-choice answering ----------------------- */
+  {
+    // The backend and the CSV schema have always supported `multiple_choice`,
+    // but the player rendered every option as a radio and stored one id, so a
+    // learner could not select two answers to a question that needs two.
+    console.log('\ntest-player.html (multiple choice)');
+    const sent = [];
+    const stub = makeStub({ mcq: true });
+    const { window, doc, errors } = await boot('test-player.html', ['core', 'content', 'ui', 'test-player'], {
+      query: '?test=5',
+      fetcher: (url, init) => {
+        sent.push({ url: String(url), init });
+        return stub(url, init);
+      }
+    });
+
+    const agree = doc.querySelector('#agree');
+    agree.checked = true;
+    agree.dispatchEvent(new window.Event('change', { bubbles: true }));
+    click(window, doc.querySelector('#start-btn'));
+    await wait(700);
+
+    const inputs = () => [...doc.querySelectorAll('#qpanel [data-choice]')];
+    check('a multiple-choice question uses checkboxes', inputs().every((input) => input.type === 'checkbox'), inputs().map((i) => i.type).join(','));
+    check('the instruction says more than one may apply', /every option/i.test(doc.querySelector('.qpanel-instruction').textContent), doc.querySelector('.qpanel-instruction').textContent);
+
+    const tick = (index) => {
+      const box = inputs()[index];
+      box.checked = !box.checked;
+      box.dispatchEvent(new window.Event('change', { bubbles: true }));
+    };
+
+    tick(0);
+    await wait(120);
+    check('one option is selected', doc.querySelectorAll('.qoption.is-selected').length === 1, String(doc.querySelectorAll('.qoption.is-selected').length));
+
+    tick(1);
+    await wait(120);
+    check('a second option can also be selected', doc.querySelectorAll('.qoption.is-selected').length === 2, String(doc.querySelectorAll('.qoption.is-selected').length));
+    check('neither selection replaced the other', inputs().filter((input) => input.checked).length === 2);
+
+    tick(0);
+    await wait(120);
+    check('deselecting removes only that option', doc.querySelectorAll('.qoption.is-selected').length === 1, String(doc.querySelectorAll('.qoption.is-selected').length));
+
+    const autosaves = () => sent.filter((call) => /autosave\/$/.test(call.url));
+    await wait(600);
+    const lastBody = JSON.parse(autosaves().at(-1)?.init?.body || '{}');
+    check(
+      'autosave sends every selected choice',
+      Array.isArray(lastBody.choice_ids) && lastBody.choice_ids.length === 1,
+      JSON.stringify(lastBody.choice_ids)
+    );
+
+    // Option 1 is the one still selected, so re-checking option 0 makes two.
+    tick(0);
+    await wait(700);
+    const bothBody = JSON.parse(autosaves().at(-1)?.init?.body || '{}');
+    check('two answers reach the server', (bothBody.choice_ids || []).length === 2, JSON.stringify(bothBody.choice_ids));
+
+    click(window, doc.querySelector('#clear-btn'));
+    await wait(700);
+    const cleared = JSON.parse(autosaves().at(-1)?.init?.body || '{}');
+    check('clear empties the answer', (cleared.choice_ids || []).length === 0, JSON.stringify(cleared.choice_ids));
+    check('a cleared question is not answered', doc.querySelectorAll('.qoption.is-selected').length === 0);
+
+    // A multiple-choice answer must survive a reload, or a resume silently
+    // drops half of it.
+    tick(0);
+    await wait(650);
+    tick(1);
+    await wait(650);
+    const persisted = JSON.parse(window.sessionStorage.getItem('studyspace.attempt') || '{}');
+    check('both answers are persisted locally', (persisted.answers?.[1] || []).length === 2, JSON.stringify(persisted.answers || null));
     check('no console errors', errors.length === 0, errors[0]);
   }
 
