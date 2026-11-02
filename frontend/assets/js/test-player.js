@@ -117,6 +117,30 @@ function apiQuestion(question, quiz) {
   };
 }
 
+/**
+ * Adopt the paper the server froze when the attempt started.
+ *
+ * `quiz.questions` is the live bank; an attempt carries the questions, options
+ * and marks it was actually served. Once an attempt exists, that copy wins —
+ * otherwise a provider editing a question mid-test would change the paper of
+ * everybody sitting it, and the score would be graded against a paper the
+ * student never saw.
+ */
+function useAttemptPaper(attempt) {
+  const paper = attempt && attempt.paper;
+  if (!paper || !Array.isArray(paper.questions) || !paper.questions.length) return false;
+  const quiz = paper.quiz || {};
+  state.questions = paper.questions.map((question) =>
+    apiQuestion(question, {
+      marks_per_question: quiz.marks_per_question,
+      negative_marks_per_wrong: quiz.negative_marks_per_wrong
+    })
+  );
+  if (quiz.marks_per_question != null) state.marksPerQuestion = Number(quiz.marks_per_question);
+  if (quiz.negative_marks_per_wrong != null) state.negativeMarks = Number(quiz.negative_marks_per_wrong);
+  return true;
+}
+
 /** Order the API questions to match the attempt's frozen question order. */
 function orderQuestions(questions, order) {
   if (!Array.isArray(order) || !order.length) return questions;
@@ -282,6 +306,7 @@ async function resumeAttempt(attemptId) {
     state.attemptId = attempt.id;
     state.deadline = attempt.deadline ? Date.parse(attempt.deadline) : null;
     state.startedAt = attempt.started_at ? Date.parse(attempt.started_at) : Date.now();
+    useAttemptPaper(attempt);
     if (Array.isArray(attempt.question_order) && attempt.question_order.length) {
       state.questions = orderQuestions(state.questions, attempt.question_order);
     }
@@ -432,6 +457,7 @@ async function startTest() {
     state.deadline = attempt.deadline
       ? Date.parse(attempt.deadline)
       : state.startedAt + state.durationMinutes * 60000;
+    useAttemptPaper(attempt);
     if (Array.isArray(attempt.question_order) && attempt.question_order.length) {
       state.questions = orderQuestions(state.questions, attempt.question_order);
     }

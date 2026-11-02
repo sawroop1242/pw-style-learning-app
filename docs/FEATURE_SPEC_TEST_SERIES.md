@@ -137,6 +137,17 @@ Do not implement proctoring, webcam capture, microphone recording, invasive devi
 - Keep an audit trail for test publication, question imports, scoring-rule changes, result release, and administrative actions without logging secrets.
 - Define behavior for deleted/updated questions: existing attempts must retain the version they were taken against.
 
+**How the immutable paper is implemented.** At start, `snapshot.build_paper()`
+copies the whole paper — every prompt, option, key, explanation, mark, negative
+mark, topic and the quiz's scoring policy — into `QuizAttempt.paper_snapshot`.
+Grading (`grading.grade_attempt`) and result review (`snapshot.review_rows`)
+read that copy and never the live question bank; `AttemptAnswer` keeps
+`question_snapshot_id` and `selected_choice_ids` so an answer row survives its
+question being deleted (`question` is `SET NULL`, not `CASCADE`). The attempt
+payload exposes `paper` (no key, no explanations) so the player renders what the
+student was actually served. Editing or deleting a question therefore cannot
+change a past attempt; see `backend/courses/tests/test_attempt_snapshot.py`.
+
 ## 8. Result and analytics views
 
 Student result view may include:

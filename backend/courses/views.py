@@ -20,7 +20,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
-from . import csv_import, grading, notifications, policy
+from . import csv_import, grading, notifications, policy, snapshot
 from .models import (
     AccessCode,
     AttemptAnswer,
@@ -114,6 +114,31 @@ def _may_read_attempt(request, attempt):
     if not token or not attempt.guest_token_hash:
         return False
     return secrets.compare_digest(attempt.guest_token_hash, _guest_token_hash(token))
+
+
+
+def _answer_row(attempt, question_id):
+    """Get or create the answer row for one question of ``attempt``.
+
+    Matched on the snapshot id rather than the live FK: the question row may
+    have been deleted, or reused, since the attempt started.
+    """
+    answer = AttemptAnswer.objects.filter(
+        attempt=attempt, question_snapshot_id=question_id
+    ).first()
+    if answer is None:
+        answer = AttemptAnswer.objects.filter(
+            attempt=attempt, question_snapshot_id__isnull=True, question_id=question_id
+        ).first()
+        if answer is not None:
+            answer.question_snapshot_id = question_id
+    if answer is None:
+        answer = AttemptAnswer(
+            attempt=attempt,
+            question_id=Question.objects.filter(pk=question_id).values_list("id", flat=True).first(),
+            question_snapshot_id=question_id,
+        )
+    return answer
 
 
 class StartAttemptThrottle(UserRateThrottle):
@@ -1001,25 +1026,27 @@ class QuizAttemptViewSet(viewsets.GenericViewSet, viewsets.mixins.ListModelMixin
         return False
 
     def _persist_answers(self, attempt, answers_data):
-        """Write the submitted answers, then grade from the database.
+        """Write the submitted answers, then grade from the frozen paper.
 
         Grading never trusts the payload: an autosaved answer that is absent
         from the final submit still counts, and the denominator covers every
-        question in the attempt snapshot.
+        question in the attempt snapshot. Choice ids are validated against the
+        *snapshot*, so an option added to the question bank after the attempt
+        started is not a valid answer to this paper.
         """
-        question_ids = set(attempt.question_order or [])
-        questions = {
-            question.id: question
-            for question in Question.objects.filter(
-                id__in=question_ids, quiz=attempt.quiz
-            ).prefetch_related("choices")
-        }
+        paper = snapshot.paper_for(attempt)
+        questions = snapshot.questions_of(paper)
+        allowed = set(attempt.question_order or []) or set(questions)
 
         for entry in answers_data:
             question_id = entry.get("question_id")
-            if question_id not in questions:
+            try:
+                question_id = int(question_id)
+            except (TypeError, ValueError):
                 continue
-            question = questions[question_id]
+            entry_paper = questions.get(question_id)
+            if question_id not in allowed or entry_paper is None:
+                continue
             raw_choices = entry.get("choice_ids") or []
             if not isinstance(raw_choices, (list, tuple)):
                 raise ValidationError({"choice_ids": ["Expected a list of choice IDs."]})
@@ -1028,20 +1055,26 @@ class QuizAttemptViewSet(viewsets.GenericViewSet, viewsets.mixins.ListModelMixin
             except (TypeError, ValueError):
                 raise ValidationError({"choice_ids": ["Choice IDs must be integers."]})
 
-            valid_ids = {choice.id for choice in question.choices.all()}
-            invalid = sorted(choice_ids - valid_ids)
+            invalid = sorted(choice_ids - snapshot.choice_ids_for(entry_paper))
             if invalid:
                 raise ValidationError(
                     {"choice_ids": [f"Invalid choice IDs: {invalid}"]}
                 )
 
-            answer, _created = AttemptAnswer.objects.get_or_create(
-                attempt=attempt, question=question
-            )
+            answer = _answer_row(attempt, question_id)
             answer.answered = bool(choice_ids)
             answer.marked_for_review = bool(entry.get("marked_for_review", False))
-            answer.save(update_fields=["answered", "marked_for_review", "updated_at"])
-            answer.selected_choices.set(choice_ids)
+            answer.selected_choice_ids = sorted(choice_ids)
+            answer.save(
+                update_fields=[
+                    "answered", "marked_for_review", "selected_choice_ids", "updated_at",
+                ]
+            )
+            answer.selected_choices.set(
+                Choice.objects.filter(
+                    id__in=choice_ids, question_id=question_id
+                )
+            )
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
@@ -1115,10 +1148,9 @@ class QuizAttemptViewSet(viewsets.GenericViewSet, viewsets.mixins.ListModelMixin
         except (TypeError, ValueError):
             raise ValidationError({"question_id": ["Must be an integer."]})
 
-        question = get_object_or_404(
-            Question, pk=question_id, quiz=attempt.quiz
-        )
-        if question_id not in set(attempt.question_order or []):
+        paper = snapshot.paper_for(attempt)
+        question_entry = snapshot.questions_of(paper).get(question_id)
+        if question_entry is None or question_id not in set(attempt.question_order or []):
             raise ValidationError({"question_id": ["Not part of this attempt."]})
 
         raw_choices = request.data.get("choice_ids") or []
@@ -1129,18 +1161,22 @@ class QuizAttemptViewSet(viewsets.GenericViewSet, viewsets.mixins.ListModelMixin
         except (TypeError, ValueError):
             raise ValidationError({"choice_ids": ["Choice IDs must be integers."]})
 
-        valid_ids = set(question.choices.values_list("id", flat=True))
-        invalid = sorted(choice_ids - valid_ids)
+        invalid = sorted(choice_ids - snapshot.choice_ids_for(question_entry))
         if invalid:
             raise ValidationError({"choice_ids": [f"Invalid choice IDs: {invalid}"]})
 
-        answer, _created = AttemptAnswer.objects.get_or_create(
-            attempt=attempt, question=question
-        )
+        answer = _answer_row(attempt, question_id)
         answer.answered = bool(choice_ids)
         answer.marked_for_review = bool(request.data.get("marked_for_review", False))
-        answer.save(update_fields=["answered", "marked_for_review", "updated_at"])
-        answer.selected_choices.set(choice_ids)
+        answer.selected_choice_ids = sorted(choice_ids)
+        answer.save(
+            update_fields=[
+                "answered", "marked_for_review", "selected_choice_ids", "updated_at",
+            ]
+        )
+        answer.selected_choices.set(
+            Choice.objects.filter(id__in=choice_ids, question_id=question_id)
+        )
 
         return Response({"status": "saved", "answered": answer.answered})
 
@@ -1423,6 +1459,19 @@ class CsvImportJobViewSet(viewsets.ModelViewSet):
         mode = str(request.data.get("mode") or "append").lower()
         if mode not in ("append", "replace"):
             raise ValidationError("mode must be 'append' or 'replace'.")
+        # The old escape hatch let a re-upload delete submitted answer sheets.
+        # It is gone; say so rather than silently ignoring a flag the caller
+        # believes is protecting them.
+        override = request.data.get("allow_replace_with_attempts")
+        if override is not None:
+            raise ValidationError(
+                {
+                    "allow_replace_with_attempts": [
+                        "This option no longer exists: a test with attempts cannot have "
+                        "its questions replaced. Create a new test for the revised paper."
+                    ]
+                }
+            )
 
         try:
             text = csv_import.fetch_csv(job.source_url)
@@ -1451,12 +1500,7 @@ class CsvImportJobViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            imported = csv_import.import_questions(
-                job.quiz,
-                report,
-                mode=mode,
-                allow_replace_with_attempts=bool(request.data.get("allow_replace_with_attempts")),
-            )
+            imported = csv_import.import_questions(job.quiz, report, mode=mode)
         except csv_import.ImportBlocked as error:
             return Response({"detail": str(error)}, status=status.HTTP_409_CONFLICT)
 
@@ -1613,6 +1657,10 @@ def start_quiz_attempt(request):
             "shuffle_options": quiz.shuffle_options,
             "result_release_policy": quiz.result_release_policy,
         }
+        # Freeze the whole paper, not just the order: prompts, options, the key,
+        # marks and explanations are copied now so a later edit to the question
+        # bank cannot change this student's paper or score.
+        paper_snapshot = snapshot.build_paper(quiz, questions, question_ids)
 
         deadline = None
         if (
@@ -1634,6 +1682,7 @@ def start_quiz_attempt(request):
             deadline=deadline,
             question_order=question_ids,
             rules_snapshot=rules_snapshot,
+            paper_snapshot=paper_snapshot,
         )
         grading.ensure_answer_rows(attempt, questions)
 

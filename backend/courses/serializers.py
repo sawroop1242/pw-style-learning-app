@@ -1,6 +1,9 @@
-from rest_framework import serializers
+from decimal import Decimal
+
 from django.contrib.contenttypes.models import ContentType
-from . import grading, policy
+from rest_framework import serializers
+
+from . import grading, policy, snapshot
 from .models import (
     CommunityPost, Course, CourseFaculty, CourseFolder, Lesson, PdfResource, Quiz,
     Question, Choice, Note, Progress, QuizAttempt, AttemptAnswer, Bookmark,
@@ -369,14 +372,23 @@ class QuizAttemptSerializer(serializers.ModelSerializer):
     # The attempt history used to fall back to "Test #5" because the payload
     # carried only a numeric id. The title is the row's reason to exist.
     quiz_title = serializers.CharField(source="quiz.title", read_only=True)
+    #: The paper as this attempt was served it. The player renders this rather
+    #: than the live question list, so editing the bank mid-attempt cannot
+    #: change what the student is looking at.
+    paper = serializers.SerializerMethodField()
 
     class Meta:
         model = QuizAttempt
         fields = [
             "id", "quiz", "quiz_title", "status", "started_at", "deadline", "submitted_at",
-            "score", "max_score", "question_order", "rules_snapshot", "result_released_at"
+            "score", "max_score", "question_order", "rules_snapshot", "paper",
+            "result_released_at"
         ]
         read_only_fields = fields
+
+    def get_paper(self, attempt):
+        """The frozen paper, without the answer key."""
+        return snapshot.public_paper(attempt)
 
 
 class AttemptAnswerSerializer(serializers.ModelSerializer):
@@ -466,6 +478,7 @@ class QuizResultSerializer(serializers.Serializer):
     marked_for_review_count = serializers.SerializerMethodField()
     answers_detail = serializers.SerializerMethodField()
     section_breakdown = serializers.SerializerMethodField()
+    paper = serializers.SerializerMethodField()
     result_released_at = serializers.DateTimeField(allow_null=True)
     
     def get_quiz(self, obj):
@@ -473,15 +486,28 @@ class QuizResultSerializer(serializers.Serializer):
             return obj.quiz.id
         return obj.quiz
 
+    def get_paper(self, obj):
+        """The paper this attempt was served, so a resumed attempt is unchanged."""
+        return snapshot.public_paper(obj)
+
     def get_percentage(self, obj):
         if obj.max_score and obj.max_score > 0:
             return round((obj.score / obj.max_score) * 100, 2)
         return 0.0
 
     def get_passed(self, obj):
-        quiz = obj.quiz
-        if quiz.pass_threshold_percent is not None and obj.score is not None and obj.max_score and obj.max_score > 0:
-            return obj.score >= (obj.max_score * quiz.pass_threshold_percent / 100)
+        """Pass/fail uses the threshold frozen when the attempt started.
+
+        Reading it from the live quiz would let a provider change the bar for
+        papers that were already sat.
+        """
+        threshold = snapshot.quiz_policy(snapshot.paper_for(obj)).get(
+            "pass_threshold_percent"
+        )
+        if threshold is None:
+            return None
+        if obj.score is not None and obj.max_score and obj.max_score > 0:
+            return obj.score >= (obj.max_score * Decimal(threshold) / 100)
         return None
 
     def get_time_taken_seconds(self, obj):
@@ -510,13 +536,15 @@ class QuizResultSerializer(serializers.Serializer):
         return self._graded(obj)["marked_for_review"]
 
     def get_answers_detail(self, obj):
-        # Only include if result is released
+        """The answer sheet, rendered from the frozen paper.
+
+        Only released results include it, and it never reads the live question
+        bank: a provider who edits an option after the test cannot change what
+        the student sees as their own answer.
+        """
         if not obj.is_released:
             return None
-        answers = obj.answers.select_related("question").prefetch_related(
-            "selected_choices", "question__choices"
-        ).order_by("question__position", "question_id")
-        return AttemptAnswerDetailSerializer(answers, many=True, context=self.context).data
+        return snapshot.review_rows(obj)
 
     def get_section_breakdown(self, obj):
         if not obj.is_released:
@@ -534,26 +562,25 @@ class QuizResultSerializer(serializers.Serializer):
         ]
 
 
-class AttemptAnswerDetailSerializer(serializers.ModelSerializer):
-    """Detailed answer with correct answer info - only for released results."""
-    selected_choices = ChoiceSerializer(many=True, read_only=True)
-    correct_choices = serializers.SerializerMethodField()
-    is_correct = serializers.SerializerMethodField()
-    explanation = serializers.CharField(source="question.explanation", read_only=True)
+class AttemptAnswerDetailSerializer(serializers.Serializer):
+    """One row of a released answer sheet, read from the frozen paper.
 
-    class Meta:
-        model = AttemptAnswer
-        fields = [
-            "id", "question", "selected_choices", "correct_choices",
-            "answered", "marked_for_review", "is_correct", "explanation"
-        ]
+    Deliberately not a ``ModelSerializer`` over the live rows: after a question
+    is deleted the FK is null, and after an option is reworded the live text is
+    no longer the text the student answered. Everything here comes from
+    ``QuizAttempt.paper_snapshot``.
+    """
 
-    def get_correct_choices(self, answer):
-        correct = [choice for choice in answer.question.choices.all() if choice.is_correct]
-        return ChoiceSerializer(correct, many=True).data
-
-    def get_is_correct(self, answer):
-        return grading.answer_is_correct(answer.question, grading.selected_ids(answer))
+    id = serializers.IntegerField()
+    question = serializers.IntegerField()          # the snapshot question id
+    prompt = serializers.CharField()
+    question_type = serializers.CharField()
+    explanation = serializers.CharField()
+    selected_choices = serializers.ListField(child=serializers.DictField())
+    correct_choices = serializers.ListField(child=serializers.DictField())
+    answered = serializers.BooleanField()
+    marked_for_review = serializers.BooleanField()
+    is_correct = serializers.BooleanField()
 
 
 class CommunityPostSerializer(serializers.ModelSerializer):

@@ -141,11 +141,16 @@ so an error report cannot become a copy of the paper.
 | `append` (default) | Existing questions kept; new ones continue the position numbering. | Adding questions to a paper. |
 | `replace` | Existing questions deleted first, positions restart at 1. | Re-importing a corrected draft. |
 
-`replace` is refused when the test has any attempt: answers reference questions
-with `ON DELETE CASCADE`, so deleting questions would destroy submitted answer
-sheets. Create a new test for a new version of a published paper. The override
-(`allow_replace_with_attempts: true`) exists for a genuine reset and is
-deliberately explicit.
+`replace` is refused when the test has any attempt. There is no override: a
+submitted answer sheet is history, and one re-upload is not a reason to delete
+it. Create a new test for a new version of a published paper, or import in
+`append` mode.
+
+The old `allow_replace_with_attempts` option is gone from both the API and the
+management command, and a request that still sends it is answered `400` with
+that field named — silently ignoring a flag the caller believes is protecting
+them is worse than refusing it. (`bool("false")` is `True` in Python, which is
+how a client that asked *not* to replace could previously delete results.)
 
 A second import of the same job is refused — one job is one import. Importing
 the same file through a fresh job is allowed and shows an `already_on_test`

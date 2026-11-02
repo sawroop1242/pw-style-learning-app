@@ -232,7 +232,29 @@ const json = (body, status = 200) =>
  *   noTelegram — every batch is served without a Telegram handle, so the
  *               "Get code" button has nothing to point at
  */
-function makeStub({ signedIn = false, empty = false, noTelegram = false } = {}) {
+/* A paper frozen at attempt start. The prompts deliberately differ from the
+ * live `QUESTIONS`, so a test can prove the player renders the attempt's copy
+ * and not today's question bank. */
+const FROZEN_PAPER = {
+  quiz: { marks_per_question: '2.00', negative_marks_per_wrong: '0.50' },
+  questions: [
+    {
+      id: 1,
+      position: 0,
+      prompt: 'FROZEN: the paper that was served',
+      question_type: 'single_choice',
+      topic: 'Frozen section',
+      marks: '2.00',
+      negative_marks: '0.50',
+      choices: [
+        { id: 11, text: 'Frozen option A', position: 1 },
+        { id: 12, text: 'Frozen option B', position: 2 }
+      ]
+    }
+  ]
+};
+
+function makeStub({ signedIn = false, empty = false, noTelegram = false, frozenPaper = false } = {}) {
   const pick = (rows) =>
     (empty ? [] : noTelegram ? rows.map((row) => ({ ...row, telegram_dm: '', telegram_handle: '' })) : rows);
   // Read receipts are the one piece of inbox state the real server persists,
@@ -338,6 +360,7 @@ function makeStub({ signedIn = false, empty = false, noTelegram = false } = {}) 
           deadline: iso(30 * 60 * 1000),
           question_order: [1, 2, 3],
           rules_snapshot: { duration_minutes: 30, marks_per_question: '4.00' },
+          ...(frozenPaper ? { paper: FROZEN_PAPER } : {}),
           ...(authed ? {} : { guest_token: 'stub-guest-token' })
         },
         201

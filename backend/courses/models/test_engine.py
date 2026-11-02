@@ -202,6 +202,10 @@ class QuizAttempt(TimeStampedModel):
     max_score = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     question_order = models.JSONField(default=list)
     rules_snapshot = models.JSONField(default=dict)
+    #: The whole paper — prompts, options, key, marks, explanations — frozen at
+    #: start. Grading and review read this, never the live question bank, so a
+    #: provider editing or deleting a question cannot rewrite a past attempt.
+    paper_snapshot = models.JSONField(default=dict)
     result_released_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -225,10 +229,19 @@ class AttemptAnswer(TimeStampedModel):
     attempt = models.ForeignKey(
         QuizAttempt, on_delete=models.CASCADE, related_name="answers"
     )
-    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    # Deleting a question must not delete the student's answer row: the attempt
+    # has to stay reviewable. The id is kept alongside so the answer can still
+    # be matched to its frozen paper entry after the row is gone.
+    question = models.ForeignKey(
+        Question, null=True, blank=True, on_delete=models.SET_NULL
+    )
+    question_snapshot_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     selected_choices = models.ManyToManyField(
         Choice, related_name="+", blank=True
     )
+    #: Choice ids as the attempt snapshot knew them, independent of the live
+    #: ``Choice`` rows and of the m2m table.
+    selected_choice_ids = models.JSONField(default=list, blank=True)
     answered = models.BooleanField(default=False)
     marked_for_review = models.BooleanField(default=False)
 
@@ -240,8 +253,13 @@ class AttemptAnswer(TimeStampedModel):
             )
         ]
 
+    @property
+    def snapshot_question_id(self):
+        """The question id this answer is about, even after the row is gone."""
+        return self.question_id or self.question_snapshot_id
+
     def __str__(self):
-        return f"Answer(attempt={self.attempt_id}, question={self.question_id})"
+        return f"Answer(attempt={self.attempt_id}, question={self.snapshot_question_id})"
 
 
 class CsvImportJob(TimeStampedModel):
