@@ -180,6 +180,13 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('the redeem dialog is open', doc.querySelector('#redeem-modal').classList.contains('is-open'));
     check('the dialog offers the Telegram chat too', Boolean(ask && ask.querySelector('a[href^="https://t.me/"]')), ask?.textContent?.trim().slice(0, 60));
     check('the dialog names who to message', /studyspace_access/.test(ask?.textContent || ''));
+
+    // The same page's own explanation must tell the same story — the copy used
+    // to claim free batches were "open to guests", which run 28 reversed.
+    click(window, doc.querySelector('[data-close-modal]'));
+    const overview = doc.querySelector('#panel-overview').textContent;
+    check('the overview points at Telegram for the code', /Telegram/i.test(overview), overview.replace(/\s+/g, ' ').slice(0, 90));
+    check('no stale "open to guests" promise', !/open to everyone, including guests/i.test(doc.body.textContent));
     check('no console errors', errors.length === 0, errors[0]);
   }
 

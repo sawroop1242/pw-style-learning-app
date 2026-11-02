@@ -234,10 +234,12 @@ function renderOverview() {
         <p class="small muted" style="margin:0">
           ${
             current.free
-              ? 'Free batches are open to everyone, including guests. Everything here can be opened straight away.'
+              ? 'Free to join — press Enrol and the batch is added to your account. Recordings and notes open to enrolled learners.'
               : current.hasAccess
                 ? 'This batch is unlocked on your account. Lessons and protected notes are available.'
-                : 'This is a paid batch. Enter an access code issued by your institute to unlock the lessons and protected notes.'
+                : current.telegramDm
+                  ? `Paid batch. Message ${esc(current.telegramHandle || 'the teacher')} on Telegram for an access code — the chat opens with this batch already named — then redeem the code here.`
+                  : 'This is a paid batch. Enter an access code issued by your institute to unlock the lessons and protected notes.'
           }
         </p>
       </div>
@@ -360,9 +362,10 @@ function renderFaculty() {
 
 function renderFaq() {
   const items = [
-    ['Is this batch free?', current.free ? 'Yes. Every lesson and note in this batch is open to any account, including guests.' : 'No — it unlocks with an access code from your institute. There is no card payment on this platform.'],
-    ['Do I need an account?', 'You can browse the batch and open free lessons without one. Signing in keeps your progress and notes attached to you.'],
-    ['Can I attempt the tests?', 'Any published test that is open can be started from the Subjects tab. Paid tests need the batch unlocked first.']
+    ['Is this batch free?', current.free ? 'Yes. Press Enrol and the batch is added to your account — recordings and notes open straight away.' : 'No — it unlocks with an access code from your institute. There is no card payment on this platform.'],
+    ['Do I need an account?', 'Browsing does not need one, but joining a batch and keeping your progress and notes does.'],
+    ['How do I get the code?', current.telegramDm ? `Press Get code to message ${current.telegramHandle || 'the teacher'} on Telegram; the batch name and number are already in the message. Then paste the code they send you under “Redeem access code”.` : 'Ask your institute for a code, then paste it under “Redeem access code”.'],
+    ['Can I attempt the tests?', 'Any published test that is open can be started from the Tests tab. Paid tests need the batch unlocked first.']
   ];
   $('#panel-faq').innerHTML = items
     .map(
