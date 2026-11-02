@@ -193,7 +193,6 @@ const NAV = [
   { href: 'courses.html', label: 'Batches', id: 'courses', icon: 'book' },
   { href: 'tests.html', label: 'Test Series', id: 'tests', icon: 'file-text' },
   { href: 'community.html#announcements', label: 'Announcements', id: 'announcements', icon: 'megaphone' },
-  { href: 'downloads.html', label: 'Downloads', id: 'downloads', icon: 'download' },
   { href: 'dashboard.html#tools', label: 'Study Tools', id: 'tools', icon: 'sparkles' }
 ];
 

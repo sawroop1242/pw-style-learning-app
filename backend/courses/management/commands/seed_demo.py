@@ -110,8 +110,8 @@ ANNOUNCEMENTS = [
     ),
     (
         "Chapter PDFs are live",
-        "Formula sheets and revision notes for the published chapters are in "
-        "Downloads. They stay available offline once opened.",
+        "Formula sheets and revision notes for the published chapters open in "
+        "the reader from the batch page.",
         False,
     ),
 ]

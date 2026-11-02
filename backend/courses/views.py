@@ -529,7 +529,7 @@ class CommunityPostViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class PdfResourceViewSet(viewsets.ReadOnlyModelViewSet):
-    """PDF notes for the download library.
+    """PDF notes for the resource library.
 
     Metadata is public; ``file_url`` is withheld by the serializer unless the
     caller may read the course, so a protected chapter cannot be pulled from a

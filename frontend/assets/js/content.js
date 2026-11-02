@@ -37,7 +37,6 @@ export const FAQS = [
 export const PROFILE_MENU = [
   { label: 'My batches', href: 'courses.html?mine=1', icon: 'book' },
   { label: 'My attempts', href: 'tests.html#attempted', icon: 'file-text' },
-  { label: 'Downloads', href: 'downloads.html', icon: 'download' },
   { label: 'Announcements', href: 'community.html', icon: 'message' },
   { label: 'Help & support', href: 'legal.html#codes', icon: 'info' }
 ];

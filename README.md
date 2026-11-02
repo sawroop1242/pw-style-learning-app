@@ -5,7 +5,7 @@ A mobile-first learning platform with a dark, app-style PWA frontend (desktop si
 ## Features
 
 - Responsive, installable PWA frontend with offline support — desktop sidebar shell, phone bottom
-  tabs, and app-style screens (exam-window test player, class player, downloads, community, profile)
+  tabs, and app-style screens (exam-window test player, class player, community, profile)
 - Django REST API for courses, lessons, quizzes, notes, bookmarks, revision items, study tasks, and progress
 - Test series with timed/untimed modes, CSV import, attempt autosave/resume, and an exam-window test
   player that runs on a light paper surface (palette, sections, pause, submit summary, answer review)
@@ -105,7 +105,6 @@ pw-style-learning-app/
 │   ├── tests.html          # Test series
 │   ├── test-player.html    # Exam-window test player + result screen
 │   ├── player.html         # Class player
-│   ├── downloads.html      # Downloads
 │   ├── community.html      # Discussion + announcements
 │   ├── profile.html        # Account
 │   ├── splash.html         # App splash

@@ -63,6 +63,14 @@ A folder has a title, optional description, stable ordering, and belongs to one 
 - Frontend should show the video embed when permitted by the provider and a clear external-open fallback when embedding is blocked.
 - Never claim every URL can be embedded. Validate URL and test the supported-provider policy.
 
+**How a lesson is filed in the admin (run 30).** The *Batch — Section* picker lists
+**every** section of **every** batch, labelled `"<batch title> — <section title>"`, and does not
+depend on which batch was chosen first — there is no browser-side filtering and no `data-course`
+handshake. Picking a section sets the lesson's batch, because a lesson cannot belong to a section
+of a different course; leaving both empty is a validation error, not a silent save. A sub-admin
+who picks a section belonging to **another provider's** batch is refused with
+*"…belongs to another teacher"* and nothing is written. A main admin may file into any batch.
+
 ### Chapter PDFs
 - Fields: title, optional description, PDF download resource, folder/course relationship, ordering, publication status.
 - Validate that the resource is an allowed HTTPS URL or use private file storage as appropriate. A URL string alone does not prove that the remote file is a PDF.

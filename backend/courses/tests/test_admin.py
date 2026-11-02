@@ -490,30 +490,74 @@ class AdminWorkflowTests(AdminTestDataMixin, TestCase):
         self.assertEqual(report.status, QuestionReport.Status.RESOLVED)
 
     def test_the_lesson_form_lists_sections_from_every_batch(self):
-        """The picker is grouped, not filtered.
+        """One list, every section, and each option names its batch.
 
-        Every section stays in the list — the chosen batch's own sections are
-        marked so they are easy to find, but a lesson can be filed into any
-        batch's section from here.
+        Nothing is filtered by the selected batch or by ownership: the whole
+        catalogue is in the dropdown, labelled “Batch — Section” so two
+        sections called “Week 1” can be told apart.
         """
+        foreign_folder = CourseFolder.objects.create(
+            course=self.other_course, title="Optics", position=1
+        )
+        self.client.force_login(self.sub_admin)
+
+        response = self.client.get(reverse("admin:courses_lesson_change", args=[self.lesson.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn(f'<option value="{foreign_folder.pk}">', body)
+        self.assertIn(f"{self.other_course.title} — Optics", body)
+        # A real, selectable option — not a disabled label.
+        self.assertNotIn("disabled", body.split(f'value="{foreign_folder.pk}"')[1][:120])
+        self.assertIn(f"{self.own_course.title} — ", body)
+        # No browser-side filtering is needed any more.
+        self.assertNotIn("staff/lesson_folder.js", body)
+
+    def test_picking_another_batchs_section_moves_the_lesson_to_that_batch(self):
         foreign_folder = CourseFolder.objects.create(
             course=self.other_course, title="Optics", position=1
         )
         self.client.force_login(self.main_admin)
 
-        response = self.client.get(reverse("admin:courses_lesson_change", args=[self.lesson.pk]))
+        response = self.client.post(
+            reverse("admin:courses_lesson_add"),
+            {
+                "title": "Lenses",
+                "course": self.own_course.pk,  # deliberately the wrong batch
+                "folder": foreign_folder.pk,
+                "duration_minutes": 30,
+                "position": 1,
+                "is_published": "0",
+            },
+            follow=True,
+        )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f'data-course="{self.own_course.pk}"', html=False)
-        self.assertContains(response, f'data-course="{self.other_course.pk}"', html=False)
+        lesson = Lesson.objects.get(title="Lenses")
+        self.assertEqual(lesson.course, self.other_course)
+        self.assertEqual(lesson.folder, foreign_folder)
 
-        # Both sections are real options with an id to submit, not disabled
-        # labels: the browser may pick either of them.
-        body = response.content.decode()
-        self.assertIn(f'<option value="{foreign_folder.pk}"', body)
-        self.assertNotIn("disabled", body.split(f'value="{foreign_folder.pk}"')[1][:120])
-        # The grouped picker is wired in.
-        self.assertContains(response, "staff/lesson_folder.js")
+    def test_a_sub_admin_cannot_file_a_lesson_into_another_teachers_section(self):
+        """Seeing every section must not mean writing into every section."""
+        foreign_folder = CourseFolder.objects.create(
+            course=self.other_course, title="Optics", position=1
+        )
+        self.client.force_login(self.sub_admin)
+
+        response = self.client.post(
+            reverse("admin:courses_lesson_add"),
+            {
+                "title": "Borrowed",
+                "folder": foreign_folder.pk,
+                "duration_minutes": 30,
+                "position": 1,
+                "is_published": "0",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Lesson.objects.filter(title="Borrowed").exists())
+        self.assertContains(response, "belongs to another teacher")
 
     def test_a_batch_page_shows_its_cover_image_field(self):
         self.client.force_login(self.sub_admin)

@@ -21,14 +21,24 @@ const liveBoot = (page, mods, query = '', seedStorage = null) =>
   boot(page, mods, { query, fetcher: liveFetch, seedStorage });
 
 /**
- * A real token so a section can act as an account.
+ * A real account for the sections that act as a learner.
  *
- * The login endpoint is deliberately throttled (10/min per identifier), and a
- * check suite that logs in on every run trips it. The token is cached on disk
- * and reused until it is nearly expired — which is also what a real session
- * does. A 429 is waited out once rather than reported as a product failure.
+ * The suite cannot use a seeded student: `seed_demo` deliberately creates no
+ * signable account, and a lesson list is empty until somebody has joined a
+ * batch (free batches need enrolment too). So the check makes its own learner
+ * through the public API and enrols it in a free batch — the same two calls a
+ * visitor makes. Both endpoints are throttled (10/min), and a suite that
+ * registers on every run would trip that, so the token is cached on disk and
+ * reused until it is nearly expired. A 429 is waited out once rather than
+ * reported as a product failure.
  */
 const TOKEN_CACHE = '/tmp/studyspace-check-token.json';
+
+const CHECK_LEARNER = {
+  username: 'live-check-learner',
+  email: 'live-check@studyspace.example',
+  password: 'LiveCheck!2026'
+};
 
 function tokenIsFresh(token) {
   try {
@@ -39,12 +49,29 @@ function tokenIsFresh(token) {
   }
 }
 
+const postJson = (path, body) =>
+  fetch(`${ORIGIN}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
 async function mintToken() {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const res = await fetch(`${ORIGIN}/api/token/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username_or_email: 'aarav', password: 'StudySpace!2026' })
+    // 201 on the first run, 400 once the learner already exists — either way
+    // the next step is the same login.
+    const registered = await postJson('/api/auth/register/', {
+      ...CHECK_LEARNER,
+      password_confirm: CHECK_LEARNER.password
+    });
+    if (registered.status === 429) {
+      console.log('  … registration throttled, waiting for the window to reopen');
+      await wait(61000);
+      continue;
+    }
+    const res = await postJson('/api/token/', {
+      username_or_email: CHECK_LEARNER.username,
+      password: CHECK_LEARNER.password
     });
     if (res.ok) return res.json();
     if (res.status !== 429) return null;
@@ -54,7 +81,28 @@ async function mintToken() {
   return null;
 }
 
-async function signIn() {
+/**
+ * Join a free batch, the way a student does.
+ *
+ * Without this every signed-in screen is empty: the enrolment gate applies to
+ * free batches too, so the check would "prove" an empty catalogue. Idempotent —
+ * an account that already belongs to a batch makes no request.
+ */
+async function ensureEnrolment(auth) {
+  const mine = await (await fetch(`${ORIGIN}/api/courses/?mine=1&page_size=1`, { headers: auth })).json();
+  if ((mine?.count || 0) > 0) return true;
+  const free = await (await fetch(`${ORIGIN}/api/courses/?pricing_mode=free&page_size=5`, { headers: auth })).json();
+  const course = (free?.results || [])[0];
+  if (!course) return false;
+  const res = await fetch(`${ORIGIN}/api/courses/${course.id}/enroll/`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  return res.ok;
+}
+
+async function signIn(depth = 0) {
   let token = null;
   try {
     const cached = JSON.parse(require('fs').readFileSync(TOKEN_CACHE, 'utf8'));
@@ -71,11 +119,22 @@ async function signIn() {
       /* a cache miss just means the next run logs in again */
     }
   }
-  const me = await (
-    await fetch(`${ORIGIN}/api/auth/me/`, {
-      headers: { Authorization: `Bearer ${token.access}` }
-    })
-  ).json();
+  const auth = { Authorization: `Bearer ${token.access}` };
+  const meRes = await fetch(`${ORIGIN}/api/auth/me/`, { headers: auth });
+  if (!meRes.ok) {
+    // A cached token from before the database was reseeded names a user that
+    // no longer exists. Drop it and mint a fresh one instead of failing the
+    // whole signed-in half of the suite.
+    if (depth > 0) return null;
+    try {
+      require('fs').unlinkSync(TOKEN_CACHE);
+    } catch {
+      /* nothing to drop */
+    }
+    return signIn(depth + 1);
+  }
+  const me = await meRes.json();
+  await ensureEnrolment(auth);
   return {
     storage: {
       'studyspace.access': token.access,
@@ -94,8 +153,8 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? '  ✓' : '  ✗'} ${name}${detail ? `  — ${detail}` : ''}`);
 };
 
-const api = async (path) => {
-  const res = await fetch(`${ORIGIN}${path}`);
+const api = async (path, auth) => {
+  const res = await fetch(`${ORIGIN}${path}`, auth ? { headers: auth } : undefined);
   return res.ok ? res.json() : null;
 };
 
@@ -116,13 +175,22 @@ const FIXTURES = [
 
 (async () => {
   console.log('\nAPI');
+  // Signed in from the start: the enrolment gate means a guest sees no
+  // lessons at all, and half the suite renders the learner's own screens.
+  const session = await signIn();
+  const auth = session?.auth;
   const courses = await api('/api/courses/?page_size=3');
   const quizzes = await api('/api/quizzes/?page_size=60');
-  const lessons = await api('/api/lessons/?page_size=60');
+  const lessons = await api('/api/lessons/?page_size=60', auth);
   check('catalogue answers', Boolean(courses), String(courses?.count));
   check('seed rows present', (courses?.count || 0) >= 5, `count=${courses?.count}`);
   check('quizzes answer', Boolean(quizzes), `count=${quizzes?.count}`);
   check('lessons answer', Boolean(lessons), `count=${lessons?.count}`);
+  check(
+    'a joined batch has classes to check',
+    (lessons?.count || 0) > 0,
+    session ? `count=${lessons?.count}` : 'no account could sign in'
+  );
   if (!courses || !quizzes) {
     console.log('\nThe API did not answer — start the server first.');
     process.exit(1);
@@ -130,7 +198,9 @@ const FIXTURES = [
 
   console.log('\nindex.html');
   {
-    const { doc, errors } = await liveBoot('index.html', ['core', 'content', 'ui', 'home']);
+    // "Today's classes" is today's uploads in the batches this learner joined,
+    // so the page is booted with the session — a guest genuinely has none.
+    const { doc, errors } = await liveBoot('index.html', ['core', 'content', 'ui', 'home'], '', session.storage);
     const batchCards = [...doc.querySelectorAll('#trending-grid .batch-card')];
     const apiTitles = rowsOf(courses).map((c) => c.title);
     check('batch rail renders API rows', batchCards.length > 0, String(batchCards.length));
@@ -238,18 +308,6 @@ const FIXTURES = [
     check('no console errors', errors.length === 0, errors[0]);
   }
 
-  console.log('\ndownloads.html');
-  {
-    const { doc, errors } = await liveBoot('downloads.html', ['core', 'content', 'ui', 'downloads']);
-    const lists = ['#list-lectures', '#list-notes', '#list-tests'].map((selector) => doc.querySelector(selector));
-    check('three panels rendered', lists.every((node) => node && node.innerHTML.trim().length > 0));
-    check(
-      'panels show rows or an explicit empty state',
-      lists.every((node) => node.querySelector('.dl-row') || node.querySelector('.empty-state'))
-    );
-    check('no console errors', errors.length === 0, errors[0]);
-  }
-
   console.log('\ncommunity.html');
   {
     const feed = await api('/api/community/');
@@ -288,7 +346,12 @@ const FIXTURES = [
   console.log('\nplayer.html');
   {
     const lesson = rowsOf(lessons)[0];
-    const { doc, errors } = await liveBoot('player.html', ['core', 'content', 'ui', 'player'], `?lesson=${lesson.id}`);
+    const { doc, errors } = await liveBoot(
+      'player.html',
+      ['core', 'content', 'ui', 'player'],
+      `?lesson=${lesson.id}`,
+      session.storage
+    );
     check('lesson title from the API', text(doc.querySelector('#player-title')) === lesson.title, text(doc.querySelector('#player-title')));
     check('no invented timestamp', !text(doc.querySelector('#player-sub')).includes('/ 1:00:15'));
     // Three honest states: an embed page, a media file, or nothing.
@@ -304,6 +367,17 @@ const FIXTURES = [
     }
     check('section list rendered', doc.querySelectorAll('#chapter-list .lesson-item').length > 0);
     check('no console errors', errors.length === 0, errors[0]);
+
+    // The same page as a guest: the class is not theirs, and the page says so
+    // instead of rendering a stage with nothing behind it.
+    const guest = await liveBoot('player.html', ['core', 'content', 'ui', 'player'], `?lesson=${lesson.id}`);
+    check(
+      'a guest is told the class is not theirs',
+      /Lesson not found|unavailable/i.test(text(guest.doc.querySelector('#player-title'))),
+      text(guest.doc.querySelector('#player-title'))
+    );
+    check('the guest player has no stage to pretend with', !guest.doc.querySelector('#player-video:not([hidden])'));
+    check('no console errors for a guest', guest.errors.length === 0, guest.errors[0]);
   }
 
   console.log('\nbatch page lists its faculty (live rows)');
@@ -325,12 +399,11 @@ const FIXTURES = [
 
   console.log('\nlearning loop: open a class, write a note, see it on the dashboard');
   {
-    const session = await signIn();
     if (!session) {
       check('a signed-in account is available for the learning-loop check', false, 'token refused');
     } else {
-      const lessons = await api('/api/lessons/?page_size=1');
-      const lesson = rowsOf(lessons)[0];
+      const owned = await api('/api/lessons/?page_size=1', session.auth);
+      const lesson = rowsOf(owned)[0];
 
       const { doc, window, errors } = await liveBoot(
         'player.html',
@@ -411,17 +484,15 @@ const FIXTURES = [
    */
   console.log('\ncontract (paths the screens request)');
   {
-    const session = await signIn();
     // Ids move when the demo is reseeded, so the player is pointed at a lesson
     // that exists right now rather than at last week's id.
-    const liveLessons = rowsOf(await api('/api/lessons/?page_size=60'));
+    const liveLessons = rowsOf(await api('/api/lessons/?page_size=60', auth));
     const lessonId = liveLessons[0]?.id;
     const PAGES = [
       ['index.html', ['core', 'content', 'ui', 'home'], '', false],
       ['courses.html', ['core', 'content', 'ui', 'courses'], '', false],
       ['course.html', ['core', 'content', 'ui', 'course'], '?slug=jee-main-2027', false],
       ['tests.html', ['core', 'content', 'ui', 'tests'], '', false],
-      ['downloads.html', ['core', 'content', 'ui', 'downloads'], '', false],
       ['community.html', ['core', 'content', 'ui', 'community'], '', false],
       ['profile.html', ['core', 'content', 'ui', 'profile'], '', true],
       ['dashboard.html', ['core', 'content', 'ui', 'dashboard'], '', true],

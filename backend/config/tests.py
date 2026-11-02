@@ -18,7 +18,7 @@ class FrontendServingTests(TestCase):
     def test_every_page_loads(self):
         pages = [
             "index", "courses", "course", "tests", "test-player", "dashboard",
-            "downloads", "profile", "login", "community", "legal", "player",
+            "profile", "login", "community", "legal", "player",
             "offline", "splash",
         ]
         for name in pages:
@@ -26,6 +26,11 @@ class FrontendServingTests(TestCase):
                 response = self.client.get(f"/{name}.html")
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response["Content-Type"], "text/html; charset=utf-8")
+
+    def test_the_downloads_page_is_gone(self):
+        """Downloads were removed outright — links must not survive to a 404."""
+        self.assertEqual(self.client.get("/downloads.html").status_code, 404)
+        self.assertEqual(self.client.get("/assets/js/downloads.js").status_code, 404)
 
     def test_stylesheets_and_scripts_are_served_with_their_own_type(self):
         for url, content_type in (

@@ -319,48 +319,83 @@ class CourseFolderInline(StaffInlineMixin, admin.TabularInline):
     show_change_link = True
 
 
-class FolderByCourseSelect(forms.Select):
-    """A folder dropdown whose options remember which batch they belong to.
+class FolderChoiceField(forms.ModelChoiceField):
+    """Every section in the catalogue, labelled with the batch it is in.
 
-    The attribute lets the admin page group the sections by batch and show
-    which batch each one belongs to, so a class can be filed into any batch's
-    section without guessing. Nothing is filtered out.
+    The label is the whole point: a dropdown of bare section names ("Week 1")
+    is unusable once a second batch has a "Week 1" too, and the list used to be
+    narrowed to one batch at a time. Each option now reads
+    "Batch — Section", so the whole catalogue can be shown at once without
+    anybody guessing which section belongs where.
     """
 
-    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
-        option = super().create_option(name, value, label, selected, index, subindex, attrs)
-        instance = getattr(value, "instance", None)
-        if instance is not None:
-            option["attrs"]["data-course"] = str(instance.course_id)
-        return option
+    def label_from_instance(self, folder):
+        return f"{folder.course.title} — {folder.title}"
 
 
 class LessonAdminForm(forms.ModelForm):
-    """Lesson form with the folder list grouped by batch."""
+    """Lesson form whose section list is the whole catalogue.
+
+    Nothing is filtered by the selected batch and nothing is filtered by
+    ownership: every section is offered, labelled with its batch. Picking a
+    section therefore decides the batch, which is what the model requires
+    anyway (`Lesson.clean` refuses a section from another course).
+    """
+
+    folder = FolderChoiceField(
+        # Replaced with the real queryset in __init__; the class body only
+        # needs something to satisfy ModelChoiceField.
+        queryset=CourseFolder.objects.none(),
+        required=False,
+        label="Batch — Section",
+        empty_label="— no section —",
+        help_text=(
+            "Every section of every batch is listed, as “Batch — Section”. "
+            "Choosing one sets the batch above to match it."
+        ),
+    )
 
     class Meta:
         model = Lesson
         fields = "__all__"
-        widgets = {"folder": FolderByCourseSelect}
 
     def __init__(self, *args, **kwargs):
-        request = kwargs.pop("request", None)
+        self.request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
-        folder_field = self.fields["folder"]
-        folders = CourseFolder.objects.select_related("course").order_by(
-            "course__title", "position", "id"
-        )
-        # A sub-admin may only attach a lesson to their own folders; the model
-        # is validated again on save, this only keeps the list honest.
-        user = getattr(request, "user", None)
-        if user is not None and not is_main_admin(user):
-            folders = folders.filter(course__owner=user)
-        folder_field.queryset = folders
-        folder_field.empty_label = "— no section —"
-        folder_field.help_text = (
-            "Sections from every batch are listed, grouped by batch. Pick one "
-            "and the batch above changes to match it."
-        )
+        self.fields["folder"].queryset = CourseFolder.objects.select_related(
+            "course"
+        ).order_by("course__title", "position", "id")
+        # The batch is optional in the form because a chosen section sets it.
+        # `clean` below puts it back before the instance is built.
+        self.fields["course"].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        folder = cleaned.get("folder")
+        course = cleaned.get("course")
+
+        if folder is not None:
+            # The section decides the batch. Without this a form could be saved
+            # with the two disagreeing and fail `Lesson.clean` on the next edit.
+            cleaned["course"] = folder.course
+            course = folder.course
+
+            user = getattr(self.request, "user", None)
+            if user is not None and not is_main_admin(user) and folder.course.owner_id != user.id:
+                raise forms.ValidationError(
+                    {
+                        "folder": (
+                            f"“{folder.title}” is a section of “{folder.course.title}”, "
+                            "which belongs to another teacher. Add the class to a "
+                            "section of one of your own batches."
+                        )
+                    }
+                )
+        elif course is None:
+            raise forms.ValidationError(
+                {"course": "Pick a batch, or a section — the section sets the batch."}
+            )
+        return cleaned
 
 
 @admin.register(Course)
@@ -559,25 +594,39 @@ class LessonAdmin(PublishableAdmin):
     list_select_related = ("course", "folder")
     list_editable = ("position", "is_published")
     form = LessonAdminForm
-    # Only `course` stays an autocomplete: the folder is a plain select that
-    # the browser narrows to the chosen batch (see FolderByCourseSelect).
+    # `course` stays an autocomplete (there may be a hundred batches); the
+    # section is a plain select listing every section in the catalogue.
     autocomplete_fields = ("course",)
     save_on_top = True
     actions = ("publish_selected", "unpublish_selected", "duplicate_selected")
 
-    class Media:
-        js = ("staff/lesson_folder.js",)
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        """Hand the request to the form.
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["request"] = self.request
-        return kwargs
+        `ModelAdmin` has no hook for extra constructor arguments — a
+        `get_form_kwargs` method looks like one but is never called — so the
+        form class is wrapped here with the request bound. Without it the form
+        could not tell a main admin from a sub-admin, and the section list was
+        never scoped the way the code appeared to say.
+        """
+        form_class = super().get_form(request, obj, change, **kwargs)
+
+        class RequestBoundForm(form_class):
+            def __init__(self, *args, **form_kwargs):
+                form_kwargs.setdefault("request", request)
+                super().__init__(*args, **form_kwargs)
+
+        RequestBoundForm.__name__ = form_class.__name__
+        RequestBoundForm.__qualname__ = form_class.__qualname__
+        return RequestBoundForm
+
     fieldsets = (
         ("Which batch", {
             "fields": ("course", "folder"),
             "description": (
-                "Pick the batch first — the section list then shows only that "
-                "batch's folders. The section groups the class in the player."
+                "The section list shows every section of every batch, labelled "
+                "“Batch — Section”. Pick the section and the batch follows it; "
+                "pick neither and the class sits at the top of its batch."
             ),
         }),
         ("The class", {"fields": ("title", "description")}),
