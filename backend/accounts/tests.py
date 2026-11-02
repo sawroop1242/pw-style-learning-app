@@ -14,7 +14,7 @@ from django.core import mail
 from django.core.mail import EmailMessage
 from django.core.cache import cache
 from django.core.management import call_command
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -1648,13 +1648,17 @@ class SendOnlyKeyTests(TestCase):
                 )
 
 
-class CaseInsensitiveIdentityTests(TestCase):
+class CaseInsensitiveIdentityTests(TransactionTestCase):
     """Finding 6: the uniqueness rule has to survive a race.
 
     The serializer's `.exists()` check is advisory; two requests can pass it at
     the same instant. These tests hold the database itself to the rule, and
     exercise the deduplication that has to run before the index can be created
     on an existing database.
+
+    ``TransactionTestCase`` because the dedupe test drops and recreates the
+    functional indexes, and PostgreSQL refuses to create an index inside a
+    transaction that has pending trigger events from the rows it just renamed.
     """
 
     MIGRATION = "accounts.migrations.0002_case_insensitive_unique_identity"
