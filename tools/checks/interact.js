@@ -140,6 +140,73 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('no console errors', errors.length === 0, errors[0]);
   }
 
+  /* ------------------------- paid batch: Get code ------------------------ */
+  {
+    console.log('\ncourse.html (paid batch, Get code)');
+    const { window, doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
+      query: '?slug=jee-main-2027',
+      signedIn: true
+    });
+    await wait(250);
+
+    const button = doc.querySelector('#purchase-slot [data-get-code]');
+    check('a paid batch offers “Get code”', Boolean(button), button?.textContent?.trim());
+    check(
+      'the button opens the teacher\'s Telegram chat',
+      button?.getAttribute('href')?.startsWith('https://t.me/studyspace_access?text='),
+      button?.getAttribute('href')?.slice(0, 48)
+    );
+    check('it opens in a new tab, without an opener', button?.getAttribute('target') === '_blank' && button?.getAttribute('rel')?.includes('noopener'));
+    // decodeURIComponent, not a raw match: the draft goes through
+    // urlencode() on the server, which leaves spaces as '+'.
+    const draft = decodeURIComponent((button?.getAttribute('href') || '').split('text=')[1] || '')
+      .replace(/\+/g, ' ');
+    check('the batch is named in the draft', draft.includes('JEE Main 2027 Complete Batch'), draft.slice(0, 70));
+    check('the draft carries the batch number', /#\d+/.test(draft), draft.slice(0, 70));
+    check(
+      'the aside offers the same link',
+      Boolean(doc.querySelector('#course-aside [data-get-code]'))
+    );
+    check(
+      'the price line explains where the code comes from',
+      /Telegram/i.test(doc.querySelector('#purchase-slot').textContent || '')
+    );
+
+    // The dialog is the second way in, and it must not be empty. Opened the
+    // way a signed-in visitor opens it: `data-redeem` sends a guest to login.
+    click(window, doc.querySelector('#purchase-slot [data-redeem]'));
+    await wait(250);
+    const ask = doc.querySelector('#redeem-ask');
+    check('the redeem dialog is open', doc.querySelector('#redeem-modal').classList.contains('is-open'));
+    check('the dialog offers the Telegram chat too', Boolean(ask && ask.querySelector('a[href^="https://t.me/"]')), ask?.textContent?.trim().slice(0, 60));
+    check('the dialog names who to message', /studyspace_access/.test(ask?.textContent || ''));
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  /* -------------------- paid batch with no Telegram handle ---------------- */
+  {
+    console.log('\ncourse.html (paid batch, no Telegram)');
+    // A provider who never filled the field: the code box must be the only
+    // way in, with no "Get code" button and no promise of a chat.
+    const { window, doc, errors } = await boot('course.html', ['core', 'content', 'ui', 'course'], {
+      query: '?slug=jee-main-2027',
+      fetcher: makeStub({ signedIn: true, noTelegram: true }),
+      seedStorage: SIGNED_IN
+    });
+    await wait(300);
+    check('no “Get code” without a handle', !doc.querySelector('[data-get-code]'));
+    check('the code button is still there', Boolean(doc.querySelector('#purchase-slot [data-redeem]')));
+    check(
+      'the copy does not promise a Telegram chat',
+      !/message .*on Telegram/i.test(doc.querySelector('#purchase-slot').textContent || ''),
+      (doc.querySelector('#purchase-slot').textContent || '').trim().slice(0, 80)
+    );
+    click(window, doc.querySelector('#purchase-slot [data-redeem]'));
+    await wait(250);
+    check('the dialog has no empty Telegram row', doc.querySelector('#redeem-ask').hidden);
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
   /* -------------------------------- tests ------------------------------- */
   {
     console.log('\ntests.html');

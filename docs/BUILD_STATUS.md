@@ -521,7 +521,7 @@ Implements the M8 scope from `MILESTONE_08_LEARNING_EXPERIENCE.md` and `FEATURE_
 | Feature | Status |
 |---|---|
 | Course cards with image, subject, free/paid, price | ✅ |
-| Paid course: locked content + Telegram contact | ✅ |
+| Paid course: locked content + Telegram contact | ✅ — the contact is a **Get code** button that opens the teacher's DM with the batch already named (run 31) |
 | Access code entry with server validation | ✅ |
 | Invalid/expired/revoked/throttled code handling | ✅ |
 | Grant-based lesson/PDF access | ✅ |

@@ -11,6 +11,7 @@ used to do automatically:
 """
 
 from datetime import timedelta
+from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -73,6 +74,7 @@ class EnrolmentData(APITestCase):
             owner=cls.admin,
             pricing_mode=Course.PricingMode.PAID,
             price=499,
+            telegram_handle="@studyspace_access",
             is_published=True,
         )
         cls.hidden = Course.objects.create(
@@ -321,3 +323,65 @@ class PdfViewerApiTests(EnrolmentData):
 
         self.assertEqual(row["embed_url"], "https://pdfhost.io/embed/abc")
         self.assertEqual(row["viewer_url"], "https://pdfhost.io/embed/abc")
+
+
+class TelegramCodeRequestTests(TestCase):
+    """The "Get code" button's link, from the API's point of view.
+
+    A paid batch is not bought here — the learner messages the provider for a
+    code and redeems it. The API hands the browser a ready-made DM link so the
+    batch name and number are already in the draft, and the provider can tell
+    three batches apart without asking a follow-up question.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(
+            username="provider", email="provider@example.com", password="TestPass123!"
+        )
+        cls.owner.profile.role = Role.SUB_ADMIN
+        cls.owner.profile.save()
+
+        cls.paid = Course.objects.create(
+            title="SSC CGL 2026 Foundation",
+            slug="ssc-cgl-2026",
+            owner=cls.owner,
+            pricing_mode=Course.PricingMode.PAID,
+            price=3599,
+            telegram_handle="@studyspace_access",
+            is_published=True,
+        )
+        cls.free = Course.objects.create(
+            title="Free Starter",
+            slug="free-starter",
+            owner=cls.owner,
+            pricing_mode=Course.PricingMode.FREE,
+            telegram_handle="",
+            is_published=True,
+        )
+
+    def test_the_list_row_carries_the_dm_link(self):
+        payload = self.client.get("/api/courses/?slug=ssc-cgl-2026").json()
+        row = payload["results"][0]
+        self.assertTrue(
+            row["telegram_dm"].startswith("https://t.me/studyspace_access?text="),
+            row["telegram_dm"],
+        )
+
+        draft = parse_qs(urlparse(row["telegram_dm"]).query)["text"][0]
+        self.assertIn("SSC CGL 2026 Foundation", draft)
+        self.assertIn(f"#{self.paid.pk}", draft)
+        self.assertIn("ssc-cgl-2026", draft)
+
+    def test_the_detail_endpoint_carries_it_too(self):
+        payload = self.client.get(f"/api/courses/{self.paid.pk}/").json()
+        self.assertTrue(payload["telegram_dm"].startswith("https://t.me/studyspace_access?text="))
+
+    def test_a_batch_without_a_handle_has_no_link(self):
+        payload = self.client.get(f"/api/courses/{self.free.pk}/").json()
+        self.assertEqual(payload["telegram_dm"], "")
+
+    def test_the_link_never_contains_a_bare_at_sign_path(self):
+        """`t.me/@name` is not a profile page, so the @ must be stripped."""
+        payload = self.client.get(f"/api/courses/{self.paid.pk}/").json()
+        self.assertNotIn("t.me/@", payload["telegram_dm"])

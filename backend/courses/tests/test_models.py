@@ -137,8 +137,37 @@ class CourseModelTests(TestDataMixin, TestCase):
         ).clean()
 
     def test_telegram_handle_validation(self):
-        with self.assertRaises(ValidationError):
-            Course(title="T", slug="t-tel", telegram_handle="provider").clean()
+        """A handle the admin stores must be one that can become a t.me link."""
+        for bad in ("ab", "x", "not a handle", "@@double", "with-dash", "@1leading"):
+            with self.subTest(handle=bad), self.assertRaises(ValidationError):
+                Course(title="T", slug="t-tel", telegram_handle=bad).clean()
+
+    def test_telegram_handle_accepts_the_forms_people_type(self):
+        for good in ("studyspace_access", "@studyspace_access", " @Studyspace_Access "):
+            with self.subTest(handle=good):
+                Course(title="T", slug="t-tel", telegram_handle=good).clean()
+
+    def test_telegram_dm_link_names_the_batch(self):
+        course = Course.objects.create(
+            title="SSC CGL 2026 Foundation",
+            slug="ssc-cgl-2026-foundation",
+            pricing_mode=Course.PricingMode.PAID,
+            price=Decimal("3599.00"),
+            telegram_handle="@studyspace_access",
+        )
+        dm = course.telegram_dm_url
+        self.assertTrue(dm.startswith("https://t.me/studyspace_access?text="), dm)
+        message = course.telegram_dm_message
+        self.assertIn(course.title, message)
+        self.assertIn(f"#{course.pk}", message)
+        self.assertIn(course.slug, message)
+        # The '@' is not part of the t.me path.
+        self.assertNotIn("t.me/@", dm)
+
+    def test_a_batch_without_a_handle_has_no_dm_link(self):
+        course = Course.objects.create(title="Plain", slug="plain-batch")
+        self.assertEqual(course.telegram_dm_url, "")
+        self.assertEqual(course.telegram_username, "")
 
     def test_courses_default_to_draft(self):
         self.assertFalse(Course(title="D", slug="draft-default").is_published)

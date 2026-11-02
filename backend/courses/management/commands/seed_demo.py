@@ -133,6 +133,7 @@ COURSES = [
         "pricing_mode": Course.PricingMode.PAID,
         "price": Decimal("4499.00"),
         "telegram_handle": "@studyspace_access",
+        "telegram_url": "https://t.me/studyspace_access",
         "folders": [
             {
                 "title": "Mechanics",
@@ -163,6 +164,7 @@ COURSES = [
         "pricing_mode": Course.PricingMode.PAID,
         "price": Decimal("3499.00"),
         "telegram_handle": "@studyspace_access",
+        "telegram_url": "https://t.me/studyspace_access",
         "folders": [
             {
                 "title": "Cell Biology",
@@ -215,6 +217,7 @@ COURSES = [
         "pricing_mode": Course.PricingMode.PAID,
         "price": Decimal("1999.00"),
         "telegram_handle": "@studyspace_access",
+        "telegram_url": "https://t.me/studyspace_access",
         "folders": [
             {
                 "title": "Quantitative Aptitude",
@@ -262,6 +265,7 @@ COURSES = [
         "pricing_mode": Course.PricingMode.PAID,
         "price": Decimal("5999.00"),
         "telegram_handle": "@studyspace_access",
+        "telegram_url": "https://t.me/studyspace_access",
         "folders": [
             {
                 "title": "Algorithms",

@@ -397,6 +397,29 @@ const FIXTURES = [
     check('no console errors', errors.length === 0, errors[0]);
   }
 
+  console.log('\nbatch page: the “Get code” button on a paid batch');
+  {
+    const list = await api('/api/courses/?page_size=60');
+    const paid = rowsOf(list).find((row) => row.pricing_mode === 'paid' && row.telegram_dm);
+    const { doc, errors } = await liveBoot(
+      'course.html',
+      ['core', 'content', 'ui', 'course'],
+      paid ? `?slug=${paid.slug}` : '?slug=missing',
+      session.storage
+    );
+    await wait(400);
+    if (!paid) {
+      check('a paid batch with a Telegram handle exists to check', false, 'none in the catalogue');
+    } else {
+      const button = doc.querySelector('#purchase-slot [data-get-code]');
+      check('the API hands the browser a DM link', /^https:\/\/t\.me\//.test(paid.telegram_dm), paid.telegram_dm.slice(0, 60));
+      check('the page renders “Get code”', Boolean(button), button?.textContent?.trim());
+      check('the button uses the API link', button?.getAttribute('href') === paid.telegram_dm);
+      check('the draft names the batch', decodeURIComponent(button?.getAttribute('href') || '').replace(/\+/g, ' ').includes(paid.title));
+    }
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
   console.log('\nlearning loop: open a class, write a note, see it on the dashboard');
   {
     if (!session) {

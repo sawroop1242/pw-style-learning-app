@@ -46,6 +46,7 @@ paths. Findings below are as of commit `ab0493c` + this change.
 | 1.9 | Paper list for a batch | `course.html` | `GET /api/quizzes/?course=` | connected |
 | 1.10 | Join a free batch | `course.html` "Enrol — free" | `POST /api/courses/<id>/enroll/` | connected — idempotent, revives a revoked grant, `400` on a paid batch |
 | 1.10a | Enrol with an access code | `course.html` | `POST /api/access-codes/redeem/` | connected |
+| 1.10c | Ask the teacher for a code | `course.html` "Get code" | `Course.telegram_handle` → `telegram_dm` in `GET /api/courses/` | connected — the DM opens with the batch title, number and slug already typed; a batch with no usable handle shows no button |
 | 1.10b | Batch cover image | `courses.html`, `course.html` | `Course.image_url` | connected — set in the admin "Artwork" section, falls back to the subject colour |
 | 1.11 | Similar batches | `course.html` | `GET /api/courses/?page_size=6` | connected |
 | 1.12 | FAQ accordion | `course.html` | — (authored copy) | n/a |

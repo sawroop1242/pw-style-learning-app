@@ -1,10 +1,18 @@
+import re
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
 from .common import TimeStampedModel
+
+# Telegram usernames are 4–32 characters, start with a letter, and may contain
+# letters, digits and underscores. A handle that does not match this cannot
+# produce a working `t.me` link, and a dead "Get code" button is worse than
+# none, so the admin refuses it instead of storing it.
+TELEGRAM_USERNAME = re.compile(r"^@?([A-Za-z][A-Za-z0-9_]{3,31})$")
 
 
 class Course(TimeStampedModel):
@@ -33,8 +41,18 @@ class Course(TimeStampedModel):
         max_digits=10, decimal_places=2, default=Decimal("0.00")
     )
     currency = models.CharField(max_length=3, default="INR")
-    telegram_handle = models.CharField(max_length=80, blank=True)
-    telegram_url = models.URLField(blank=True)
+    telegram_handle = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text=(
+            "Telegram username the learner should message for an access code, "
+            "with or without the @ — e.g. @studyspace_access."
+        ),
+    )
+    telegram_url = models.URLField(
+        blank=True,
+        help_text="Optional public channel or group to link from the batch page.",
+    )
     is_published = models.BooleanField(default=False)
     position = models.PositiveIntegerField(default=0)
 
@@ -51,10 +69,47 @@ class Course(TimeStampedModel):
             errors["price"] = "Free courses must have a zero price."
         if self.pricing_mode == self.PricingMode.PAID and (self.price or 0) <= 0:
             errors["price"] = "Paid courses must have a positive price."
-        if self.telegram_handle and self.telegram_handle.startswith("@") is False:
-            errors["telegram_handle"] = "Telegram handle must start with '@'."
+        handle = (self.telegram_handle or "").strip()
+        if handle and not TELEGRAM_USERNAME.match(handle):
+            errors["telegram_handle"] = (
+                "Use a Telegram username: 4–32 letters, digits or underscores, "
+                "starting with a letter — @studyspace_access and studyspace_access "
+                "both work."
+            )
         if errors:
             raise ValidationError(errors)
+
+    @property
+    def telegram_username(self):
+        """The bare username, or ``""`` when no usable handle is stored.
+
+        The ``@`` people type in the admin is not part of the ``t.me`` path, so
+        it is stripped here once instead of in every caller.
+        """
+        match = TELEGRAM_USERNAME.match((self.telegram_handle or "").strip())
+        return match.group(1) if match else ""
+
+    @property
+    def telegram_dm_message(self):
+        """What the learner's Telegram draft says before they send it.
+
+        It names the batch and its number, because the teacher may be running
+        several batches and "send me the code" alone is not enough to answer.
+        """
+        if self.pk:
+            return (
+                f'Hi! I want an access code for the batch "{self.title}" '
+                f"(batch #{self.pk} · {self.slug})."
+            )
+        return f'Hi! I want an access code for the batch "{self.title}" ({self.slug}).'
+
+    @property
+    def telegram_dm_url(self):
+        """A direct-message link with that text pre-filled, or ``""``."""
+        username = self.telegram_username
+        if not username:
+            return ""
+        return f"https://t.me/{username}?{urlencode({'text': self.telegram_dm_message})}"
 
     def __str__(self):
         return self.title

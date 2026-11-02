@@ -195,12 +195,14 @@ class CourseListSerializer(serializers.ModelSerializer):
     quiz_count = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
     is_enrolled = serializers.SerializerMethodField()
+    telegram_dm = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
         fields = [
             "id", "title", "slug", "description", "subject", "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
+            "telegram_dm",
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",
             "has_access", "is_enrolled", "created_at", "updated_at"
         ]
@@ -231,6 +233,10 @@ class CourseListSerializer(serializers.ModelSerializer):
         """Whether the caller has joined — the flag the Enrol button reads."""
         return policy.is_enrolled(_request_user(self), course)
 
+    def get_telegram_dm(self, course):
+        """The teacher's DM link, with the batch already named in the draft."""
+        return course.telegram_dm_url
+
 
 class CourseDetailSerializer(serializers.ModelSerializer):
     """Full serializer for course detail with nested folders/lessons/PDFs.
@@ -243,6 +249,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     quiz_count = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
     is_enrolled = serializers.SerializerMethodField()
+    telegram_dm = serializers.SerializerMethodField()
     folders = serializers.SerializerMethodField()
     faculty = serializers.SerializerMethodField()
 
@@ -251,6 +258,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "slug", "description", "subject", "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
+            "telegram_dm",
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",
             "has_access", "is_enrolled", "folders", "faculty", "created_at", "updated_at"
         ]
@@ -266,6 +274,9 @@ class CourseDetailSerializer(serializers.ModelSerializer):
 
     def get_is_enrolled(self, course):
         return policy.is_enrolled(_request_user(self), course)
+
+    def get_telegram_dm(self, course):
+        return course.telegram_dm_url
 
     def get_folders(self, course):
         folders = course.folders.all().prefetch_related("lessons", "pdf_resources")

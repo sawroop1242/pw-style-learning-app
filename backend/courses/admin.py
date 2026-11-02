@@ -416,7 +416,7 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
     list_editable = ("is_published",)
     save_on_top = True
     # A fieldset may only name a non-model field when it is declared read-only.
-    readonly_fields = ("shortcuts", "image_preview")
+    readonly_fields = ("shortcuts", "image_preview", "telegram_preview")
 
     def get_fieldsets(self, request, obj=None):
         """`owner` is hidden from sub-admins by OwnerAssignAdmin, so it is only
@@ -443,9 +443,15 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
                 "description": "A free batch must cost 0; a paid batch needs a price. "
                                "Nobody pays here — a paid batch unlocks with an access code.",
             }),
-            ("Channel", {
-                "fields": ("telegram_handle", "telegram_url"),
-                "description": "Where learners ask questions about this batch.",
+            ("Access codes and Telegram", {
+                "fields": ("telegram_handle", "telegram_url", "telegram_preview"),
+                "description": (
+                    "Fill in the Telegram username to answer for this batch. "
+                    "A learner who opens a paid batch sees “Get code”, which "
+                    "opens a chat with that account with the batch name and "
+                    "number already typed, so you know what they are asking "
+                    "for. The public channel link is optional."
+                ),
             }),
             ("Visibility", {"fields": ("is_published", "position")}),
         )
@@ -453,6 +459,32 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
             # Appended as a one-element tuple of (name, options).
             fieldsets += (("Add to this batch", {"fields": ("shortcuts",)}),)
         return fieldsets
+
+    @admin.display(description="What the learner will send")
+    def telegram_preview(self, obj):
+        """Show the exact DM the button opens, or say the button is hidden.
+
+        Seeing the draft here is the only way to notice a wrong handle before
+        a learner does: the message is what arrives in the provider's Telegram.
+        """
+        if obj is None:
+            return format_html(
+                '<span class="ss-muted">Save the batch first — the draft names '
+                "the batch number.</span>"
+            )
+        url = obj.telegram_dm_url
+        if not url:
+            return format_html(
+                '<span class="ss-muted">No usable username yet, so the paid batch '
+                "shows no “Get code” button and keeps the code box only.</span>"
+            )
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener">{}</a>'
+            '<br><span class="ss-muted">Opens a chat with @{}.</span>',
+            url,
+            obj.telegram_dm_message,
+            obj.telegram_username,
+        )
 
     @admin.display(description="Cover preview")
     def image_preview(self, obj):
