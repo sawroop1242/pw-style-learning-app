@@ -23,7 +23,7 @@ claim, not a fix.
 | 9 | Token settings diverge from ADR 0004 | P2 | **Fixed** | `config/tests.py::TokenLifetimeTests` | #30 |
 | 10 | No Content-Security-Policy | P2 | **Fixed** | `config/tests.py::ContentSecurityPolicyTests` (6) | #30 |
 | 11 | CSV fetch has a DNS rebinding window | P2 | **Fixed** | `test_csv_import.py::FetchGuardTests` (8) | #31 |
-| 12 | R2 upload pipeline unproven | P2 | **Open** | — | — |
+| 12 | R2 upload pipeline unproven | P2 | **Fixed** | `objectstore/tests/test_uploads.py` (30) | #33 |
 
 ### §6 engineering gaps
 
@@ -32,7 +32,7 @@ claim, not a fix.
 | 6.1 Frontend CI missing | **Fixed** | `.github/workflows/frontend-checks.yml`; a frontend-only PR now runs `check`, `a11y`, `interact`, `css` |
 | 6.2 CI does not exercise PostgreSQL | **Fixed** | `postgres` job in `backend-checks.yml`; migrations + full suite. It caught a real defect in its first run |
 | 6.3 Dependencies not reproducibly locked | **Open** | Ranges only; a `pip-compile` lock with hashes is the next step |
-| 6.4 "Offline learning" is offline shell support | **Open — wording** | The PWA caches the shell, not API data, deliberately; product copy should say so |
+| 6.4 "Offline learning" is offline shell support | **Fixed — wording** | The PWA caches the shell, not API data, deliberately; product copy should say so |
 | 6.5 Community is an announcement feed | **Open — scope** | Read-only by design; discussions are a separate milestone |
 | 6.6 Admin analytics scope | **Open — scope** | No enrolment/revenue/retention analytics exist; do not advertise them |
 | 6.7 No API schema or versioning | **Open** | `/api/v1/` + OpenAPI schema before third-party clients |
