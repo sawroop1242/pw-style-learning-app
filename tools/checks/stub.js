@@ -254,9 +254,25 @@ const FROZEN_PAPER = {
   ]
 };
 
-function makeStub({ signedIn = false, empty = false, noTelegram = false, frozenPaper = false } = {}) {
+function makeStub({
+  signedIn = false,
+  empty = false,
+  noTelegram = false,
+  frozenPaper = false,
+  mcq = false
+} = {}) {
   const pick = (rows) =>
     (empty ? [] : noTelegram ? rows.map((row) => ({ ...row, telegram_dm: '', telegram_handle: '' })) : rows);
+
+  // `mcq` turns the first question into a multiple-choice one, so a test can
+  // select two options and prove the payload carries both.
+  const paperQuestions = mcq
+    ? QUESTIONS.map((question, index) =>
+        index === 0 ? { ...question, question_type: 'multiple_choice' } : question
+      )
+    : QUESTIONS;
+  const quizRows = () =>
+    QUIZZES.map((row) => (row.id === 5 ? { ...row, questions: paperQuestions } : row));
   // Read receipts are the one piece of inbox state the real server persists,
   // so the stub keeps them too; otherwise "mark all read" could never clear.
   const readKeys = new Set();
@@ -344,7 +360,7 @@ function makeStub({ signedIn = false, empty = false, noTelegram = false, frozenP
 
     const quizDetail = path.match(/^\/quizzes\/(\d+)\/$/);
     if (quizDetail) {
-      const quiz = QUIZZES.find((row) => row.id === Number(quizDetail[1]));
+      const quiz = quizRows().find((row) => row.id === Number(quizDetail[1]));
       if (!quiz) return json({ detail: 'Not found.' }, 404);
       return json(quiz);
     }

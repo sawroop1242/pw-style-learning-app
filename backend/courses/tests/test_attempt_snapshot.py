@@ -10,10 +10,12 @@ So these tests start an attempt, then deliberately vandalise the question bank
 question — and assert the attempt still grades and reviews as it did before.
 """
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import Role
@@ -239,3 +241,59 @@ class AttemptSnapshotTests(SnapshotData):
         resumed = self.client.get(f"/api/quiz-attempts/{payload['id']}/").json()
         prompts = [question["prompt"] for question in resumed["paper"]["questions"]]
         self.assertEqual(prompts, ["2 + 2 = ?", "Which are primes?"])
+
+
+class DeadlineTests(SnapshotData):
+    """Pause is a curtain, not a stopwatch — audit finding 5.
+
+    The attempt's deadline is the server's. A client that thinks it paused
+    cannot move it, so the API must accept a save just before expiry and refuse
+    one just after, whatever the browser believes.
+    """
+
+    def start_timed(self, minutes=30):
+        response = self.client.post("/api/quizzes/start/", {"quiz_id": self.quiz.id}, format="json")
+        self.assertEqual(response.status_code, 201, response.content)
+        body = response.json()
+        self.client.credentials(HTTP_X_ATTEMPT_TOKEN=body["guest_token"])
+        attempt = QuizAttempt.objects.get(pk=body["id"])
+        attempt.deadline = timezone.now() + timedelta(minutes=minutes)
+        attempt.save(update_fields=["deadline"])
+        return body["id"]
+
+    def autosave(self, attempt_id, question_id, choice_id):
+        return self.client.post(
+            f"/api/quiz-attempts/{attempt_id}/autosave/",
+            {"question_id": question_id, "choice_ids": [choice_id]},
+            format="json",
+        )
+
+    def test_a_save_just_before_expiry_is_accepted(self):
+        attempt_id = self.start_timed(minutes=5)
+        response = self.autosave(attempt_id, self.q1.id, self.q1_right.id)
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_a_save_after_expiry_is_refused_with_400(self):
+        attempt_id = self.start_timed()
+        QuizAttempt.objects.filter(pk=attempt_id).update(
+            deadline=timezone.now() - timedelta(seconds=1)
+        )
+        response = self.autosave(attempt_id, self.q1.id, self.q1_right.id)
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("closed", response.json()[0].lower())
+
+    def test_a_submit_after_expiry_is_recorded_as_expired_not_scored(self):
+        attempt_id = self.start_timed()
+        QuizAttempt.objects.filter(pk=attempt_id).update(
+            deadline=timezone.now() - timedelta(seconds=1)
+        )
+        response = self.client.post(
+            f"/api/quiz-attempts/{attempt_id}/submit/",
+            {"answers": [{"question_id": self.q1.id, "choice_ids": [self.q1_right.id]}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        attempt = QuizAttempt.objects.get(pk=attempt_id)
+        self.assertEqual(attempt.status, QuizAttempt.Status.EXPIRED)
+        # Late answers are not retro-fitted to the score.
+        self.assertEqual(Decimal(attempt.score or 0), Decimal("0.00"))

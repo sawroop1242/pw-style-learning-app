@@ -87,6 +87,19 @@ Each test supports a clearly selected timing mode:
 - **Section-based timing:** each section has its own duration and deadline. Define whether sections are sequential and locked after expiry, and whether users may navigate back.
 - **Total + section limits:** if enabled, both limits apply and the earliest applicable deadline wins.
 
+**Current status.** Only the first two modes are offered. `section_timed` and
+`total_and_section` are refused by `Quiz.clean()` and by the quiz serializer
+(HTTP 400 naming `timing_mode`) until a section entity with its own duration,
+order and navigation policy exists — the enum values remain so historical rows
+keep their meaning, but no new paper can select them. Without that refusal the
+attempt simply ran untimed while the page implied per-section clocks.
+
+**Pause.** Pause is a curtain, not a stopwatch: the paper is hidden and the
+clock keeps running against the server deadline, which the client never
+modifies. The card above the questions says so, and resuming after the deadline
+has passed submits the attempt instead of handing back time that no longer
+exists.
+
 Do not show a misleading timer. The backend clock and stored deadline are authoritative; the browser timer is only a display. Persist start time, deadline, current section, and server-side state so refresh/reconnect does not reset the clock. Define what happens when a learner closes the browser, loses network, changes device, or returns after the deadline.
 
 For each section, support:

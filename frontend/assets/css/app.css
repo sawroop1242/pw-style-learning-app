@@ -681,8 +681,16 @@ body.is-exam #site-tabbar { display: none !important; }
   font-size: var(--text-lg);
   line-height: 1.6;
   color: var(--text);
-  margin-bottom: var(--sp-5);
+  margin-bottom: var(--sp-2);
   max-width: 68ch;
+}
+
+/* Says whether one option or several apply. Quiet enough to sit above the
+   options without competing with the question itself. */
+.qpanel-instruction {
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
+  margin-bottom: var(--sp-4);
 }
 
 .qpanel-options { display: grid; gap: 9px; }
