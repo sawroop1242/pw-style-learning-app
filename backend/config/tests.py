@@ -6,6 +6,8 @@ the admin were reachable, the application itself was not.
 
 from django.test import TestCase
 
+from config.views import FRONTEND_ROOT
+
 
 class FrontendServingTests(TestCase):
     def test_home_page_is_the_app(self):
@@ -44,12 +46,49 @@ class FrontendServingTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response["Content-Type"], content_type)
 
-    def test_static_assets_are_cacheable_but_pages_are_not(self):
-        asset = self.client.get("/assets/css/base.css")
-        self.assertIn("max-age", asset["Cache-Control"])
-
+    def test_pages_are_never_stored(self):
         page = self.client.get("/courses.html")
         self.assertEqual(page["Cache-Control"], "no-store")
+
+    def test_scripts_and_styles_are_revalidated_not_aged(self):
+        """A deploy must not be served against last release's stylesheet.
+
+        The URL carries no content hash, so an hour-long `max-age` here meant a
+        returning visitor ran an old `course.js` against new HTML — which is
+        exactly what happened after the run-31 deploy. They must revalidate,
+        and revalidating must be cheap: a 304, not another copy.
+        """
+        for url in ("/assets/css/base.css", "/assets/js/core.js"):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response["Cache-Control"], "no-cache")
+                self.assertTrue(response["ETag"])
+                self.assertTrue(response["Last-Modified"])
+
+                again = self.client.get(url, HTTP_IF_NONE_MATCH=response["ETag"])
+                self.assertEqual(again.status_code, 304)
+                self.assertEqual(again.content, b"")
+
+    def test_images_may_be_cached_for_an_hour(self):
+        for url in ("/assets/icon.svg", "/assets/img/hero-art.jpg"):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertIn("max-age", response["Cache-Control"])
+                self.assertTrue(response["ETag"])
+
+    def test_a_changed_file_gets_a_new_validator(self):
+        import os
+
+        url = "/assets/js/course.js"
+        first = self.client.get(url)["ETag"]
+        path = FRONTEND_ROOT / "assets/js/course.js"
+        stat = path.stat()
+        os.utime(path, (stat.st_atime, stat.st_mtime + 10))
+        try:
+            second = self.client.get(url)["ETag"]
+        finally:
+            os.utime(path, (stat.st_atime, stat.st_mtime))
+        self.assertNotEqual(first, second)
 
     def test_service_worker_is_never_cached(self):
         response = self.client.get("/sw.js")

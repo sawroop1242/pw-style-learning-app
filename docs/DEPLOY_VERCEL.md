@@ -126,6 +126,22 @@ catalogue or a missing administrator. Every step is idempotent:
 `.vercelignore` must not list `backend/staticfiles`: `collectstatic` generates it
 during the build and the admin needs it.
 
+## Caching (why a deploy can look like it did nothing)
+
+The front end is served by Django (`config/views.py`), not by the CDN, because
+the pages and the API share one origin. Its headers decide whether a returning
+visitor sees this deploy or the last one:
+
+| File | `Cache-Control` | Why |
+|---|---|---|
+| `*.html` | `no-store` | A page is generated content; storing it hides a deploy. |
+| `assets/**/*.js`, `*.css` | `no-cache` + `ETag`/`Last-Modified` | The URL has no content hash. An hour of `max-age` here paired new HTML with the previous release's `course.js`, so a shipped copy change did not appear. Revalidation is a `304`. |
+| images, icons, fonts | `public, max-age=3600` + `ETag` | A stale icon is harmless. |
+| `sw.js` | `no-cache` | A service worker must be re-fetched on every load. |
+
+`frontend/sw.js` is also network-first for CSS/JS, so an installed PWA is not
+served from its cache either; bump `CACHE_VERSION` when the shell changes.
+
 ## Health probes
 
 | URL | Meaning |

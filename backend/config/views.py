@@ -24,7 +24,8 @@ from http import HTTPStatus
 from pathlib import Path
 
 from django.conf import settings
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseNotModified
+from django.utils.http import http_date
 from django.views.decorators.http import require_safe
 
 #: ``backend/config/views.py`` -> repository root -> ``frontend/``
@@ -33,9 +34,15 @@ FRONTEND_ROOT = (Path(settings.BASE_DIR).parent / "frontend").resolve()
 #: Files at the site root that are not pages.
 ROOT_FILES = ("manifest.webmanifest", "sw.js", "offline.html", "splash.html")
 
-#: Extensions that must not be cached aggressively: a deploy should be visible
-#: on the next request, not when a year-old cache entry expires.
-NO_STORE = {".html", ".webmanifest", ".js"}
+#: Extensions whose content changes with a deploy. These are served
+#: ``no-cache``: the browser may keep a copy but must revalidate it, which is a
+#: 304 while nothing changed. There is no content hash in these URLs, so an
+#: hour-long ``max-age`` would pair new HTML with last release's script.
+REVALIDATE = {".html", ".webmanifest", ".js", ".css"}
+
+#: Media that really is immutable between deploys. A stale icon is harmless,
+#: and this is the one place a long cache is worth it.
+MEDIA_CACHE_CONTROL = "public, max-age=3600"
 
 EXTRA_TYPES = {
     ".webmanifest": "application/manifest+json; charset=utf-8",
@@ -83,7 +90,7 @@ def page(request, name: str = "index.html"):
     """One of the site's HTML pages."""
     if not name.endswith(".html"):
         raise Http404("Not found")
-    return _serve(_resolve(name), cache=False)
+    return _serve(request, _resolve(name), store=False)
 
 
 @require_safe
@@ -91,16 +98,43 @@ def asset(request, path: str):
     """A file under ``assets/`` or one of the PWA files at the site root."""
     if not path.startswith("assets/") and path not in ROOT_FILES:
         raise Http404("Not found")
-    return _serve(_resolve(path), cache=path not in NO_STORE)
+    return _serve(request, _resolve(path), store=True)
 
 
-def _serve(file_path: Path, *, cache: bool) -> FileResponse:
-    response = FileResponse(open(file_path, "rb"), content_type=_content_type(file_path))
-    if cache:
-        # Media changes only with a deploy, and a stale icon is harmless.
-        response["Cache-Control"] = "public, max-age=3600"
+def _etag(stat) -> str:
+    """A strong validator from what the file actually is.
+
+    mtime *and* size: a deploy rewrites the mtime, and an editor that saves
+    within the same second still changes the size.
+    """
+    return f'"{int(stat.st_mtime)}-{stat.st_size}"'
+
+
+def _serve(request, file_path: Path, *, store: bool) -> FileResponse:
+    stat = file_path.stat()
+    etag = _etag(stat)
+
+    # A page is never stored; scripts and styles must be revalidated, because
+    # the URL carries no content hash and the file changes with every deploy.
+    if not store:
+        cache_control = "no-store"
+    elif file_path.suffix in REVALIDATE:
+        cache_control = "no-cache"
     else:
-        response["Cache-Control"] = "no-store"
+        cache_control = MEDIA_CACHE_CONTROL
+
+    # Revalidation, so "no-cache" costs a 304 instead of a re-download.
+    headers = {
+        "ETag": etag,
+        "Last-Modified": http_date(stat.st_mtime),
+        "Cache-Control": cache_control,
+    }
+    if cache_control != "no-store" and request.headers.get("If-None-Match") == etag:
+        return HttpResponseNotModified(headers=headers)
+
+    response = FileResponse(open(file_path, "rb"), content_type=_content_type(file_path))
+    for key, value in headers.items():
+        response[key] = value
     if file_path.name == "sw.js":
         # A service worker must be re-fetched on every page load, and it is
         # allowed to control the whole origin, not just its own directory.
