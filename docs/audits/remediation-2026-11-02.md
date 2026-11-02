@@ -31,7 +31,7 @@ claim, not a fix.
 |---|---|---|
 | 6.1 Frontend CI missing | **Fixed** | `.github/workflows/frontend-checks.yml`; a frontend-only PR now runs `check`, `a11y`, `interact`, `css` |
 | 6.2 CI does not exercise PostgreSQL | **Fixed** | `postgres` job in `backend-checks.yml`; migrations + full suite. It caught a real defect in its first run |
-| 6.3 Dependencies not reproducibly locked | **Fixed** | `requirements.lock` (hashes, 462) is what CI installs; the `lock` job recompiles and diffs it |
+| 6.3 Dependencies not reproducibly locked | **Fixed** | `requirements.lock` (462 hashes); the `lock` CI job installs it with `--require-hashes` on Python 3.11 and runs `check` |
 | 6.4 "Offline learning" is offline shell support | **Fixed — wording** | The PWA caches the shell, not API data, deliberately; product copy should say so |
 | 6.5 Community is an announcement feed | **Fixed — scope** | Read-only by design; the audit now lives in `docs/FEATURE_BACKEND_MATRIX.md` → *Deliberately out of scope*, and the page copy no longer says "student discussion" |
 | 6.6 Admin analytics scope | **Fixed — scope** | Recorded in *Deliberately out of scope*; the admin index counts rows, not revenue |
