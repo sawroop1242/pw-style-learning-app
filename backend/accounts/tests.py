@@ -6,6 +6,7 @@ import re
 import urllib.error
 from datetime import timedelta
 from unittest.mock import patch
+from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -101,6 +102,57 @@ class RegistrationTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+
+    def test_a_registration_that_loses_a_race_is_a_400_not_a_500(self):
+        """Two requests can pass the `.exists()` check at the same moment.
+
+        The database index is what decides; the loser must get the same field
+        error a plain duplicate gets, not an IntegrityError traceback. The
+        validators are stubbed to "not seen", which is exactly the state a
+        racing request is in.
+        """
+        from .serializers import UserRegistrationSerializer
+
+        User.objects.create_user("Racer", "racer@example.com", "SecurePass123!")
+
+        with mock.patch.object(
+            UserRegistrationSerializer, "validate_username", return_value="racer"
+        ):
+            response = self.client.post(
+                self.register_url,
+                {
+                    "username": "racer",
+                    "email": "raced@example.com",
+                    "password": "SecurePass123!",
+                    "password_confirm": "SecurePass123!",
+                },
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.content)
+        self.assertIn("username", response.data)
+
+    def test_a_racing_email_collision_names_the_email_field(self):
+        from .serializers import UserRegistrationSerializer
+
+        User.objects.create_user("racer", "racer@example.com", "SecurePass123!")
+
+        with mock.patch.object(
+            UserRegistrationSerializer,
+            "validate_email",
+            return_value="racer@example.com",
+        ):
+            response = self.client.post(
+                self.register_url,
+                {
+                    "username": "someone-else",
+                    "email": "RACER@example.com",
+                    "password": "SecurePass123!",
+                    "password_confirm": "SecurePass123!",
+                },
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.content)
         self.assertIn("email", response.data)
 
     def test_register_password_mismatch(self):
@@ -1116,34 +1168,37 @@ class OTPDeliveryTests(TestCase):
         self.assertLess(remaining, timedelta(minutes=3, seconds=5))
         self.assertGreater(remaining, timedelta(minutes=2, seconds=55))
 
-    def test_an_address_shared_by_two_accounts_is_not_reset(self):
-        """`User.email` is not unique; `.get()` used to make this a 500.
+    def test_an_address_cannot_be_shared_by_two_accounts(self):
+        """The database, not the view, is what refuses a duplicate.
 
-        Two logins can carry the same address (registration only checks the
-        username). Picking one at random would let whoever holds the mailbox
-        reset an account they may not own, so the request is answered with the
-        generic message and recorded instead.
+        Two accounts on one address used to be creatable, and the reset flow
+        then had to refuse with a generic message. Migration 0002 makes the
+        collision impossible in the first place; the `ambiguous_email` branch in
+        the view stays as a guard for databases restored from before it.
         """
-        twin = User.objects.create_user("mailer2", "mailer@example.com", "SecurePass123!")
+        from django.db import IntegrityError, transaction
 
-        response = self.client.post(self.forgot_url, {"email": "mailer@example.com"})
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                User.objects.create_user("mailer2", "MAILER@example.com", "SecurePass123!")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(mail.outbox), 0)
-        self.assertFalse(
-            PasswordResetOTP.objects.filter(user__in=[self.user, twin]).exists()
-        )
-        audit = AuditEvent.objects.filter(outcome="ambiguous_email").last()
-        self.assertIsNotNone(audit)
-        self.assertEqual(audit.metadata.get("accounts"), 2)
+        self.assertEqual(User.objects.filter(email__iexact="mailer@example.com").count(), 1)
+        self.assertFalse(User.objects.filter(username="mailer2").exists())
 
-    def test_verifying_with_a_shared_address_is_a_400_not_a_500(self):
-        User.objects.create_user("mailer2", "mailer@example.com", "SecurePass123!")
+    def test_a_case_variant_username_cannot_be_created(self):
+        from django.db import IntegrityError, transaction
 
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                User.objects.create_user("MAILER", "other@example.com", "SecurePass123!")
+
+        self.assertFalse(User.objects.filter(email="other@example.com").exists())
+
+    def test_verify_otp_with_no_matching_address_is_a_400_not_a_500(self):
         response = self.client.post(
             "/api/auth/verify-otp/",
             {
-                "email": "mailer@example.com",
+                "email": "nobody@example.com",
                 "otp": "123456",
                 "new_password": "Another!2026",
                 "new_password_confirm": "Another!2026",
@@ -1546,3 +1601,80 @@ class SendOnlyKeyTests(TestCase):
                 ResendEmailBackend().send_messages(
                     [EmailMessage("s", "b", "StudySpace <a@b.c>", ["x@y.z"])]
                 )
+
+
+class CaseInsensitiveIdentityTests(TestCase):
+    """Finding 6: the uniqueness rule has to survive a race.
+
+    The serializer's `.exists()` check is advisory; two requests can pass it at
+    the same instant. These tests hold the database itself to the rule, and
+    exercise the deduplication that has to run before the index can be created
+    on an existing database.
+    """
+
+    MIGRATION = "accounts.migrations.0002_case_insensitive_unique_identity"
+
+    def migration(self):
+        import importlib
+
+        return importlib.import_module(self.MIGRATION)
+
+    def test_the_database_refuses_a_case_variant_username(self):
+        from django.db import IntegrityError, transaction
+
+        User.objects.create_user("Alice", "alice@example.com", "SecurePass123!")
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                User.objects.create_user("alice", "other@example.com", "SecurePass123!")
+
+    def test_the_database_refuses_a_case_variant_email(self):
+        from django.db import IntegrityError, transaction
+
+        User.objects.create_user("alice", "Alice@Example.com", "SecurePass123!")
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                User.objects.create_user("bob", "alice@example.com", "SecurePass123!")
+
+    def test_blank_emails_are_still_allowed(self):
+        """Superusers created from the command line have no address."""
+        User.objects.create_user("root_one", "", "SecurePass123!")
+        User.objects.create_user("root_two", "", "SecurePass123!")
+        self.assertEqual(User.objects.filter(email="").count(), 2)
+
+    def test_deduplicate_renames_the_newer_collision(self):
+        """Run the migration's data step on a database that already has twins.
+
+        The oldest row keeps its identity; later ones get a suffix built from
+        their primary key, which stays valid for both fields and unique by
+        construction.
+        """
+        migration = self.migration()
+        from django.apps import apps
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute(migration.DROP_USERNAME_INDEX)
+            cursor.execute(migration.DROP_EMAIL_INDEX)
+        try:
+            older = User.objects.create_user("Alice", "alice@example.com", "SecurePass123!")
+            newer = User.objects.create_user("alice", "ALICE@example.com", "SecurePass123!")
+
+            migration.deduplicate(apps, connection)
+
+            older.refresh_from_db()
+            newer.refresh_from_db()
+            self.assertEqual(older.username, "Alice")
+            self.assertEqual(older.email, "alice@example.com")
+            self.assertEqual(newer.username, f"alice-{newer.id}")
+            # Case is preserved in the local part; the index compares LOWER().
+            self.assertEqual(newer.email.lower(), f"alice+dup{newer.id}@example.com")
+
+            # The renamed rows satisfy the index that is created next.
+            with connection.cursor() as cursor:
+                cursor.execute(migration.CREATE_USERNAME_INDEX)
+                cursor.execute(migration.CREATE_EMAIL_INDEX)
+        finally:
+            User.objects.filter(pk=newer.pk).delete() if "newer" in locals() else None
+            with connection.cursor() as cursor:
+                cursor.execute(migration.CREATE_USERNAME_INDEX)
+                cursor.execute(migration.CREATE_EMAIL_INDEX)
