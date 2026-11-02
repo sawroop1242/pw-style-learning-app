@@ -32,6 +32,9 @@ Names and shapes only; values live in the Vercel project settings, never in Git.
 | `BREVO_API_KEY` | optional; enables password-reset email (see below) |
 | `DEFAULT_FROM_EMAIL` | the address the mail provider has verified, e.g. `StudySpace <you@gmail.com>` |
 | `EMAIL_TIMEOUT` | `10` — seconds before a provider that stopped answering is abandoned |
+| `REDIS_URL` (or `CACHE_URL`) | optional but strongly recommended: `rediss://…` from Upstash or any Redis. Without it, DRF throttles count in each function's memory, so every instance grants the full allowance again — `manage.py check` warns with `accounts.W005` |
+| `CONTENT_SECURITY_POLICY` | optional override; the default is in `config/settings.py` and allows scripts only from this origin |
+| `CSP_REPORT_ONLY` | `1` to ship the policy as `Content-Security-Policy-Report-Only` while watching for violations before enforcing |
 
 The Supabase **direct** host (`db.<ref>.supabase.co`) is IPv6-only and a Vercel
 function cannot reach it. Use the pooler on port 5432 (session mode). If session

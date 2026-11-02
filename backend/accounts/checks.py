@@ -162,3 +162,34 @@ def email_delivery_configured(app_configs, **kwargs):
         )
 
     return problems
+
+
+@register()
+def shared_cache_configured(app_configs, **kwargs):
+    """Warn when throttles are counted in per-process memory.
+
+    A limit enforced in one worker's memory is not a limit: two workers, or two
+    serverless instances, each grant the full allowance. The app checks stay as
+    they are — they are cheap and catch a single hot client — but they cannot
+    be the only defence in a deployment with more than one process.
+    """
+    backend = settings.CACHES.get("default", {}).get("BACKEND", "")
+    if "locmem" not in backend.lower():
+        return []
+
+    if getattr(settings, "ENVIRONMENT", "development") not in {"production", "staging"}:
+        return []
+
+    return [
+        Warning(
+            "Throttle counters live in this process's memory (locmem cache), so "
+            "each worker or serverless instance grants the full rate limit again.",
+            hint=(
+                "Set REDIS_URL (or CACHE_URL) to a shared Redis instance — Upstash "
+                "works and is a single environment variable — then redeploy. "
+                "Login, OTP, registration and attempt-start limits all count "
+                "through this cache."
+            ),
+            id="accounts.W005",
+        )
+    ]

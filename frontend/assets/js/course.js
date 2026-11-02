@@ -117,7 +117,7 @@ function renderHeadline() {
     cover.className = `batch-cover-lg ${thumbTone(current.subject)}`;
     cover.innerHTML = `${
       current.image
-        ? `<img class="batch-cover-img" src="${esc(current.image)}" alt="" decoding="async" onerror="this.remove()">`
+        ? `<img class="batch-cover-img" src="${esc(current.image)}" alt="" decoding="async" data-hide-on-error>`
         : ''
     }<span class="cover-faces"><span class="cover-face">${esc(initials(current.subject || 'SS'))}</span></span>`;
   }
