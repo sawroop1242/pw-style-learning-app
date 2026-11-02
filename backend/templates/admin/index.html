@@ -2,33 +2,57 @@
 {% load i18n static admin_nav log %}
 
 {% comment %}
-    The console home, grouped by job rather than by app.
+    The console home: four numbers, then one card per job.
 
     Every card is built from Django's own permission-filtered `app_list` (see
     courses/templatetags/admin_nav.py), so this page never offers a link the
-    signed-in user cannot follow.
-{% endcomment %}
+    signed-in user cannot follow, and never shows a count they cannot open.
 
-{% comment %}
     admin/css/dashboard.css is deliberately not loaded: it pins #content to
-    600px and styles the old app-list tables. The cards below replace both, and
-    their styles live in staff/admin.css with everything else.
+    600px and styles the old app-list tables. The tiles and cards below replace
+    both, and their styles live in staff/admin.css with everything else.
 {% endcomment %}
 
 {% block coltype %}colMS{% endblock %}
 {% block bodyclass %}{{ block.super }} dashboard{% endblock %}
 {% block nav-breadcrumbs %}{% endblock %}
-{% block nav-sidebar %}{% endblock %}
+{% block nav-sidebar %}{% include "admin/nav_sidebar.html" %}{% endblock %}
 
 {% block content %}
 <div id="content-main">
   {% email_delivery_problem as email_problem %}
   {% if email_problem %}
     <div class="ss-alert" role="status">
-      <strong>Password-reset codes cannot be sent.</strong>
+      <strong>{% translate "Password-reset codes cannot be sent." %}</strong>
       <p>{{ email_problem }}</p>
     </div>
   {% endif %}
+
+  <div class="ss-page-head">
+    <div>
+      <h1>{% translate "Admin console" %}</h1>
+      <p class="ss-page-sub">
+        {% blocktranslate with name=user.get_username %}Signed in as {{ name }}. Everything below is limited to what your account may open.{% endblocktranslate %}
+      </p>
+    </div>
+    <div class="ss-page-actions">
+      <a class="ss-btn" href="/">{% translate "View site" %}</a>
+    </div>
+  </div>
+
+  {% console_stats app_list as stats %}
+  {% if stats %}
+    <div class="ss-stats">
+      {% for tile in stats %}
+        <a class="ss-stat{% if forloop.first %} ss-stat--violet{% endif %}" href="{{ tile.url }}">
+          <span class="ss-stat-label">{{ tile.label }}</span>
+          <span class="ss-stat-value">{{ tile.count }}</span>
+          <span class="ss-stat-hint">{{ tile.hint }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
   {% workflow_cards app_list as workflow_cards %}
   <div class="ss-workflows">
     {% for card in workflow_cards %}
@@ -62,7 +86,7 @@
     <h3>{% translate "My actions" %}</h3>
     {% get_admin_log 10 as admin_log for_user user %}
     {% if not admin_log %}
-      <p>{% translate "Nothing yet. Edits you make will show up here." %}</p>
+      <p class="mini quiet" style="padding:0 18px 12px">{% translate "Nothing yet. Edits you make will show up here." %}</p>
     {% else %}
       <ul class="actionlist">
         {% for entry in admin_log %}

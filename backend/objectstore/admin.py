@@ -20,6 +20,8 @@ from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
 
+from config.admin_ui import pill
+
 from accounts.models import AuditEvent
 from accounts.roles import is_main_admin, is_staff_role
 
@@ -29,18 +31,9 @@ from .services import test_account, test_bucket
 
 
 def _badge(ok, label: str) -> str:
-    if ok is None:
-        colour = "#6b7280"
-    elif ok:
-        colour = "#15803d"
-    else:
-        colour = "#b91c1c"
-    return format_html(
-        '<span style="display:inline-flex;gap:6px;align-items:center">'
-        '<span style="width:8px;height:8px;border-radius:50%;background:{}"></span>{}</span>',
-        colour,
-        label,
-    )
+    """The console's status chip: one shape and one palette for every answer."""
+    kind = "muted" if ok is None else ("ok" if ok else "bad")
+    return pill(label, kind)
 
 
 def _audit(actor, action: str, obj, outcome: str = "success", **metadata) -> None:

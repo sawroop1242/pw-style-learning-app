@@ -1,0 +1,35 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% comment %}
+    An edit screen: the title says what is being edited, the actions sit on the
+    right, and each fieldset is a card. Django's own fieldsets, inlines, media
+    and validation stay untouched underneath — this only changes the framing, so
+    a field added to a ModelAdmin appears here without a template edit.
+{% endcomment %}
+
+{% block content_title %}
+  <div class="ss-page-head">
+    <div>
+      <h1>{{ title }}</h1>
+      <p class="ss-page-sub">
+        {% if original %}
+          {{ original }}
+        {% else %}
+          {% blocktranslate with name=opts.verbose_name %}A new {{ name }}. Nothing is saved until you press Save.{% endblocktranslate %}
+        {% endif %}
+      </p>
+    </div>
+    <div class="ss-page-actions">
+      {% if change and not is_popup %}
+        <ul class="object-tools">
+          {% if has_absolute_url %}
+            <li><a href="{{ absolute_url }}" target="_blank" rel="noopener">{% translate "View on site" %}</a></li>
+          {% endif %}
+          {% url opts|admin_urlname:'history' original.pk|admin_urlquote as history_url %}
+          <li><a href="{{ history_url }}">{% translate "History" %}</a></li>
+        </ul>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

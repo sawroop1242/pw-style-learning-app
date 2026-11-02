@@ -151,6 +151,10 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Project-level assets that belong to no single app: the staff console's theme
+# and its one script. App-level `static/` directories are still found by the
+# app-directories finder, so this adds a location rather than moving one.
+STATICFILES_DIRS = [BASE_DIR / "static"]
 # Manifest hashing (for far-future cache headers) is only needed in
 # production; without a collectstatic manifest, admin pages raise
 # "Missing staticfiles manifest entry" in development and tests.

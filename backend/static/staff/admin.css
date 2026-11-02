@@ -1,0 +1,1711 @@
+/* StudySpace admin — one stylesheet for every console screen.
+ *
+ * The shape is a dark navigation rail on the left, a light working area on the
+ * right, and a top bar that answers three questions without a click: where am
+ * I (breadcrumb), what can I jump to (search), and who am I (account chip).
+ *
+ * Every selector below either styles markup that staff/templates provide or
+ * restyles Django's own admin DOM. Django's admin JS filters on a few class
+ * names and element shapes (see nav_sidebar.js, inlines.js, calendar.js); those
+ * stay intact. Everything else is ours.
+ *
+ * Palette, once:
+ *   ink        #16203a   text
+ *   muted      #6b7793   secondary text
+ *   line       #e6e8f0   borders
+ *   canvas     #f6f7fb   page background
+ *   navy       #0e1729   rail
+ *   violet     #6d5dfc   primary action
+ */
+
+:root {
+  --ss-ink: #16203a;
+  --ss-ink-soft: #37415c;
+  --ss-muted: #6b7793;
+  --ss-line: #e6e8f0;
+  --ss-line-strong: #d5d9e5;
+  --ss-canvas: #f6f7fb;
+  --ss-card: #ffffff;
+  --ss-navy: #0e1729;
+  --ss-navy-soft: #16213a;
+  --ss-rail-text: #9aa7c2;
+  --ss-rail-text-strong: #ffffff;
+  --ss-violet: #6d5dfc;
+  --ss-violet-dark: #5847f5;
+  --ss-violet-wash: #f1efff;
+  --ss-green: #0f9d58;
+  --ss-green-wash: #e9f8f0;
+  --ss-amber: #b26a00;
+  --ss-amber-wash: #fff6e5;
+  --ss-red: #c0392f;
+  --ss-red-wash: #fdecea;
+  --ss-blue: #1d63d1;
+  --ss-blue-wash: #eaf2ff;
+  --ss-radius: 14px;
+  --ss-radius-sm: 9px;
+  --ss-rail: 248px;
+  --ss-rail-collapsed: 76px;
+  --ss-topbar: 68px;
+  --ss-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+  --ss-shadow-lg: 0 12px 32px rgba(16, 24, 40, .12);
+  --ss-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --ss-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ---------------------------------------------------------------- reset-ish */
+
+html[data-theme="dark"] {
+  /* The console is deliberately light-only. Django's theme switch writes this
+   * attribute; neutralising its variables keeps one palette on every machine. */
+  color-scheme: light;
+}
+
+body.ss-admin {
+  margin: 0;
+  background: var(--ss-canvas);
+  color: var(--ss-ink);
+  font-family: var(--ss-font);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ss-admin a {
+  color: var(--ss-blue);
+  text-decoration: none;
+}
+
+.ss-admin a:hover,
+.ss-admin a:focus-visible {
+  text-decoration: underline;
+}
+
+.ss-admin h1,
+.ss-admin h2,
+.ss-admin h3,
+.ss-admin h4 {
+  color: var(--ss-ink);
+  font-weight: 650;
+  letter-spacing: -.01em;
+  margin: 0;
+}
+
+.ss-admin :focus-visible {
+  outline: 2px solid var(--ss-violet);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.ss-admin .visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.ss-admin #container {
+  min-height: 100vh;
+}
+
+.ss-admin #header {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 40;
+  height: var(--ss-topbar);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 26px 0 0;
+  background: var(--ss-card);
+  border-bottom: 1px solid var(--ss-line);
+}
+
+.ss-admin #branding {
+  flex: 0 0 var(--ss-rail);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding-left: 22px;
+  background: var(--ss-navy);
+}
+
+.ss-admin #site-name,
+.ss-admin #site-name a {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+}
+
+.ss-admin #site-name a::before {
+  content: "";
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--ss-violet), #9a7bff);
+  box-shadow: 0 4px 10px rgba(109, 93, 252, .45);
+  flex: none;
+}
+
+.ss-admin .ss-admin-tag {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--ss-rail-text);
+  padding-left: 2px;
+}
+
+/* Top bar pieces added by staff/templates/admin/base_site.html */
+.ss-admin .ss-topbar-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ss-admin .ss-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ss-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ss-admin .ss-breadcrumbs a {
+  color: var(--ss-muted);
+  font-weight: 500;
+}
+
+.ss-admin .ss-breadcrumbs a:hover {
+  color: var(--ss-ink);
+  text-decoration: none;
+}
+
+.ss-admin .ss-breadcrumbs .ss-crumb-sep {
+  color: var(--ss-line-strong);
+}
+
+.ss-admin .ss-breadcrumbs .ss-crumb-current {
+  color: var(--ss-ink);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ss-admin .ss-jump {
+  margin-left: auto;
+  position: relative;
+  flex: 0 1 300px;
+}
+
+.ss-admin .ss-jump input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 38px;
+  border: 1px solid var(--ss-line);
+  border-radius: 10px;
+  background: var(--ss-canvas);
+  color: var(--ss-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ss-admin .ss-jump input::placeholder {
+  color: var(--ss-muted);
+}
+
+.ss-admin .ss-jump::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  transform: translateY(-50%);
+  background: currentColor;
+  color: var(--ss-muted);
+  -webkit-mask: var(--ss-icon-search) center / contain no-repeat;
+  mask: var(--ss-icon-search) center / contain no-repeat;
+  pointer-events: none;
+}
+
+.ss-admin .ss-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 16px;
+  border-left: 1px solid var(--ss-line);
+  flex: none;
+}
+
+.ss-admin .ss-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(140deg, #6d5dfc, #8f7bff);
+  letter-spacing: .02em;
+}
+
+.ss-admin .ss-account-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ss-ink);
+  line-height: 1.2;
+}
+
+.ss-admin .ss-account-role {
+  font-size: 11.5px;
+  color: var(--ss-muted);
+}
+
+.ss-admin .ss-account-links {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ss-muted);
+}
+
+.ss-admin .ss-account-links a {
+  color: var(--ss-muted);
+}
+
+.ss-admin .ss-account-links a:hover {
+  color: var(--ss-violet);
+}
+
+/* Django's own user tools are replaced by the account chip above. */
+.ss-admin #user-tools {
+  display: none;
+}
+
+/* ------------------------------------------------------------------- rail */
+
+.ss-admin #nav-sidebar {
+  position: fixed;
+  top: var(--ss-topbar);
+  bottom: 0;
+  left: 0;
+  width: var(--ss-rail);
+  padding: 14px 12px 84px;
+  background: var(--ss-navy);
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 0;
+  box-shadow: none;
+  scrollbar-width: thin;
+  scrollbar-color: #2c3a56 transparent;
+}
+
+.ss-admin #nav-sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ss-admin #nav-sidebar::-webkit-scrollbar-thumb {
+  background: #2c3a56;
+  border-radius: 8px;
+}
+
+.ss-admin #nav-sidebar table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+}
+
+.ss-admin .ss-nav-group {
+  margin-bottom: 18px;
+}
+
+.ss-admin #nav-sidebar caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0 12px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #63719a;
+}
+
+.ss-admin #nav-sidebar tr {
+  border: 0;
+}
+
+.ss-admin #nav-sidebar th,
+.ss-admin #nav-sidebar td {
+  border: 0;
+  padding: 0;
+  vertical-align: middle;
+  font-weight: 400;
+  text-align: left;
+  background: transparent;
+}
+
+.ss-admin #nav-sidebar th a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  margin-bottom: 2px;
+  border-radius: 10px;
+  color: var(--ss-rail-text);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-decoration: none;
+  transition: background .14s ease, color .14s ease;
+}
+
+.ss-admin #nav-sidebar th a::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex: none;
+  background: currentColor;
+  opacity: .9;
+  -webkit-mask: var(--ss-icon-dot) center / contain no-repeat;
+  mask: var(--ss-icon-dot) center / contain no-repeat;
+}
+
+.ss-admin #nav-sidebar th a:hover {
+  background: rgba(255, 255, 255, .06);
+  color: #e8edf8;
+  text-decoration: none;
+}
+
+.ss-admin #nav-sidebar tr.current-model th a {
+  background: rgba(109, 93, 252, .22);
+  color: var(--ss-rail-text-strong);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--ss-violet);
+}
+
+.ss-admin #nav-sidebar td .ss-nav-add {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  border-radius: 7px;
+  color: #7f8db0;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.ss-admin #nav-sidebar td .ss-nav-add:hover {
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+}
+
+.ss-admin #nav-filter {
+  width: 100%;
+  margin: 2px 0 16px;
+  padding: 9px 12px;
+  border: 1px solid #26334f;
+  border-radius: 10px;
+  background: var(--ss-navy-soft);
+  color: #dbe3f3;
+  font: inherit;
+  font-size: 13px;
+}
+
+.ss-admin #nav-filter::placeholder {
+  color: #64729a;
+}
+
+.ss-admin #toggle-nav-sidebar {
+  position: fixed;
+  z-index: 45;
+  left: 0;
+  bottom: 18px;
+  width: var(--ss-rail);
+  height: 46px;
+  border: 0;
+  border-top: 1px solid #1d2942;
+  border-radius: 0;
+  background: var(--ss-navy-soft);
+  color: var(--ss-rail-text);
+  font-size: 0;
+  cursor: pointer;
+}
+
+.ss-admin #toggle-nav-sidebar::before {
+  content: "Collapse menu";
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.ss-admin #toggle-nav-sidebar:hover {
+  background: #1b2740;
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------- main */
+
+.ss-admin #main {
+  min-height: 100vh;
+  padding-top: var(--ss-topbar);
+}
+
+.ss-admin #main > #content-start {
+  margin-left: var(--ss-rail);
+  padding: 26px 30px 60px;
+  min-height: calc(100vh - var(--ss-topbar));
+}
+
+.ss-admin #content {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.ss-admin #content h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.ss-admin #content h2 {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+/* Page header: title on the left, the primary action on the right. */
+.ss-admin .ss-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.ss-admin .ss-page-head h1 {
+  margin-bottom: 2px;
+}
+
+.ss-admin .ss-page-sub {
+  color: var(--ss-muted);
+  font-size: 13px;
+}
+
+.ss-admin .ss-page-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* --------------------------------------------------------------- controls */
+
+.ss-admin .button,
+.ss-admin input[type="submit"],
+.ss-admin input[type="button"],
+.ss-admin button,
+.ss-admin .ss-btn {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--ss-line-strong);
+  background: #fff;
+  color: var(--ss-ink);
+  cursor: pointer;
+  transition: background .14s ease, border-color .14s ease, box-shadow .14s ease;
+}
+
+.ss-admin .button:hover,
+.ss-admin input[type="submit"]:hover,
+.ss-admin button:hover,
+.ss-admin .ss-btn:hover {
+  background: #f4f5fa;
+  border-color: #c7ccdb;
+}
+
+.ss-admin .button.default,
+.ss-admin input[type="submit"].default,
+.ss-admin .submit-row input.default,
+.ss-admin .ss-btn-primary,
+.ss-admin .object-tools a.ss-add-primary {
+  background: var(--ss-violet);
+  border-color: var(--ss-violet);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(109, 93, 252, .28);
+}
+
+.ss-admin .button.default:hover,
+.ss-admin input[type="submit"].default:hover,
+.ss-admin .ss-btn-primary:hover,
+.ss-admin .object-tools a.ss-add-primary:hover {
+  background: var(--ss-violet-dark);
+  border-color: var(--ss-violet-dark);
+  color: #fff;
+}
+
+.ss-admin .ss-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ss-muted);
+}
+
+.ss-admin .ss-btn-danger {
+  background: #fff;
+  border-color: #f1c9c5;
+  color: var(--ss-red);
+}
+
+.ss-admin .ss-btn-danger:hover {
+  background: var(--ss-red-wash);
+  border-color: #e5a7a1;
+}
+
+/* Django puts object-tools in a floating list; make it a header action. */
+.ss-admin .object-tools {
+  float: none;
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ss-admin .object-tools li {
+  float: none;
+  margin: 0;
+  list-style: none;
+}
+
+.ss-admin .object-tools a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 15px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid var(--ss-line-strong);
+  color: var(--ss-ink);
+  text-decoration: none;
+}
+
+.ss-admin .object-tools a:hover {
+  background: #f4f5fa;
+  text-decoration: none;
+}
+
+.ss-admin .object-tools a.addlink::before {
+  content: "+";
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* --------------------------------------------------------------- surfaces */
+
+.ss-admin .ss-card,
+.ss-admin .module,
+.ss-admin #changelist,
+.ss-admin fieldset.module,
+.ss-admin .inline-group,
+.ss-admin .ss-panel {
+  background: var(--ss-card);
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow);
+}
+
+.ss-admin .module h2,
+.ss-admin .module caption,
+.ss-admin .module > h3 {
+  background: transparent;
+  color: var(--ss-ink);
+  border: 0;
+  padding: 16px 20px 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+.ss-admin .module table caption {
+  padding: 14px 20px 10px;
+  background: transparent;
+  color: var(--ss-ink);
+  font-size: 15px;
+  font-weight: 650;
+  text-align: left;
+}
+
+/* ------------------------------------------------------------------ stats */
+
+.ss-admin .ss-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.ss-admin .ss-stat {
+  background: var(--ss-card);
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  padding: 16px 18px;
+  box-shadow: var(--ss-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ss-admin .ss-stat-label {
+  font-size: 12.5px;
+  color: var(--ss-muted);
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+.ss-admin .ss-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+  color: var(--ss-ink);
+}
+
+.ss-admin .ss-stat-hint {
+  font-size: 12px;
+  color: var(--ss-muted);
+}
+
+.ss-admin .ss-stat--violet {
+  background: linear-gradient(150deg, #6d5dfc, #8a78ff);
+  border-color: transparent;
+}
+
+.ss-admin .ss-stat--violet .ss-stat-label,
+.ss-admin .ss-stat--violet .ss-stat-hint {
+  color: rgba(255, 255, 255, .82);
+}
+
+.ss-admin .ss-stat--violet .ss-stat-value {
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ cards */
+
+.ss-admin .ss-workflows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 18px;
+}
+
+.ss-admin .ss-card {
+  padding: 18px 20px 12px;
+}
+
+.ss-admin .ss-card h2 {
+  font-size: 15.5px;
+  margin-bottom: 4px;
+}
+
+.ss-admin .ss-card-blurb {
+  color: var(--ss-muted);
+  font-size: 12.8px;
+  margin: 0 0 12px;
+}
+
+.ss-admin .ss-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ss-admin .ss-card li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--ss-line);
+}
+
+.ss-admin .ss-model {
+  font-weight: 550;
+  font-size: 13.5px;
+  color: var(--ss-ink);
+}
+
+.ss-admin .ss-model:hover {
+  color: var(--ss-violet);
+  text-decoration: none;
+}
+
+.ss-admin .ss-count {
+  margin-left: auto;
+  min-width: 26px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ss-canvas);
+  border: 1px solid var(--ss-line);
+  color: var(--ss-muted);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.ss-admin .ss-count[data-empty="1"] {
+  color: #9aa4bd;
+}
+
+.ss-admin .ss-add {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ss-violet);
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: var(--ss-violet-wash);
+}
+
+.ss-admin .ss-add:hover {
+  background: #e6e1ff;
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------- messages */
+
+.ss-admin .messagelist {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ss-admin .messagelist li,
+.ss-admin .ss-alert {
+  margin: 0;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--ss-line);
+  background: #fff;
+  font-size: 13.5px;
+  box-shadow: var(--ss-shadow);
+}
+
+.ss-admin .messagelist li.success { background: var(--ss-green-wash); border-color: #bce8d1; color: #085d36; }
+.ss-admin .messagelist li.warning { background: var(--ss-amber-wash); border-color: #f6d9a6; color: #7a4700; }
+.ss-admin .messagelist li.error,
+.ss-admin .ss-alert {
+  background: var(--ss-red-wash);
+  border-color: #f3c6c1;
+  color: #8a2019;
+}
+
+.ss-admin .ss-alert strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.ss-admin .ss-alert p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* ----------------------------------------------------------------- tables */
+
+.ss-admin #changelist {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  display: block;
+}
+
+.ss-admin #changelist .ss-table-card {
+  background: var(--ss-card);
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow);
+  overflow: hidden;
+}
+
+.ss-admin #changelist-form .actions {
+  background: #fff;
+  border-bottom: 1px solid var(--ss-line);
+  padding: 12px 18px;
+  font-size: 13px;
+  color: var(--ss-muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ss-admin #changelist-form .actions label {
+  font-size: 13px;
+  color: var(--ss-ink);
+  font-weight: 550;
+}
+
+.ss-admin select,
+.ss-admin input[type="text"],
+.ss-admin input[type="number"],
+.ss-admin input[type="url"],
+.ss-admin input[type="email"],
+.ss-admin input[type="password"],
+.ss-admin input[type="search"],
+.ss-admin input[type="date"],
+.ss-admin input[type="time"],
+.ss-admin textarea,
+.ss-admin .vTextField {
+  font: inherit;
+  font-size: 13.5px;
+  padding: 9px 11px;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ss-ink);
+  max-width: 100%;
+}
+
+.ss-admin select:focus,
+.ss-admin input:focus,
+.ss-admin textarea:focus {
+  border-color: var(--ss-violet);
+  box-shadow: 0 0 0 3px rgba(109, 93, 252, .16);
+  outline: none;
+}
+
+.ss-admin .results {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+}
+
+.ss-admin .results thead th {
+  background: #fbfbfe;
+  border-bottom: 1px solid var(--ss-line);
+  padding: 12px 14px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ss-muted);
+  white-space: nowrap;
+}
+
+.ss-admin .results thead th a {
+  color: inherit;
+}
+
+.ss-admin .results thead th.sorted {
+  color: var(--ss-ink);
+}
+
+.ss-admin .results tbody td,
+.ss-admin .results tbody th {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--ss-line);
+  color: var(--ss-ink);
+  font-weight: 400;
+  background: #fff;
+}
+
+.ss-admin .results tbody th {
+  font-weight: 600;
+}
+
+.ss-admin .results tbody tr:hover td,
+.ss-admin .results tbody tr:hover th {
+  background: #fafaff;
+}
+
+.ss-admin .results tbody tr:last-child td,
+.ss-admin .results tbody tr:last-child th {
+  border-bottom: 0;
+}
+
+.ss-admin .results tbody th a {
+  color: var(--ss-ink);
+  font-weight: 600;
+}
+
+.ss-admin .results tbody th a:hover {
+  color: var(--ss-violet);
+  text-decoration: none;
+}
+
+.ss-admin .results .action-checkbox,
+.ss-admin .results .action-checkbox-column {
+  width: 42px;
+  padding-left: 18px;
+}
+
+.ss-admin .results input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ss-violet);
+}
+
+.ss-admin .results td.nowrap,
+.ss-admin .results th.nowrap {
+  white-space: nowrap;
+}
+
+/* Status pills, produced by list_display callables and object links. */
+.ss-admin .ss-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+  white-space: nowrap;
+  background: var(--ss-canvas);
+  color: var(--ss-muted);
+  border: 1px solid transparent;
+}
+
+.ss-admin .ss-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .85;
+}
+
+.ss-admin .ss-pill--ok { background: var(--ss-green-wash); color: #0a7a4a; }
+.ss-admin .ss-pill--warn { background: var(--ss-amber-wash); color: var(--ss-amber); }
+.ss-admin .ss-pill--bad { background: var(--ss-red-wash); color: var(--ss-red); }
+.ss-admin .ss-pill--info { background: var(--ss-blue-wash); color: var(--ss-blue); }
+.ss-admin .ss-pill--muted { background: var(--ss-canvas); color: var(--ss-muted); }
+
+/* ------------------------------------------------------------------ chips */
+
+.ss-admin #changelist-filter {
+  float: none;
+  width: auto;
+  margin: 0 0 18px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.ss-admin #changelist-filter h2 {
+  display: none;
+}
+
+.ss-admin #changelist-filter h3 {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ss-muted);
+  margin: 0 2px 6px;
+}
+
+.ss-admin .ss-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 16px;
+  background: #fff;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  padding: 14px 18px;
+  box-shadow: var(--ss-shadow);
+}
+
+.ss-admin .ss-filter-group {
+  min-width: 150px;
+}
+
+.ss-admin .ss-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ss-admin .ss-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ss-line-strong);
+  background: #fff;
+  color: var(--ss-ink-soft);
+  font-size: 12.5px;
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.ss-admin .ss-chip:hover {
+  border-color: var(--ss-violet);
+  color: var(--ss-violet);
+  text-decoration: none;
+}
+
+.ss-admin .ss-chip[aria-current="true"],
+.ss-admin .ss-chip.is-selected {
+  background: var(--ss-violet-wash);
+  border-color: #cfc7ff;
+  color: var(--ss-violet);
+  font-weight: 650;
+}
+
+/* ------------------------------------------------------------- pagination */
+
+.ss-admin .paginator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--ss-line);
+  background: #fff;
+  font-size: 13px;
+  color: var(--ss-muted);
+}
+
+.ss-admin .paginator .ss-page-links {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ss-admin .paginator a,
+.ss-admin .paginator .this-page {
+  display: inline-grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 9px;
+  border: 1px solid var(--ss-line-strong);
+  background: #fff;
+  color: var(--ss-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ss-admin .paginator .this-page {
+  background: var(--ss-violet);
+  border-color: var(--ss-violet);
+  color: #fff;
+}
+
+.ss-admin .paginator a:hover {
+  border-color: var(--ss-violet);
+  color: var(--ss-violet);
+  text-decoration: none;
+}
+
+/* ------------------------------------------------------------------ forms */
+
+.ss-admin #content-main {
+  float: none;
+  width: auto;
+}
+
+.ss-admin fieldset.module {
+  padding: 0;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.ss-admin fieldset.module > h2,
+.ss-admin .aligned fieldset > h2 {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ss-line);
+  font-size: 14.5px;
+}
+
+.ss-admin .aligned .form-row {
+  border: 0;
+  padding: 14px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  align-items: flex-start;
+}
+
+.ss-admin .aligned .form-row + .form-row {
+  border-top: 1px solid #f1f2f7;
+}
+
+.ss-admin .aligned .form-row > label,
+.ss-admin .aligned .form-row > div > label {
+  flex: 0 0 210px;
+  max-width: 210px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ss-ink-soft);
+  padding-top: 9px;
+}
+
+.ss-admin .aligned .form-row .help,
+.ss-admin .aligned .form-row p.help {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12.3px;
+  color: var(--ss-muted);
+  padding-left: 234px;
+}
+
+.ss-admin .aligned .form-row .readonly {
+  padding-top: 9px;
+  font-weight: 550;
+}
+
+.ss-admin .aligned .form-row .vTextField,
+.ss-admin .aligned .form-row .vURLField,
+.ss-admin .aligned .form-row select,
+.ss-admin .aligned .form-row textarea {
+  min-width: 320px;
+}
+
+.ss-admin .aligned .form-row textarea {
+  min-height: 90px;
+}
+
+.ss-admin .aligned .form-row .checkbox-row,
+.ss-admin .aligned .checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-top: 6px;
+}
+
+.ss-admin .aligned .form-row .checkbox-row label {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ss-ink);
+}
+
+.ss-admin .aligned .form-row .errors,
+.ss-admin .errornote {
+  background: var(--ss-red-wash);
+  border: 1px solid #f3c6c1;
+  color: #8a2019;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin: 10px 20px;
+  flex-basis: 100%;
+}
+
+.ss-admin .aligned .form-row .errorlist {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ss-red);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ss-admin .aligned .form-row .errorlist li {
+  margin: 0;
+}
+
+/* The sticky action bar at the foot of an edit screen. */
+.ss-admin .submit-row {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 24px 0 0;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, .94);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow-lg);
+}
+
+.ss-admin .submit-row a.deletelink {
+  margin-left: auto;
+  padding: 10px 15px;
+  border-radius: 10px;
+  background: var(--ss-red-wash);
+  color: var(--ss-red);
+  font-size: 13px;
+  font-weight: 650;
+  border: 1px solid #f3c6c1;
+}
+
+.ss-admin .submit-row a.deletelink:hover {
+  background: #fbdcd8;
+  text-decoration: none;
+}
+
+.ss-admin .submit-row .ss-save-note {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--ss-muted);
+}
+
+/* Inline groups (questions inside a test, choices inside a question). */
+.ss-admin .inline-group h2 {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ss-line);
+  font-size: 14.5px;
+  background: #fff;
+}
+
+.ss-admin .inline-group .tabular table {
+  width: 100%;
+}
+
+.ss-admin .inline-group .tabular th {
+  background: #fbfbfe;
+  font-size: 11.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ss-muted);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ss-line);
+}
+
+.ss-admin .inline-group .tabular td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f2f7;
+}
+
+.ss-admin .inline-group .add-row {
+  padding: 12px 18px;
+  background: #fbfbfe;
+  border-top: 1px solid var(--ss-line);
+}
+
+/* --------------------------------------------------------------- sidebar */
+
+.ss-admin #content-related {
+  float: none;
+  width: auto;
+  margin: 0 0 20px;
+}
+
+.ss-admin #content-related .module {
+  background: #fff;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow);
+  padding-bottom: 6px;
+}
+
+.ss-admin #content-related .module h2,
+.ss-admin #content-related .module h3 {
+  padding: 14px 18px 6px;
+  font-size: 13px;
+}
+
+.ss-admin #recent-actions-module .actionlist {
+  list-style: none;
+  margin: 0;
+  padding: 0 18px 10px;
+}
+
+.ss-admin #recent-actions-module .actionlist li {
+  padding: 9px 0;
+  border-top: 1px solid var(--ss-line);
+  font-size: 13px;
+}
+
+.ss-admin .mini.quiet {
+  color: var(--ss-muted);
+  font-size: 11.5px;
+}
+
+/* ---------------------------------------------------------- breadcrumbs */
+
+.ss-admin #breadcrumbs {
+  display: none;
+}
+
+/* ----------------------------------------------------------------- login */
+
+body.ss-admin.login {
+  background: radial-gradient(1200px 600px at 20% -10%, #1b2542, var(--ss-navy));
+  display: grid;
+  place-items: start center;
+  padding-top: 8vh;
+}
+
+body.ss-admin.login #container {
+  width: 100%;
+  max-width: 420px;
+}
+
+body.ss-admin.login #header {
+  position: static;
+  height: auto;
+  padding: 0 0 18px;
+  background: transparent;
+  border: 0;
+  justify-content: center;
+}
+
+body.ss-admin.login #branding {
+  background: transparent;
+  padding: 0;
+  flex: none;
+}
+
+body.ss-admin.login #main {
+  padding: 0;
+}
+
+body.ss-admin.login #main > #content-start,
+body.ss-admin.login #content {
+  margin: 0;
+  padding: 0;
+  max-width: none;
+}
+
+body.ss-admin.login #content-main {
+  background: #fff;
+  border-radius: 18px;
+  padding: 26px 26px 20px;
+  box-shadow: 0 24px 60px rgba(4, 10, 26, .45);
+}
+
+body.ss-admin.login #content-main h1 {
+  font-size: 19px;
+  margin-bottom: 4px;
+}
+
+body.ss-admin.login .form-row {
+  padding: 0;
+  border: 0;
+  margin-bottom: 14px;
+}
+
+body.ss-admin.login .form-row label {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ss-ink-soft);
+  display: block;
+  margin-bottom: 6px;
+}
+
+body.ss-admin.login .form-row input {
+  width: 100%;
+}
+
+body.ss-admin.login .submit-row {
+  position: static;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
+  margin: 18px 0 0;
+}
+
+body.ss-admin.login .submit-row input {
+  width: 100%;
+}
+
+body.ss-admin.login .errornote {
+  margin: 0 0 14px;
+}
+
+/* --------------------------------------------------------------- responsive */
+
+@media (max-width: 1180px) {
+  .ss-admin #content-start {
+    padding: 22px 20px 60px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .ss-admin {
+    --ss-rail: 0px;
+  }
+
+  .ss-admin #branding {
+    flex-basis: auto;
+    background: transparent;
+    padding-left: 16px;
+  }
+
+  .ss-admin #site-name a {
+    color: var(--ss-ink);
+  }
+
+  .ss-admin #site-name a::before {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+  }
+
+  .ss-admin .ss-admin-tag {
+    color: var(--ss-muted);
+  }
+
+  .ss-admin #header {
+    padding-right: 16px;
+  }
+
+  .ss-admin #nav-sidebar {
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+    width: 260px;
+    box-shadow: 0 20px 60px rgba(4, 10, 26, .4);
+  }
+
+  .ss-admin.nav-open #nav-sidebar {
+    transform: translateX(0);
+  }
+
+  .ss-admin #toggle-nav-sidebar {
+    left: 12px;
+    bottom: 14px;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    border: 1px solid #26334f;
+    box-shadow: 0 10px 24px rgba(4, 10, 26, .35);
+  }
+
+  .ss-admin #toggle-nav-sidebar::before {
+    content: "";
+    display: block;
+    width: 18px;
+    height: 18px;
+    margin: 0 auto;
+    background: currentColor;
+    -webkit-mask: var(--ss-icon-menu) center / contain no-repeat;
+    mask: var(--ss-icon-menu) center / contain no-repeat;
+    color: #dbe3f3;
+  }
+
+  .ss-admin #main > #content-start {
+    margin-left: 0;
+  }
+
+  .ss-admin #main {
+    padding-top: 64px;
+  }
+
+  .ss-admin .ss-jump {
+    flex: 1 1 auto;
+    max-width: 320px;
+  }
+
+  .ss-admin .ss-account-name,
+  .ss-admin .ss-account-role {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .ss-admin #header {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 14px;
+    top: 0;
+  }
+
+  .ss-admin #branding {
+    padding-left: 0;
+  }
+
+  .ss-admin .ss-topbar-main {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .ss-admin .ss-breadcrumbs {
+    display: none;
+  }
+
+  .ss-admin .ss-jump {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .ss-admin #main {
+    padding-top: 112px;
+  }
+
+  .ss-admin #content-start {
+    padding: 16px 14px 80px;
+  }
+
+  .ss-admin #content h1 {
+    font-size: 20px;
+  }
+
+  .ss-admin .ss-page-head {
+    align-items: flex-start;
+  }
+
+  .ss-admin .ss-stats {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+
+  .ss-admin .ss-stat-value {
+    font-size: 22px;
+  }
+
+  .ss-admin .ss-workflows {
+    grid-template-columns: 1fr;
+  }
+
+  .ss-admin .aligned .form-row > label,
+  .ss-admin .aligned .form-row > div > label {
+    flex-basis: 100%;
+    max-width: none;
+    padding-top: 0;
+  }
+
+  .ss-admin .aligned .form-row .help,
+  .ss-admin .aligned .form-row p.help {
+    padding-left: 0;
+  }
+
+  .ss-admin .aligned .form-row .vTextField,
+  .ss-admin .aligned .form-row .vURLField,
+  .ss-admin .aligned .form-row select,
+  .ss-admin .aligned .form-row textarea {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .ss-admin #changelist .ss-table-card {
+    overflow-x: auto;
+  }
+
+  .ss-admin .results {
+    min-width: 620px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ss-admin * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ icons */
+
+.ss-admin {
+  --ss-icon-dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3.2' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E");
+  --ss-icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='4.6' fill='none' stroke='black' stroke-width='1.6'/%3E%3Cpath d='M10.6 10.6 14 14' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  --ss-icon-menu: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 4h12M2 8h12M2 12h12' stroke='black' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/* Print: the console is used to check a row, not to be printed. */
+@media print {
+  .ss-admin #header,
+  .ss-admin #nav-sidebar,
+  .ss-admin #toggle-nav-sidebar,
+  .ss-admin .submit-row,
+  .ss-admin .object-tools {
+    display: none !important;
+  }
+
+  .ss-admin #main > #content-start {
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* A quiet button that reads as a link (logout lives inside a POST form). */
+.ss-admin .ss-link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ss-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ss-admin .ss-link-button:hover {
+  color: var(--ss-violet);
+  background: none;
+  text-decoration: underline;
+}
+
+.ss-admin .ss-empty-note {
+  padding: 0 18px 14px;
+  margin: 0;
+  color: var(--ss-muted);
+  font-size: 12.5px;
+}
+
+/* The filter card sits above the table even though Django renders it after. */
+.ss-admin #changelist {
+  display: flex;
+  flex-direction: column;
+}
+
+.ss-admin #changelist .changelist-form-container {
+  order: 1;
+}
+
+.ss-admin #changelist-filter {
+  order: 0;
+}
+
+/* List rows are a card of their own, so the table's corners are clipped. */
+.ss-admin #changelist-form #result_list {
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow);
+  overflow: hidden;
+}
+
+.ss-admin #changelist-form .actions + #result_list {
+  margin-top: 0;
+}
+
+.ss-admin #changelist .paginator {
+  border: 1px solid var(--ss-line);
+  border-top: 0;
+  border-radius: 0 0 var(--ss-radius) var(--ss-radius);
+  margin-top: -4px;
+}
+
+.ss-admin .ss-page-of {
+  color: var(--ss-muted);
+  font-size: 12.5px;
+  padding: 0 4px;
+}
