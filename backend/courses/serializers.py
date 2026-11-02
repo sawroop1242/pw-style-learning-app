@@ -3,12 +3,15 @@ from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
+from objectstore import uploads
+
 from . import grading, policy, snapshot
 from .models import (
     CommunityPost, Course, CourseFaculty, CourseFolder, Lesson, PdfResource, Quiz,
     Question, Choice, Note, Progress, QuizAttempt, AttemptAnswer, Bookmark,
     RevisionItem, StudyTask, QuestionReport
 )
+from .models.catalog import viewer_url_for
 
 ALLOWED_VIDEO_SCHEMES = {"https"}
 # Only hosts we are willing to put in an <iframe> or a <video src>. An open
@@ -42,6 +45,39 @@ def _request_user(serializer):
     return getattr(request, "user", None)
 
 
+def _stored_image_url(course):
+    """The cover URL for a key-backed image, or ``None`` to use ``image_url``."""
+    key = getattr(course, "image_key", "")
+    owner = getattr(course, "owner", None)
+    if not key or owner is None:
+        return None
+    try:
+        return uploads.url_for_key(owner, uploads.Purpose.COURSE_IMAGES, key)
+    except Exception:  # noqa: BLE001 - storage is optional at read time
+        return None
+
+
+def _stored_pdf_url(obj):
+    """The URL for a PDF this object holds by key, or ``None``.
+
+    ``None`` means "no key, or storage cannot serve it right now", and the
+    caller falls back to the pasted link. Signing failures must not turn an
+    authorised chapter into a 500 — a learner who may read it sees the old link,
+    which is what the row said before keys existed.
+    """
+    key = getattr(obj, "file_key", "")
+    if not key:
+        return None
+    course = getattr(obj.folder, "course", None)
+    owner = getattr(course, "owner", None)
+    if owner is None:
+        return None
+    try:
+        return uploads.url_for_key(owner, uploads.Purpose.PDFS, key)
+    except Exception:  # noqa: BLE001 - storage is optional at read time
+        return None
+
+
 class PdfResourceSerializer(serializers.ModelSerializer):
     """PDF metadata. ``file_url`` is withheld unless the caller may read the
     course, so a protected chapter cannot be fetched from a public payload."""
@@ -73,13 +109,16 @@ class PdfResourceSerializer(serializers.ModelSerializer):
         course = getattr(obj.folder, "course", None)
         if obj.is_protected and not policy.can_read_media(_request_user(self), course):
             return None
-        return obj.file_url
+        # An uploaded file wins over a pasted link: the link is a signature that
+        # expires, so the key is the durable part of the row.
+        return _stored_pdf_url(obj) or obj.file_url
 
     def get_viewer_url(self, obj):
         """The frameable URL for the in-app reader, or None when locked."""
-        if self.get_file_url(obj) is None:
+        file_url = self.get_file_url(obj)
+        if file_url is None:
             return None
-        return obj.viewer_url
+        return viewer_url_for(file_url, obj.embed_url)
 
     def get_is_locked(self, obj):
         return self.get_file_url(obj) is None
@@ -162,17 +201,32 @@ class StaffLessonSerializer(serializers.ModelSerializer):
 
 
 class StaffPdfResourceSerializer(serializers.ModelSerializer):
-    """Write serializer for staff; the storage URL is writable here only."""
+    """Write serializer for staff; the storage URL is writable here only.
 
-    file_url = serializers.URLField()
+    ``file_key`` is the output of ``POST /api/staff/uploads/``: paste the key,
+    and learners get a signed URL minted per request. ``file_url`` stays
+    optional so a host's own share page can still be pasted directly.
+    """
+
+    file_url = serializers.URLField(required=False, allow_blank=True)
 
     class Meta:
         model = PdfResource
         fields = [
-            "id", "folder", "title", "description", "file_url", "embed_url",
-            "position", "is_published", "is_protected"
+            "id", "folder", "title", "description", "file_url", "file_key",
+            "embed_url", "position", "is_published", "is_protected"
         ]
         read_only_fields = ["id"]
+
+    def validate(self, attrs):
+        """One of the two has to be there, or the row points at nothing."""
+        file_url = attrs.get("file_url", getattr(self.instance, "file_url", ""))
+        file_key = attrs.get("file_key", getattr(self.instance, "file_key", ""))
+        if not file_url and not file_key:
+            raise serializers.ValidationError(
+                {"file_url": ["Upload a file or paste a link."]}
+            )
+        return attrs
 
 
 class StaffCourseFacultySerializer(serializers.ModelSerializer):
@@ -200,6 +254,8 @@ class CourseListSerializer(serializers.ModelSerializer):
     is_enrolled = serializers.SerializerMethodField()
     telegram_dm = serializers.SerializerMethodField()
 
+    image_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Course
         fields = [
@@ -209,6 +265,9 @@ class CourseListSerializer(serializers.ModelSerializer):
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",
             "has_access", "is_enrolled", "created_at", "updated_at"
         ]
+
+    def get_image_url(self, course):
+        return _stored_image_url(course) or course.image_url
 
     def get_lesson_count(self, course):
         annotated = getattr(course, "lesson_count", None)
@@ -260,6 +319,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         model = Course
         fields = [
             "id", "title", "slug", "description", "subject", "image_url",
+            "image_key",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
             "telegram_dm",
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",

@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - "requirements.txt"
+      - "requirements.lock"
       - ".github/workflows/backend-checks.yml"
   pull_request:
     paths:
       - "backend/**"
+      - "requirements.txt"
+      - "requirements.lock"
       - ".github/workflows/backend-checks.yml"
   workflow_dispatch:
 
@@ -40,7 +44,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
@@ -97,7 +101,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
@@ -107,3 +111,38 @@ jobs:
 
       - name: Run Django tests
         run: python manage.py test
+
+  # `requirements.txt` states ranges a human may edit; `requirements.lock` is the
+  # exact resolution with a hash for every artefact. This job installs the lock
+  # for real, so a hash that no longer matches its file, or a pin that does not
+  # resolve, fails here instead of on a deploy. It runs on the oldest supported
+  # interpreter because that is where a pin is most likely to have no wheel.
+  lock:
+    name: Dependency lock installs
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      ENVIRONMENT: test
+      DEBUG: "True"
+      SECRET_KEY: "test-only-not-a-production-secret"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.lock
+
+      - name: Install from the lock, verifying every hash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r ../requirements.lock
+
+      - name: The locked set can run the application
+        run: python manage.py check

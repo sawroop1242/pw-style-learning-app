@@ -1,27 +1,87 @@
 {% extends "admin/change_list.html" %}
-{% load i18n %}
+{% load i18n admin_list %}
 
 {% comment %}
-    Django titles every list "<Select model to change>", an instruction left
-    over from a screen that no longer exists, and it repeats on all 25 lists.
-    The model's plural name is what the page is about.
+    A list screen: a page head with the primary action on the right, filter
+    chips above the table, the table itself as a card, and a footer that says
+    which rows you are looking at and how many there are.
 
-    Set here rather than in each ModelAdmin so the lists Django registers for
-    itself (Users, Groups, Profiles) read the same as ours.
+    Everything Django provides underneath — the action form, the search box,
+    the fieldset for list-editable rows, the query-string handling in the
+    filters — is left exactly as it is. Only the framing changes.
 {% endcomment %}
 
 {% block title %}
-  {% if cl %}
-    {{ cl.opts.verbose_name_plural|capfirst }} | {% translate "StudySpace admin" %}
-  {% else %}
-    {{ block.super }}
-  {% endif %}
+  {% if cl %}{{ cl.opts.verbose_name_plural|capfirst }} | {% translate "StudySpace admin" %}{% else %}{{ block.super }}{% endif %}
 {% endblock %}
+
+{% comment %}
+    Django floats a "Add …" button as object-tools above the table. The command
+    belongs in the page head, on the right, where the eye looks for the one
+    action a list screen has.
+{% endcomment %}
+{% block object-tools %}{% endblock %}
 
 {% block content_title %}
   {% if cl %}
-    <h1>{{ cl.opts.verbose_name_plural|capfirst }}</h1>
+    <div class="ss-page-head">
+      <div>
+        <h1>{{ cl.opts.verbose_name_plural|capfirst }}</h1>
+        <p class="ss-page-sub">
+          {% blocktranslate count counter=cl.result_count %}{{ counter }} row{% plural %}{{ counter }} rows{% endblocktranslate %}
+          {% if cl.has_active_filters %} · <a href="{{ cl.clear_all_filters_qs }}">{% translate "clear filters" %}</a>{% endif %}
+        </p>
+      </div>
+      <div class="ss-page-actions">
+        <ul class="object-tools">{% change_list_object_tools %}</ul>
+      </div>
+    </div>
   {% elif title %}
-    <h1>{{ title }}</h1>
+    <div class="ss-page-head"><div><h1>{{ title }}</h1></div></div>
+  {% endif %}
+{% endblock %}
+
+{% block filters %}
+  {% if cl.has_filters %}
+    <nav id="changelist-filter" aria-labelledby="changelist-filter-header">
+      <h2 id="changelist-filter-header" class="visually-hidden">{% translate "Filter" %}</h2>
+      <div class="ss-filters">
+        {% for spec in cl.filter_specs %}{% admin_list_filter cl spec %}{% endfor %}
+        {% if cl.has_active_filters %}
+          <div class="ss-filter-group">
+            <h3>{% translate "Selected" %}</h3>
+            <a class="ss-chip" href="{{ cl.clear_all_filters_qs }}">{% translate "Clear all" %}</a>
+          </div>
+        {% endif %}
+      </div>
+    </nav>
+  {% endif %}
+{% endblock %}
+
+{% comment %}
+    Django's own `paginator_number` builds every page link with the current
+    filters, search term and ordering intact; writing those links by hand is
+    how a filtered list loses its filter on page two.
+{% endcomment %}
+{% block pagination %}
+  {% if cl.result_count %}
+    {% with page=cl.page_num per_page=cl.paginator.per_page rows=cl.result_list|length %}
+      {% widthratio page|add:"-1" 1 per_page as offset %}
+      {% with first=offset|add:"1" last=offset|add:rows %}
+        <div class="paginator">
+          <span>
+            {% blocktranslate with start=first end=last total=cl.result_count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktranslate %}
+          </span>
+          <span class="ss-page-links">
+            {% if pagination_required %}
+              {% for i in page_range %}{% paginator_number cl i %}{% endfor %}
+            {% endif %}
+            {% if show_all_url %}
+              <a class="showall" href="{{ show_all_url }}">{% translate "Show all" %}</a>
+            {% endif %}
+          </span>
+        </div>
+      {% endwith %}
+    {% endwith %}
   {% endif %}
 {% endblock %}

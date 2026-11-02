@@ -173,6 +173,44 @@ def _row(model_key, model, request, site, with_counts=True):
     }
 
 
+#: The four numbers a content editor checks before starting work. Each is a
+#: model that already appears in ``app_list``; a tile the user may not open is
+#: never rendered, so the row never shows a zero standing in for "no access".
+STAT_TILES = [
+    ("courses.course", "Batches", "on the catalogue"),
+    ("courses.lesson", "Lessons", "in every batch"),
+    ("courses.quiz", "Tests", "papers and mock series"),
+    ("courses.quizattempt", "Attempts", "started by learners"),
+]
+
+
+@register.simple_tag(takes_context=True)
+def console_stats(context, app_list):
+    """``{% console_stats app_list as stats %}`` — the tiles on the home page."""
+    request = context.get("request")
+    visible = {}
+    for app in app_list:
+        for model in app["models"]:
+            visible[f"{app['app_label']}.{model['object_name'].lower()}"] = model
+
+    tiles = []
+    for model_key, label, hint in STAT_TILES:
+        model = visible.get(model_key)
+        if model is None or not model["admin_url"]:
+            continue
+        try:
+            model_class = apps.get_model(*model_key.split("."))
+            count = _count(admin.site.get_model_admin(model_class), request)
+        except (LookupError, admin.sites.NotRegistered, PermissionDenied):
+            count = None
+        if count is None:
+            continue
+        tiles.append(
+            {"label": label, "hint": hint, "count": count, "url": model["admin_url"]}
+        )
+    return tiles
+
+
 @register.simple_tag(takes_context=True)
 def workflow_cards(context, app_list):
     """``{% workflow_cards app_list as cards %}`` — the console home."""

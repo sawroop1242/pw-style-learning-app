@@ -8,6 +8,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
+from config.admin_ui import pill
+
 from accounts.models import Role
 from accounts.roles import is_main_admin, is_staff_role, user_role
 from courses import csv_import
@@ -136,6 +138,15 @@ class OwnershipScopedAdmin(CompactTextareaMixin, admin.ModelAdmin):
         extra_context = dict(extra_context or {})
         extra_context.setdefault("title", str(self.model._meta.verbose_name_plural).capitalize())
         return super().changelist_view(request, extra_context)
+
+
+    @admin.display(description="Status", ordering="is_published")
+    def publish_status(self, obj):
+        # Deliberately not called `status`: AccessCode has a `status` of its
+        # own, and a ModelAdmin attribute of the same name would hide it.
+        """Published rows are green, drafts blue — the console's one palette."""
+        return pill("Published" if obj.is_published else "Draft",
+                    "ok" if obj.is_published else "info")
 
 
 class OwnerAssignAdmin(OwnershipScopedAdmin):
@@ -407,13 +418,12 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
     ordering = ("title",)
     list_display = (
         "title", "subject", "pricing_mode", "price", "lesson_total", "folder_total",
-        "is_published", "owner", "updated_at",
+        "publish_status", "owner", "updated_at",
     )
     list_filter = ("subject", "pricing_mode", "is_published")
     search_fields = ("title", "description", "slug")
     prepopulated_fields = {"slug": ("title",)}
     inlines = [CourseFolderInline]
-    list_editable = ("is_published",)
     save_on_top = True
     # A fieldset may only name a non-model field when it is declared read-only.
     readonly_fields = ("shortcuts", "image_preview", "telegram_preview")
@@ -619,12 +629,12 @@ class LessonAdmin(PublishableAdmin):
     publish_label = "lessons"
     list_display = (
         "title", "course", "folder", "position", "duration_minutes",
-        "recording", "is_published",
+        "recording", "publish_status",
     )
     list_filter = ("is_published", "course")
     search_fields = ("title", "description", "course__title")
     list_select_related = ("course", "folder")
-    list_editable = ("position", "is_published")
+    list_editable = ("position",)
     form = LessonAdminForm
     # `course` stays an autocomplete (there may be a hundred batches); the
     # section is a plain select listing every section in the catalogue.
@@ -744,7 +754,7 @@ class LessonAdmin(PublishableAdmin):
 
 @admin.register(PdfResource)
 class PdfResourceAdmin(OwnershipScopedAdmin):
-    list_display = ("title", "folder", "position", "is_published", "is_protected")
+    list_display = ("title", "folder", "position", "publish_status", "is_protected")
     list_filter = ("is_published", "is_protected")
     search_fields = ("title", "description")
     autocomplete_fields = ("folder",)
@@ -851,7 +861,7 @@ class CourseAccessGrantAdmin(OwnershipScopedAdmin):
 
 @admin.register(TestSeries)
 class TestSeriesAdmin(OwnerAssignAdmin):
-    list_display = ("title", "subject", "owner", "is_published", "last_edited")
+    list_display = ("title", "subject", "owner", "publish_status", "last_edited")
     list_filter = ("subject", "is_published")
     search_fields = ("title", "description")
     prepopulated_fields = {"slug": ("title",)}
@@ -865,12 +875,12 @@ class QuizAdmin(PublishableAdmin):
     publish_label = "tests"
     list_display = (
         "title", "series", "course", "timing_mode", "duration",
-        "question_total", "is_published", "last_edited",
+        "question_total", "publish_status", "last_edited",
     )
     list_filter = ("timing_mode", "is_published", "series")
     search_fields = ("title", "description")
     list_select_related = ("series", "course")
-    list_editable = ("is_published",)
+    list_editable = ()
     autocomplete_fields = ("series", "course")
     save_on_top = True
     fieldsets = (

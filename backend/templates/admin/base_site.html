@@ -2,52 +2,110 @@
 {% load i18n static %}
 
 {% comment %}
-    Branding and the one stylesheet that gives the console its looks.
+    The console shell: a navy rail, a top bar, and a light working area.
 
-    This overrides Django's own admin/base_site.html, which every admin page
-    extends, so the name, the palette and the font are set in exactly one place.
+    This overrides Django's admin/base_site.html, which every admin page
+    extends, so the name, the palette, the top bar and the stylesheet are set in
+    exactly one place. The body keeps Django's own classes — its JS filters on
+    them — and adds `ss-admin` so the theme applies to nothing else.
 
-    The theme is pinned to light on purpose (see the palette block in the CSS):
+    The theme is pinned to light on purpose (see the note in staff/admin.css):
     an OS set to dark would otherwise hand a content editor a half-converted
     admin, and long question forms read better on white.
 {% endcomment %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {% translate "StudySpace admin" %}{% endblock %}
 
-{% comment %}
-    Loaded in the `responsive` block, i.e. last in the <head>: Django's
-    change_form and change_list templates append forms.css and changelists.css
-    to `extrastyle`, so a stylesheet linked there is overridden by rules of the
-    same weight. Last wins without !important everywhere.
-{% endcomment %}
 {% block responsive %}
   {{ block.super }}
   <link rel="stylesheet" href="{% static 'staff/admin.css' %}">
 {% endblock %}
 
-{% comment %}
-    "Welcome, admin." is four words of greeting in a bar that also has to hold
-    View site / Change password / Log out; on a phone it pushed Log out off the
-    edge. The bar says who you are by being there.
-{% endcomment %}
-{% block welcome-msg %}{% endblock %}
-
 {% block bodyclass %}ss-admin {{ block.super }}{% endblock %}
 
 {% block extrahead %}
   {{ block.super }}
-  {% comment %}
-    On a phone the navigation rail is a drawer; this gives the toggle the
-    behaviour the CSS expects (see staff/mobile_nav.js and the mobile block in
-    staff/admin.css). Deferred, so it runs after Django's own nav_sidebar.js.
-  {% endcomment %}
-  <script src="{% static 'staff/mobile_nav.js' %}" defer></script>
+  <script src="{% static 'staff/admin.js' %}" defer></script>
 {% endblock %}
 
-{% block branding %}
-  <div id="site-name">
-    <a href="{% url 'admin:index' %}">StudySpace<span class="ss-admin-tag">admin</span></a>
+{% comment %}
+    The whole top bar is ours. Django's header holds a brand, a greeting and a
+    row of links; this holds a brand, where you are, what you can jump to, and
+    who you are — in that order, which is the order the questions are asked.
+{% endcomment %}
+{% block header %}
+  <div id="header">
+    {% block branding %}
+      <div id="site-name">
+        <a href="{% url 'admin:index' %}">StudySpace<span class="ss-admin-tag">admin</span></a>
+      </div>
+    {% endblock %}
+
+    <div class="ss-topbar-main">
+      <nav class="ss-breadcrumbs" aria-label="{% translate 'Breadcrumb' %}">
+        <a href="{% url 'admin:index' %}">{% translate "Admin" %}</a>
+        {% if opts %}
+          <span class="ss-crumb-sep" aria-hidden="true">/</span>
+          <a href="{% url 'admin:app_list' opts.app_config.label %}">{{ opts.app_config.verbose_name }}</a>
+          <span class="ss-crumb-sep" aria-hidden="true">/</span>
+          <span class="ss-crumb-current">{{ opts.verbose_name_plural|capfirst }}</span>
+        {% elif title %}
+          <span class="ss-crumb-sep" aria-hidden="true">/</span>
+          <span class="ss-crumb-current">{{ title }}</span>
+        {% endif %}
+      </nav>
+
+      {% comment %}
+        "Jump to" searches the models this account may open, not the rows: there
+        is no cross-model search index, and pretending there is one would return
+        a page of guesses. The datalist is filled from Django's own
+        permission-filtered `available_apps`.
+      {% endcomment %}
+      <form class="ss-jump" role="search" onsubmit="return false">
+        <label class="visually-hidden" for="ss-jump-input">{% translate "Jump to a screen" %}</label>
+        <input id="ss-jump-input" type="search" list="ss-jump-list" autocomplete="off"
+               placeholder="{% translate 'Jump to… ( / )' %}"
+               aria-describedby="ss-jump-help">
+        <span id="ss-jump-help" class="visually-hidden">
+          {% translate "Type a screen name and press Enter." %}
+        </span>
+        <datalist id="ss-jump-list">
+          {% for app in available_apps %}
+            {% for model in app.models %}
+              {% if model.admin_url %}
+                <option value="{{ model.name }}" data-url="{{ model.admin_url }}"></option>
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+        </datalist>
+      </form>
+
+      <div class="ss-account">
+        <span class="ss-avatar" aria-hidden="true">{{ user.get_username|slice:":2"|upper }}</span>
+        <span>
+          <span class="ss-account-name">{{ user.get_username }}</span><br>
+          <span class="ss-account-role">
+            {% if user.is_superuser %}{% translate "Owner" %}{% else %}{% translate "Staff" %}{% endif %}
+          </span>
+        </span>
+        {% if has_permission %}
+          <form class="ss-account-links" method="post" action="{% url 'admin:logout' %}">
+            {% csrf_token %}
+            <a href="{% url 'admin:password_change' %}">{% translate "Password" %}</a>
+            <button type="submit" class="ss-link-button">{% translate "Log out" %}</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
   </div>
 {% endblock %}
 
 {% block nav-global %}{% endblock %}
+
+{% comment %}
+    Django draws its own breadcrumb strip under the header. The trail now lives
+    in the top bar, so this renders nothing rather than repeating it.
+{% endcomment %}
+{% block nav-breadcrumbs %}{% endblock %}
+
+{% block footer %}{% endblock %}

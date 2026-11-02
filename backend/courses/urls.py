@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from .upload_views import StaffAssetUploadView
 from .views import (
     CommunityPostViewSet, PdfResourceViewSet,
     QuestionReportViewSet, notifications_read, notifications_view,
@@ -49,5 +50,6 @@ urlpatterns = [
     path("notifications/", notifications_view, name="notifications"),
     path("notifications/read/", notifications_read, name="notifications-read"),
     path("", include(router.urls)),
+    path("staff/uploads/", StaffAssetUploadView.as_view(), name="staff-upload"),
     path("staff/", include(staff_router.urls)),
 ]

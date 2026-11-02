@@ -1,0 +1,41 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% comment %}
+    One app's models. Reachable from the top-bar breadcrumb, and useful when the
+    rail is collapsed; the rail and the console home remain the main routes.
+{% endcomment %}
+
+{% block content_title %}
+  <div class="ss-page-head">
+    <div>
+      <h1>{{ app_list.0.name|default:title }}</h1>
+      <p class="ss-page-sub">{% translate "Every screen in this app, in the order Django registers them." %}</p>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  {% for app in app_list %}
+    <section class="ss-card" aria-labelledby="ss-app-{{ app.app_label }}">
+      <h2 id="ss-app-{{ app.app_label }}">{{ app.name }}</h2>
+      <p class="ss-card-blurb">{{ app.app_url }}</p>
+      <ul>
+        {% for model in app.models %}
+          <li>
+            {% if model.admin_url %}
+              <a class="ss-model" href="{{ model.admin_url }}">{{ model.name }}</a>
+            {% else %}
+              <span class="ss-model">{{ model.name }}</span>
+            {% endif %}
+            {% if model.add_url %}
+              <a class="ss-add" href="{{ model.add_url }}">{% translate "Add" %}</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endfor %}
+</div>
+{% endblock %}

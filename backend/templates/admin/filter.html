@@ -1,19 +1,19 @@
 {% load i18n %}
 {% comment %}
-    One filter, as a chip.
+    One filter, rendered as a row of chips instead of a collapsed <details>.
 
-    Django's own version opens the list and prefixes the label with "By", which
-    is a sentence: on a list page with three filters that is three open panels
-    stacked in a 240px column. Here the label is the field's own name and the
-    list opens only when you ask for it (see #changelist-filter in
-    staff/admin.css).
+    Django's own version hides every filter behind a summary element and stacks
+    them down the right edge, so two filters meant two clicks to answer one
+    question. `choice.query_string` still comes from ChangeList, so a chip keeps
+    the search term and the other filters.
 {% endcomment %}
-<details data-filter-title="{{ title }}">
-  <summary>{{ title }}</summary>
-  <ul>
-  {% for choice in choices %}
-    <li{% if choice.selected %} class="selected"{% endif %}>
-    <a href="{{ choice.query_string|iriencode }}">{{ choice.display }}</a></li>
-  {% endfor %}
-  </ul>
-</details>
+<div class="ss-filter-group">
+  <h3 id="ss-filter-{{ title|slugify }}">{{ title }}</h3>
+  <div class="ss-filter-chips" role="group" aria-labelledby="ss-filter-{{ title|slugify }}">
+    {% for choice in choices %}
+      <a class="ss-chip{% if choice.selected %} is-selected{% endif %}"
+         href="{{ choice.query_string|iriencode }}"
+         {% if choice.selected %}aria-current="true"{% endif %}>{{ choice.display }}</a>
+    {% endfor %}
+  </div>
+</div>

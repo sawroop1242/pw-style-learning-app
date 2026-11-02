@@ -263,3 +263,133 @@ class TokenLifetimeTests(TestCase):
         # The rotated-away token cannot be used a second time.
         reused = client.post("/api/token/refresh/", {"refresh": pair["refresh"]}, format="json")
         self.assertEqual(reused.status_code, 401)
+
+
+class ApiSchemaTests(TestCase):
+    """The schema is generated from the code, and only staff may download it."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        cls.staff = User.objects.create_user(
+            username="schema-staff", password="TestPass123!", is_staff=True
+        )
+        cls.learner = User.objects.create_user(
+            username="schema-learner", password="TestPass123!"
+        )
+
+    def test_staff_download_an_openapi_document_that_names_real_paths(self):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(self.staff)
+        response = client.get("/api/schema/")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertTrue(body.startswith("openapi:") or body.startswith("openapi"))
+        self.assertIn("/api/courses/", body)
+        self.assertIn("/api/staff/uploads/", body)
+
+    def test_a_learner_cannot_download_the_schema(self):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(self.learner)
+        response = client.get("/api/schema/")
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_an_anonymous_caller_cannot_download_the_schema(self):
+        response = self.client.get("/api/schema/")
+        self.assertIn(response.status_code, (401, 403))
+
+
+class ApiVersionTests(TestCase):
+    """Header versioning: today's clients are 1.0 without saying so."""
+
+    def test_a_client_that_says_nothing_gets_version_1_0(self):
+        response = self.client.get("/api/courses/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"].split(";")[0], "application/json")
+
+    def test_a_client_may_pin_the_version_it_was_built_against(self):
+        response = self.client.get(
+            "/api/courses/", HTTP_ACCEPT="application/json; version=1.0"
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_an_unknown_version_is_refused_rather_than_guessed(self):
+        response = self.client.get(
+            "/api/courses/", HTTP_ACCEPT="application/json; version=99"
+        )
+        # 406, not a silent fallback: a client asking for a version this server
+        # does not serve must be told, not answered in another dialect.
+        self.assertEqual(response.status_code, 406)
+
+
+class RequestIdTests(TestCase):
+    """Every response carries an id, and a server error logs the same one."""
+
+    def test_a_response_carries_an_id(self):
+        response = self.client.get("/healthz/")
+        self.assertRegex(response["X-Request-ID"], r"^[0-9a-f]{32}$")
+
+    def test_a_valid_upstream_id_is_passed_through(self):
+        response = self.client.get("/healthz/", HTTP_X_REQUEST_ID="edge-abc12345")
+        self.assertEqual(response["X-Request-ID"], "edge-abc12345")
+
+    def test_a_header_that_is_not_an_id_is_replaced(self):
+        # A newline here would split the log line, which is how log injection
+        # starts. Anything that is not a boring id is ignored.
+        for bad in ("short", "has space", "abc\ndef1234", "x" * 65):
+            with self.subTest(value=bad):
+                response = self.client.get("/healthz/", HTTP_X_REQUEST_ID=bad)
+                self.assertRegex(response["X-Request-ID"], r"^[0-9a-f]{32}$")
+
+    def test_a_server_error_logs_the_id_it_returned(self):
+        from django.http import HttpResponse
+
+        from config.middleware import RequestIdMiddleware
+
+        middleware = RequestIdMiddleware(lambda request: HttpResponse(status=500))
+        with self.assertLogs("studyspace.requests", level="ERROR") as logs:
+            response = middleware(self._request("/boom/", "trace-me-1234"))
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response["X-Request-ID"], "trace-me-1234")
+        self.assertIn("trace-me-1234", logs.output[0])
+        self.assertIn("duration_ms", logs.output[0])
+
+    def test_an_exception_is_logged_with_the_same_id_before_it_propagates(self):
+        from config.middleware import RequestIdMiddleware
+
+        def explode(request):
+            raise RuntimeError("boom")
+
+        middleware = RequestIdMiddleware(explode)
+        request = self._request("/boom/", "trace-me-5678")
+        with self.assertLogs("studyspace.requests", level="ERROR") as logs:
+            with self.assertRaises(RuntimeError):
+                middleware(request)
+
+        self.assertIn("trace-me-5678", logs.output[0])
+
+    def test_a_successful_request_is_not_logged_as_an_error(self):
+        from django.http import HttpResponse
+
+        from config.middleware import RequestIdMiddleware
+
+        middleware = RequestIdMiddleware(lambda request: HttpResponse(status=200))
+        with self.assertNoLogs("studyspace.requests", level="ERROR"):
+            middleware(self._request("/healthz/"))
+
+    @staticmethod
+    def _request(path, request_id=None):
+        from django.test import RequestFactory
+
+        request = RequestFactory().get(path)
+        if request_id is not None:
+            request.META["HTTP_X_REQUEST_ID"] = request_id
+        return request

@@ -23,12 +23,32 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# or, for the exact set with every artefact hash-verified (Python 3.11):
+# pip install --require-hashes -r ../requirements.lock
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver 0.0.0.0:8000
 ```
 
 Open `/admin/` to manage content and `/api/` for API routes.
+
+`requirements.txt` holds the ranges a human edits; `requirements.lock` is the
+pinned, hashed resolution of them, and the *Dependency lock installs* CI job
+installs it with `--require-hashes` on Python 3.11 so a stale hash fails there.
+Change the ranges, then:
+
+```bash
+pip install pip-tools
+pip-compile --generate-hashes --strip-extras -o requirements.lock requirements.txt
+```
+
+Regenerate the lock in the same commit as the range change.
+
+The API describes itself: `GET /api/schema/` (staff only) returns OpenAPI 3, and
+clients may pin a version with `Accept: application/json; version=1.0`. The
+default is `1.0`, so existing clients are already on it; a breaking change ships
+as `2.0` and old clients keep answering in `1.0`.
 
 ## Frontend
 

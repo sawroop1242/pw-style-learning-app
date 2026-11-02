@@ -11,3 +11,5 @@ whitenoise>=6.8,<7.0
 cryptography>=43,<47
 # Shared cache for DRF throttles in production (see CACHES in config/settings.py).
 redis>=5.0,<7.0
+# OpenAPI 3 schema generated from the live serializers (/api/schema/).
+drf-spectacular>=0.30,<0.31
