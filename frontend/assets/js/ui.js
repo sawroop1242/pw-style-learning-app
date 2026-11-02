@@ -107,6 +107,8 @@ const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute
   )
   .join('')}</svg>`;
 
+installImageFallback();
+
 export function mountSprite() {
   if (!document.getElementById('icon-sprite')) {
     const wrap = document.createElement('div');
@@ -114,6 +116,27 @@ export function mountSprite() {
     wrap.innerHTML = SPRITE;
     document.body.prepend(wrap);
   }
+}
+
+/**
+ * Remove a decorative image that failed to load.
+ *
+ * This used to be `onerror="this.remove()"` on the element. Inline handlers are
+ * blocked by a `script-src 'self'` policy — and were the reason the page needed
+ * `'unsafe-inline'` at all — so the behaviour moved here. `error` does not
+ * bubble, hence the capture listener.
+ */
+export function installImageFallback() {
+  document.addEventListener(
+    'error',
+    (event) => {
+      const node = event.target;
+      if (node && node.tagName === 'IMG' && node.dataset.hideOnError !== undefined) {
+        node.remove();
+      }
+    },
+    true
+  );
 }
 
 export const icon = (name, cls = '') =>
@@ -565,7 +588,7 @@ export function batchCard(course) {
   // initials, so an image is never required to publish a batch.
   const art = course.image
     ? `<img class="batch-cover-img" src="${esc(course.image)}" alt="" loading="lazy" decoding="async"
-         onerror="this.remove()">`
+         data-hide-on-error>`
     : '';
 
   return `

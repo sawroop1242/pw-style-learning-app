@@ -49,6 +49,7 @@ Define the technical controls required before StudySpace is exposed to public us
 
 ## 7. Secure deployment and configuration
 - Use HTTPS in deployed environments; configure trusted hosts, CORS/CSRF settings, secure cookies where applicable, HSTS only when HTTPS deployment is verified, and appropriate content/security headers.
+  - **Implemented:** `config.middleware.ContentSecurityPolicyMiddleware` sends `Content-Security-Policy` on every response (pages, assets and API): `default-src 'self'`, `script-src 'self'` with no `unsafe-inline`/`unsafe-eval`, `object-src 'none'`, `frame-ancestors 'none'`. Styles keep `'unsafe-inline'` for inline `style="…"` attributes; that is the only relaxation, and it is recorded in `settings.py`. No page carries an inline `<script>` or an inline event handler — a test fails if one reappears. `CSP_REPORT_ONLY=1` rolls a change out as a report-only policy.
 - Use environment-managed Django secret key, database credentials, email credentials, allowed hosts, trusted frontend origins, and debug setting. Production must fail safely when required configuration is absent.
 - Use least-privilege database and hosting credentials; separate development/staging/production secrets; rotate exposed credentials.
 - Apply migrations as a controlled release step, collect static assets reproducibly, expose only intended ports, and document rollback.

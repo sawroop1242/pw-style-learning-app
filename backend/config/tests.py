@@ -153,3 +153,113 @@ class ReadinessTests(TestCase):
             response = self.client.get("/healthz/")
 
         self.assertEqual(response.status_code, 200)
+
+
+class ContentSecurityPolicyTests(TestCase):
+    """Audit finding 10: there was no Content-Security-Policy at all.
+
+    Tokens live in browser storage, so an injected script is the worst outcome
+    the app can have; the policy is what stops the browser running one.
+    """
+
+    def policy(self, url="/"):
+        return self.client.get(url)["Content-Security-Policy"]
+
+    def test_every_kind_of_response_carries_the_policy(self):
+        for url in ("/", "/course.html", "/assets/js/core.js", "/assets/css/app.css", "/healthz/"):
+            with self.subTest(url=url):
+                self.assertTrue(self.policy(url), url)
+
+    def test_scripts_may_only_come_from_this_origin(self):
+        policy = self.policy()
+        self.assertIn("script-src 'self';", policy)
+        self.assertNotIn("'unsafe-eval'", policy)
+        # The inline handlers and inline <script> blocks were removed so this
+        # assertion can exist; if a page regresses, its console will say so.
+        script_src = [part for part in policy.split(";") if part.strip().startswith("script-src")]
+        self.assertNotIn("'unsafe-inline'", script_src[0])
+
+    def test_the_rest_of_the_policy(self):
+        policy = self.policy()
+        for directive in (
+            "default-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "frame-ancestors 'none'",
+            "form-action 'self'",
+        ):
+            self.assertIn(directive, policy)
+
+    def test_report_only_mode_replaces_the_enforcing_header(self):
+        from django.test import override_settings
+
+        with override_settings(CSP_REPORT_ONLY=True):
+            response = self.client.get("/")
+        self.assertEqual(response.get("Content-Security-Policy"), None)
+        self.assertTrue(response.get("Content-Security-Policy-Report-Only"))
+
+    def test_the_policy_can_be_replaced_without_a_code_change(self):
+        """`CONTENT_SECURITY_POLICY` is an environment variable."""
+        from django.test import override_settings
+
+        with override_settings(CONTENT_SECURITY_POLICY="default-src 'none'"):
+            self.assertEqual(self.policy(), "default-src 'none'")
+
+    def test_no_page_carries_an_inline_script_or_handler(self):
+        """A single inline block would be silently blocked by the policy."""
+        import re
+
+        pages = sorted(FRONTEND_ROOT.glob("*.html"))
+        inline = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>", re.IGNORECASE)
+        handler = re.compile(r"\son(?:click|change|submit|load|error|input)\s*=", re.IGNORECASE)
+        for page in pages:
+            text = page.read_text(encoding="utf-8")
+            with self.subTest(page=page.name):
+                self.assertIsNone(inline.search(text), f"{page.name} has an inline <script>")
+                self.assertIsNone(handler.search(text), f"{page.name} has an inline handler")
+
+
+class TokenLifetimeTests(TestCase):
+    """Audit finding 9: the ADR's token settings were never in `settings.py`.
+
+    SimpleJWT's defaults applied instead: a one-day refresh token with no
+    rotation and no blacklisting, so a stolen refresh token could not be
+    revoked. These tests hold the runtime settings to the ADR.
+    """
+
+    def test_settings_match_the_adr(self):
+        from datetime import timedelta
+
+        from django.conf import settings
+
+        jwt = settings.SIMPLE_JWT
+        self.assertEqual(jwt["ACCESS_TOKEN_LIFETIME"], timedelta(minutes=30))
+        self.assertEqual(jwt["REFRESH_TOKEN_LIFETIME"], timedelta(days=7))
+        self.assertTrue(jwt["ROTATE_REFRESH_TOKENS"])
+        self.assertTrue(jwt["BLACKLIST_AFTER_ROTATION"])
+        self.assertIn("rest_framework_simplejwt.token_blacklist", settings.INSTALLED_APPS)
+
+    def test_refreshing_rotates_and_blacklists_the_old_token(self):
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+
+        User = get_user_model()
+        User.objects.create_user("rotator", "rotator@example.com", "SecurePass123!")
+        client = APIClient()
+        pair = client.post(
+            "/api/token/",
+            {"username_or_email": "rotator", "password": "SecurePass123!"},
+            format="json",
+        ).json()
+        self.assertIn("refresh", pair)
+
+        rotated = client.post("/api/token/refresh/", {"refresh": pair["refresh"]}, format="json")
+        self.assertEqual(rotated.status_code, 200, rotated.content)
+        self.assertIn("refresh", rotated.json(), "rotation must return a new refresh token")
+        self.assertNotEqual(rotated.json()["refresh"], pair["refresh"])
+        self.assertTrue(BlacklistedToken.objects.exists())
+
+        # The rotated-away token cannot be used a second time.
+        reused = client.post("/api/token/refresh/", {"refresh": pair["refresh"]}, format="json")
+        self.assertEqual(reused.status_code, 401)

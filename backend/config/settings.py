@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -88,6 +89,9 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # Last in, first out: the policy is attached to whatever the view returns,
+    # including the static shell served by config.views.
+    "config.middleware.ContentSecurityPolicyMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -217,6 +221,24 @@ else:
         }
     }
 
+# ADR 0004. These were never in the settings file, so SimpleJWT's defaults
+# applied: a 5-minute access token (fine) but a 1-day refresh token with no
+# rotation and no blacklisting, so a stolen refresh token stayed valid for a
+# day and could not be revoked. The values below are the ones the ADR records.
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": False,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication"
@@ -244,6 +266,45 @@ REST_FRAMEWORK = {
         "user": os.getenv("THROTTLE_USER", "1000/minute"),
     },
 }
+
+# --------------------------------------------------------------------------- #
+# Content Security Policy
+# --------------------------------------------------------------------------- #
+
+# No third-party scripts, fonts or styles: everything the pages load is served
+# from this origin, so `'self'` is the whole story for scripts. Styles keep
+# `'unsafe-inline'` for the inline `style="…"` attributes used by the shell and
+# the generated markup — CSS cannot execute, and every dynamic value that goes
+# into those strings is escaped by the same helper as the text.
+#
+# Frames are allowed from any https origin because a provider configures its own
+# video and PDF host; scripts inside those frames are not ours to police, and
+# `frame-ancestors 'none'` stops anyone framing *this* site.
+CONTENT_SECURITY_POLICY = os.getenv(
+    "CONTENT_SECURITY_POLICY",
+    " ".join(
+        [
+            "default-src 'self';",
+            "base-uri 'self';",
+            "object-src 'none';",
+            "frame-ancestors 'none';",
+            "form-action 'self';",
+            "script-src 'self';",
+            "style-src 'self' 'unsafe-inline';",
+            "img-src 'self' data: blob: https:;",
+            "media-src 'self' https:;",
+            "font-src 'self' data:;",
+            "frame-src 'self' https:;",
+            "connect-src 'self' https:;",
+            "worker-src 'self';",
+            "manifest-src 'self';",
+        ]
+    ),
+)
+
+# Roll a change out in this mode first: the browser reports violations instead
+# of blocking them. `manage.py check` does not care either way.
+CSP_REPORT_ONLY = env_bool("CSP_REPORT_ONLY", False)
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
