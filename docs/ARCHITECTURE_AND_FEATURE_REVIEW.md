@@ -1,5 +1,11 @@
 # StudySpace — Architecture & Feature Review
 
+> **Historical document.** This report describes the state of the repository
+> when it was written and is kept for context only. The current review is
+> [`docs/audits/pw-style-learning-app-audit-2026-11-02.md`](../audits/pw-style-learning-app-audit-2026-11-02.md);
+> for what is actually built, read `docs/FEATURE_BACKEND_MATRIX.md`.
+
+
 **What the docs ask for, what the code actually does, and what should be done next**
 
 | | |

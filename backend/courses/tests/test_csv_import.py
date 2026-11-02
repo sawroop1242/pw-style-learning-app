@@ -12,6 +12,7 @@ import tempfile
 from decimal import Decimal
 from pathlib import Path
 from unittest import mock
+import urllib.request
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
@@ -229,6 +230,88 @@ class FetchGuardTests(TestCase):
             csv_import.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("93.184.216.34", 0))]
         ):
             csv_import._assert_public_host("files.example.com")
+
+    def test_one_private_answer_condemns_the_whole_name(self):
+        """A name that answers both publicly and privately is choosing its check."""
+        answers = [
+            (2, 1, 6, "", ("93.184.216.34", 0)),
+            (2, 1, 6, "", ("10.0.0.5", 0)),
+        ]
+        with mock.patch.object(csv_import.socket, "getaddrinfo", return_value=answers):
+            with self.assertRaises(csv_import.CsvImportError):
+                csv_import.fetch_csv("https://mixed.example.com/q.csv")
+
+    def test_the_validated_address_is_the_address_connected_to(self):
+        """DNS rebinding: the second lookup must not be able to change the answer.
+
+        `urllib` resolves the hostname itself at connect time. Here the pinned
+        connection is exercised directly: it must open a socket to the address
+        the guard returned, not to whatever DNS says next.
+        """
+        connection = csv_import._PinnedHTTPSConnection(
+            "files.example.com", pinned_address="93.184.216.34", timeout=5
+        )
+        connection._context = mock.MagicMock()
+
+        with mock.patch.object(
+            csv_import.socket, "create_connection", return_value=mock.MagicMock()
+        ) as create_connection, mock.patch.object(
+            csv_import.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.5", 0))]
+        ):
+            connection.connect()
+
+        host_port = create_connection.call_args.args[0]
+        self.assertEqual(host_port, ("93.184.216.34", 443))
+        # TLS still verifies the hostname, not the address we pinned.
+        self.assertEqual(
+            connection._context.wrap_socket.call_args.kwargs["server_hostname"],
+            "files.example.com",
+        )
+
+    def test_fetch_pins_the_resolved_address(self):
+        """The opener used by `fetch_csv` is built around the validated address."""
+        responses = []
+
+        class _Body:
+            def read(self, limit):
+                return b"question_text,option_a,option_b,option_c,option_d,correct_option\n"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        real_opener = urllib.request.build_opener
+
+        def build(*handlers):
+            responses.append(handlers)
+            opener = real_opener(*handlers)
+            opener.open = mock.MagicMock(return_value=_Body())
+            return opener
+
+        with mock.patch.object(
+            csv_import.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("93.184.216.34", 0))]
+        ), mock.patch.object(csv_import.urllib.request, "build_opener", side_effect=build):
+            csv_import.fetch_csv("https://files.example.com/q.csv")
+
+        pinned = [h for h in responses[0] if isinstance(h, csv_import._PinnedHTTPSHandler)]
+        self.assertEqual(len(pinned), 1)
+        self.assertEqual(pinned[0]._address, "93.184.216.34")
+
+    def test_credentials_in_the_url_do_not_change_the_host_checked(self):
+        with mock.patch.object(
+            csv_import.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("93.184.216.34", 0))]
+        ) as lookup:
+            with mock.patch.object(csv_import.urllib.request, "build_opener") as build:
+                build.return_value.open.side_effect = csv_import.urllib.error.URLError("no")
+                with self.assertRaises(csv_import.CsvImportError):
+                    csv_import.fetch_csv("https://user:secret@files.example.com/q.csv")
+        lookup.assert_called_once_with("files.example.com", None)
+
+    def test_an_ipv6_literal_is_checked_like_any_other_host(self):
+        with self.assertRaises(csv_import.CsvImportError):
+            csv_import.fetch_csv("https://[::1]/q.csv")
 
 
 class ImportTests(TestCase):

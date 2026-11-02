@@ -56,3 +56,54 @@ jobs:
 
       - name: Compile Python modules
         run: python -m compileall -q config courses
+
+  # SQLite and PostgreSQL do not behave the same under concurrency, and this
+  # application depends on the difference: `select_for_update()` is what stops
+  # two submissions scoring one attempt twice and two redemptions using one
+  # access code. The job above runs on SQLite because it is fast; this one runs
+  # the same suite against the database production actually uses.
+  postgres:
+    name: Tests on PostgreSQL
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      ENVIRONMENT: test
+      DEBUG: "True"
+      SECRET_KEY: "test-only-not-a-production-secret"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
+      DATABASE_URL: "postgres://studyspace:studyspace@127.0.0.1:5432/studyspace"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: studyspace
+          POSTGRES_PASSWORD: studyspace
+          POSTGRES_DB: studyspace
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studyspace"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Migrations apply to a real PostgreSQL
+        run: python manage.py migrate --noinput
+
+      - name: Run Django tests
+        run: python manage.py test

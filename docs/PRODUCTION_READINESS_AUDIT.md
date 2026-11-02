@@ -1,5 +1,11 @@
 # Production Readiness Audit — StudySpace
 
+> **Historical document.** This report describes the state of the repository
+> when it was written and is kept for context only. The current review is
+> [`docs/audits/pw-style-learning-app-audit-2026-11-02.md`](../audits/pw-style-learning-app-audit-2026-11-02.md);
+> for what is actually built, read `docs/FEATURE_BACKEND_MATRIX.md`.
+
+
 **Date:** 23 October 2026
 **Branch:** `arena/b4556565-pw-style-learning-app` (from `main` @ `fd75b2c`)
 **Scope:** every source file in the repository — backend Python, frontend assets, configuration, migrations and CI.
