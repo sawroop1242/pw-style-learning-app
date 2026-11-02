@@ -1,0 +1,67 @@
+name: Frontend checks
+
+# The site is what most changes touch, and until this file existed a
+# frontend-only pull request merged without a single check running: the backend
+# workflow's `paths` filter never matched it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "tools/checks/**"
+      - ".github/workflows/frontend-checks.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "tools/checks/**"
+      - ".github/workflows/frontend-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: DOM, accessibility, interaction and CSS checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/checks
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tools/checks/package-lock.json
+
+      # `npm ci` fails on a lockfile that disagrees with package.json, which is
+      # the property we want: the checks run against the versions the lockfile
+      # records, not whatever resolves today.
+      - name: Install check dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Every page boots without console errors
+        run: node check.js
+
+      - name: No structural accessibility problems
+        run: node a11y.js
+
+      - name: Interactions behave
+        run: node interact.js
+
+      - name: Every class used by the scripts exists in the stylesheet
+        run: node css.js
+
+      - name: Syntax-check the service worker and scripts
+        run: |
+          node --check ../../frontend/sw.js
+          for file in ../../frontend/assets/js/*.js; do node --check "$file"; done

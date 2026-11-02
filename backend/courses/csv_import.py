@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import http.client
 import io
 import ipaddress
 import re
@@ -289,8 +290,54 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         )
 
 
-def _assert_public_host(host: str) -> None:
-    """Reject a host that resolves to anything but a public address."""
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """An HTTPS connection to an address that has already been checked.
+
+    ``urllib`` resolves the hostname itself when it connects, which is a second
+    lookup a rebinding DNS server can answer differently — public during the
+    validation, private when the socket opens. Pinning means the validated
+    address is the address connected to, while ``server_hostname`` keeps SNI and
+    certificate verification on the hostname, so TLS still proves who answered.
+    """
+
+    def __init__(self, host, *, pinned_address, **kwargs):
+        super().__init__(host, **kwargs)
+        self._pinned_address = pinned_address
+
+    def connect(self):
+        sock = socket.create_connection(
+            (self._pinned_address, self.port), self.timeout, self.source_address
+        )
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    """Route the one request this opener makes through a pinned address."""
+
+    def __init__(self, address):
+        super().__init__()
+        self._address = address
+
+    def https_open(self, req):
+        return self.do_open(
+            lambda host, **kwargs: _PinnedHTTPSConnection(
+                host, pinned_address=self._address, **kwargs
+            ),
+            req,
+            context=self._context,
+        )
+
+
+def _resolve_public_address(host: str) -> str:
+    """Return one validated, public address for ``host``.
+
+    Every address the name resolves to has to be acceptable: a name that
+    answers with one public and one private address is a name trying to decide
+    which check it passes.
+    """
     if not host:
         raise CsvImportError("CSV URL has no host.")
     if "." not in host:
@@ -300,7 +347,10 @@ def _assert_public_host(host: str) -> None:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror as error:
         raise CsvImportError(f"CSV host could not be resolved: {host}") from error
+    if not infos:
+        raise CsvImportError(f"CSV host could not be resolved: {host}")
 
+    addresses = []
     for info in infos:
         address = ipaddress.ip_address(info[4][0])
         if not address.is_global or address.is_multicast:
@@ -308,6 +358,13 @@ def _assert_public_host(host: str) -> None:
                 "CSV URL must point at a public address; private, loopback and "
                 "link-local hosts are refused."
             )
+        addresses.append(str(address))
+    return addresses[0]
+
+
+def _assert_public_host(host: str) -> None:
+    """Reject a host that resolves to anything but a public address."""
+    _resolve_public_address(host)
 
 
 def fetch_csv(url: str) -> str:
@@ -319,12 +376,13 @@ def fetch_csv(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme != "https":
         raise CsvImportError("CSV URL must use https://.")
-    _assert_public_host(parsed.hostname or "")
+    # Resolve once, validate every answer, and connect to *that* address.
+    pinned = _resolve_public_address(parsed.hostname or "")
 
     request = urllib.request.Request(
         url, headers={"User-Agent": f"studyspace-csv-import/{SCHEMA_VERSION}"}
     )
-    opener = urllib.request.build_opener(_NoRedirect)
+    opener = urllib.request.build_opener(_NoRedirect, _PinnedHTTPSHandler(pinned))
     try:
         with opener.open(request, timeout=FETCH_TIMEOUT_SECONDS) as response:
             payload = response.read(MAX_CSV_BYTES + 1)
