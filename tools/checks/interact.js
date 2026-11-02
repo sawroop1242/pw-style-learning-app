@@ -314,6 +314,37 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('no console errors', errors.length === 0, errors[0]);
   }
 
+  /* ------------------ exam window on a frozen paper --------------------- */
+  {
+    // An attempt carries the paper it was served. If the player kept using the
+    // live question list, editing a question mid-test would change what every
+    // student sitting it is looking at — and their score would be graded
+    // against a paper they never saw.
+    console.log('\ntest-player.html (frozen paper)');
+    const { window, doc, errors } = await boot('test-player.html', ['core', 'content', 'ui', 'test-player'], {
+      query: '?test=5',
+      fetcher: makeStub({ frozenPaper: true })
+    });
+
+    const agree = doc.querySelector('#agree');
+    agree.checked = true;
+    agree.dispatchEvent(new window.Event('change', { bubbles: true }));
+    click(window, doc.querySelector('#start-btn'));
+    await wait(700);
+
+    const prompt = doc.querySelector('#qpanel-text');
+    check('the served paper is what the student reads', /FROZEN/.test(prompt.textContent), prompt.textContent);
+    check('marks come from the frozen paper', doc.querySelector('#q-marks').textContent === '+2', doc.querySelector('#q-marks').textContent);
+    check(
+      'the live question bank is not substituted',
+      !/Stub question/.test(prompt.textContent),
+      prompt.textContent
+    );
+    check('the frozen options are the ones offered', doc.querySelectorAll('.qoption').length === 2, String(doc.querySelectorAll('.qoption').length));
+    check('the frozen section is used', [...doc.querySelectorAll('#section-tabs .exam-tab')].some((tab) => /Frozen section/.test(tab.textContent)));
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
   /* ----------------------------- dashboard ------------------------------ */
   {
     console.log('\ndashboard.html (signed in)');

@@ -51,11 +51,6 @@ class Command(BaseCommand):
             action="store_true",
             help="Validate and print the preview without writing anything.",
         )
-        parser.add_argument(
-            "--allow-replace-with-attempts",
-            action="store_true",
-            help="DESTRUCTIVE: allow replace on a test that already has attempts.",
-        )
         parser.add_argument("--template", action="store_true", help="Print the CSV template and exit.")
         parser.add_argument("--export", type=Path, help="Write this test's questions to a CSV file and exit.")
 
@@ -108,12 +103,7 @@ class Command(BaseCommand):
             return
 
         try:
-            imported = csv_import.import_questions(
-                quiz,
-                report,
-                mode=options["mode"],
-                allow_replace_with_attempts=options["allow_replace_with_attempts"],
-            )
+            imported = csv_import.import_questions(quiz, report, mode=options["mode"])
         except csv_import.ImportBlocked as error:
             raise CommandError(str(error)) from error
 

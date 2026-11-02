@@ -604,13 +604,16 @@ def import_questions(
     report: ImportReport,
     *,
     mode: str = "append",
-    allow_replace_with_attempts: bool = False,
 ) -> int:
     """Write a validated report into ``quiz`` atomically.
 
     ``append`` keeps existing questions and appends after the highest position.
-    ``replace`` deletes them first, and is refused when the test already has
-    attempts because answer rows reference questions with ``ON DELETE CASCADE``.
+    ``replace`` deletes them first, and is refused outright once the test has
+    attempts: an answer sheet is history, and a re-upload is not a reason to
+    delete one. A revised paper is a new test, not a rewrite of the old one.
+
+    There is deliberately no override flag. With one, "replace" is a button that
+    destroys submitted results, and the argument for keeping it was convenience.
     """
     if mode not in ("append", "replace"):
         raise ValueError("mode must be 'append' or 'replace'")
@@ -623,11 +626,11 @@ def import_questions(
         locked = Quiz.objects.select_for_update().get(pk=quiz.pk)
 
         if mode == "replace":
-            if not allow_replace_with_attempts and QuizAttempt.objects.filter(quiz=locked).exists():
+            if QuizAttempt.objects.filter(quiz=locked).exists():
                 raise ImportBlocked(
                     "This test already has attempts. Replacing its questions would delete "
                     "submitted answer sheets, so the import is refused. Create a new test "
-                    "for a new version of the paper."
+                    "for a new version of the paper, or import in append mode."
                 )
             locked.questions.all().delete()
             start = 1

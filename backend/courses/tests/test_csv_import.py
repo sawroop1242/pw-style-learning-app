@@ -326,16 +326,19 @@ class ImportTests(TestCase):
             list(self.quiz.questions.values_list("prompt", flat=True)), ["New Q"]
         )
 
-    def test_replace_can_be_forced_explicitly(self):
+    def test_replace_cannot_be_forced_explicitly(self):
+        """There is no override: history is not something a flag may delete."""
         self.import_rows(good_row(question_text="Q1"))
         attempt = QuizAttempt.objects.create(user=self.staff, quiz=self.quiz)
         AttemptAnswer.objects.create(attempt=attempt, question=self.quiz.questions.get())
 
         report = csv_import.parse_questions_csv(csv_text(good_row(question_text="New Q")))
-        csv_import.import_questions(
-            self.quiz, report, mode="replace", allow_replace_with_attempts=True
-        )
+        with self.assertRaises(TypeError):
+            csv_import.import_questions(
+                self.quiz, report, mode="replace", allow_replace_with_attempts=True
+            )
         self.assertEqual(self.quiz.questions.count(), 1)
+        self.assertEqual(AttemptAnswer.objects.count(), 1)
 
     def test_export_round_trips(self):
         self.import_rows(
@@ -547,6 +550,37 @@ class ImportApiTests(TestCase):
             response = self.confirm(job, mode="replace")
 
         self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.quiz.questions.count(), 1)
+        self.assertEqual(AttemptAnswer.objects.count(), 1)
+
+    def test_the_deleted_override_flag_is_refused_not_ignored(self):
+        """`allow_replace_with_attempts="false"` used to mean True, and deleted history."""
+        job = self.make_job()
+        text = csv_text(good_row(question_text="New"))
+        self.validated(job, text)
+        with mock.patch.object(csv_import, "fetch_csv", return_value=text):
+            response = self.confirm(job, mode="replace", allow_replace_with_attempts="false")
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("allow_replace_with_attempts", response.json())
+        self.assertEqual(self.quiz.questions.count(), 0)
+        job.refresh_from_db()
+        self.assertEqual(job.status, CsvImportJob.Status.VALIDATED)
+
+    def test_confirm_replace_is_refused_once_attempts_exist(self):
+        report = csv_import.parse_questions_csv(csv_text(good_row(question_text="Q1")))
+        csv_import.import_questions(self.quiz, report)
+        question = self.quiz.questions.get()
+        attempt = QuizAttempt.objects.create(user=self.staff, quiz=self.quiz)
+        AttemptAnswer.objects.create(attempt=attempt, question=question)
+
+        job = self.make_job()
+        text = csv_text(good_row(question_text="New"))
+        self.validated(job, text)
+        with mock.patch.object(csv_import, "fetch_csv", return_value=text):
+            response = self.confirm(job, mode="replace")
+
+        self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(self.quiz.questions.count(), 1)
         self.assertEqual(AttemptAnswer.objects.count(), 1)
 
