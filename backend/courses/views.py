@@ -20,7 +20,6 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
-from accounts.models import Role
 from . import csv_import, grading, notifications, policy
 from .models import (
     AccessCode,
@@ -128,33 +127,60 @@ class StartAttemptThrottle(UserRateThrottle):
 
 
 class IsSubAdminOrMainAdmin(permissions.BasePermission):
-    """Allow access to sub-admins and main admins."""
-    
+    """Allow access to sub-admins and main admins.
+
+    Delegates to ``policy`` so the door and the room agree: a Django superuser
+    with no ``Profile.role`` is a main admin in both places.
+    """
+
     def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-        profile = getattr(request.user, "profile", None)
-        return profile and profile.role in (Role.SUB_ADMIN, Role.MAIN_ADMIN)
+        return policy.is_staff_role(request.user)
 
 
 class IsOwnerOrMainAdmin(permissions.BasePermission):
-    """Allow access to object owner or main admin."""
-    
+    """Allow access to the object's owner or a main admin.
+
+    Ownership is resolved through the whole parent chain by ``policy.may_manage``
+    — ``course``/``series`` for a quiz, ``quiz`` for a question, ``question`` for
+    a choice. The previous version stopped at the first object without its own
+    ``owner`` attribute, which denied a sub-admin their *own* questions and
+    choices while the list endpoint happily returned them.
+    """
+
     def has_object_permission(self, request, view, obj):
-        if not request.user.is_authenticated:
-            return False
-        profile = getattr(request.user, "profile", None)
-        if not profile:
-            return False
-        if profile.role == Role.MAIN_ADMIN:
-            return True
-        if profile.role == Role.SUB_ADMIN:
-            # Check ownership via course owner
-            owner = getattr(obj, "owner", None)
-            if owner is None and hasattr(obj, "course"):
-                owner = obj.course.owner
-            return owner == request.user
-        return False
+        return policy.may_manage(request.user, obj)
+
+
+class TenantParentMixin:
+    """Refuse a write whose submitted parent belongs to another provider.
+
+    ``get_object()`` protects the row being edited; it says nothing about the
+    parent the body asks to move that row *to*, and the parent is chosen by the
+    request, not by the URL. So every writable parent field is checked on
+    create **and** on update — previously only creation checked, which let a
+    provider move a lesson, PDF, access code, faculty row, quiz or question
+    into somebody else's batch.
+
+    Subclasses declare the fields and the sentence a refusal shows.
+    """
+
+    #: ``{field name: message shown when that parent is not the caller's}``
+    parent_messages = {}
+
+    def check_parents(self, serializer):
+        for field, message in self.parent_messages.items():
+            parent = serializer.validated_data.get(field)
+            if parent is not None:
+                policy.check_manage(self.request.user, parent, message)
+        return serializer
+
+    def perform_create(self, serializer):
+        self.check_parents(serializer)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self.check_parents(serializer)
+        serializer.save()
 
 
 class StaffCourseViewSet(viewsets.ModelViewSet):
@@ -169,8 +195,7 @@ class StaffCourseViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return Course.objects.all().select_related("owner").annotate(
                 lesson_count=Count("lessons", filter=Q(lessons__is_published=True)),
                 folder_count=Count("folders")
@@ -199,34 +224,34 @@ class StaffCourseViewSet(viewsets.ModelViewSet):
         return Response({"status": "unpublished"})
 
 
-class StaffCourseFolderViewSet(viewsets.ModelViewSet):
-    """Staff CRUD for course folders - owner-scoped."""
-    
+class StaffCourseFolderViewSet(TenantParentMixin, viewsets.ModelViewSet):
+    """Staff CRUD for course sections - owner-scoped."""
+
     serializer_class = CourseFolderSerializer
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
+    parent_messages = {
+        "course": "You can only add sections to your own batches.",
+    }
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["position", "title", "created_at"]
     ordering = ["position", "id"]
     
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return CourseFolder.objects.all().select_related("course")
         return CourseFolder.objects.filter(course__owner=user).select_related("course")
     
     def perform_create(self, serializer):
         course_id = self.kwargs.get("course_pk") or self.request.data.get("course")
         course = get_object_or_404(Course, pk=course_id)
-        # Check ownership
-        if course.owner != self.request.user:
-            profile = getattr(self.request.user, "profile", None)
-            if not (profile and profile.role == Role.MAIN_ADMIN):
-                raise PermissionDenied("You can only create folders in your own courses.")
+        policy.check_manage(
+            self.request.user, course, "You can only create sections in your own batches."
+        )
         serializer.save(course=course)
 
 
-class StaffLessonViewSet(viewsets.ModelViewSet):
+class StaffLessonViewSet(TenantParentMixin, viewsets.ModelViewSet):
     """Staff CRUD for lessons - owner-scoped."""
 
     serializer_class = StaffLessonSerializer
@@ -237,8 +262,7 @@ class StaffLessonViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return Lesson.objects.all().select_related("course", "folder")
         return Lesson.objects.filter(course__owner=user).select_related("course", "folder")
 
@@ -247,8 +271,9 @@ class StaffLessonViewSet(viewsets.ModelViewSet):
         if course_id in (None, ""):
             raise ValidationError({"course": ["This field is required."]})
         course = get_object_or_404(Course, pk=course_id)
-        if course.owner != request.user and not policy.is_main_admin(request.user):
-            raise PermissionDenied("You can only create lessons in your own courses.")
+        policy.check_manage(
+            request.user, course, "You can only create lessons in your own courses."
+        )
         return course
 
     def perform_create(self, serializer):
@@ -261,10 +286,14 @@ class StaffLessonViewSet(viewsets.ModelViewSet):
         serializer.save(course=course)
 
     def perform_update(self, serializer):
-        # Object-level ownership is already enforced by get_object().
+        # Object-level ownership is enforced by get_object(); the *new* course
+        # and folder are chosen by the body and have to be checked here.
         instance = serializer.instance
         course = serializer.validated_data.get("course", instance.course)
         folder = serializer.validated_data.get("folder", instance.folder)
+        policy.check_manage(
+            self.request.user, course, "You can only file lessons into your own batches."
+        )
         if folder is not None and folder.course_id != course.id:
             raise ValidationError({"folder": ["Folder must belong to the same course."]})
         serializer.save()
@@ -284,19 +313,21 @@ class StaffLessonViewSet(viewsets.ModelViewSet):
         return Response({"status": "unpublished"})
 
 
-class StaffPdfResourceViewSet(viewsets.ModelViewSet):
+class StaffPdfResourceViewSet(TenantParentMixin, viewsets.ModelViewSet):
     """Staff CRUD for PDF resources - owner-scoped."""
 
     serializer_class = StaffPdfResourceSerializer
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
+    parent_messages = {
+        "folder": "You can only file notes into sections of your own batches.",
+    }
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["position", "title", "created_at"]
     ordering = ["position", "id"]
     
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return PdfResource.objects.all().select_related("folder", "folder__course")
         return PdfResource.objects.filter(folder__course__owner=user).select_related("folder", "folder__course")
     
@@ -307,10 +338,11 @@ class StaffPdfResourceViewSet(viewsets.ModelViewSet):
             folder = get_object_or_404(CourseFolder, pk=folder_id)
         if folder is None:
             raise ValidationError({"folder": ["This field is required."]})
-        if folder.course.owner != self.request.user and not policy.is_main_admin(
-            self.request.user
-        ):
-            raise PermissionDenied("You can only add PDFs to folders in your own courses.")
+        policy.check_manage(
+            self.request.user,
+            folder.course,
+            "You can only add notes to sections of your own batches.",
+        )
         serializer.save(folder=folder)
     
     @action(detail=True, methods=["post"])
@@ -351,29 +383,30 @@ class AccessCodeSerializer(serializers.ModelSerializer):
                            "last_redeemed_at", "revoked_at", "revoked_by", "created_at"]
 
 
-class StaffAccessCodeViewSet(viewsets.ModelViewSet):
+class StaffAccessCodeViewSet(TenantParentMixin, viewsets.ModelViewSet):
     """Staff CRUD for access codes - owner-scoped."""
-    
+
     serializer_class = AccessCodeSerializer
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
+    parent_messages = {
+        "course": "You can only create codes for your own batches.",
+    }
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["created_at", "uses_count"]
     ordering = ["-created_at"]
     
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return AccessCode.objects.all().select_related("course", "created_by")
         return AccessCode.objects.filter(course__owner=user).select_related("course", "created_by")
     
     def perform_create(self, serializer):
         course_id = self.kwargs.get("course_pk") or self.request.data.get("course")
         course = get_object_or_404(Course, pk=course_id)
-        if course.owner != self.request.user:
-            profile = getattr(self.request.user, "profile", None)
-            if not (profile and profile.role == Role.MAIN_ADMIN):
-                raise PermissionDenied("You can only create codes for your own courses.")
+        policy.check_manage(
+            self.request.user, course, "You can only create codes for your own batches."
+        )
         if course.pricing_mode != Course.PricingMode.PAID:
             raise ValidationError("Access codes can only be created for paid courses.")
         
@@ -383,6 +416,22 @@ class StaffAccessCodeViewSet(viewsets.ModelViewSet):
         # Add raw_code to response context
         serializer.instance.raw_code = raw_code
     
+    def perform_update(self, serializer):
+        """Moving a code must stay inside the tenant *and* on a paid batch.
+
+        Both checks run before the save: raising afterwards would leave the row
+        moved with the request reporting a failure.
+        """
+        course = serializer.validated_data.get("course", serializer.instance.course)
+        policy.check_manage(
+            self.request.user,
+            course,
+            self.parent_messages["course"],
+        )
+        if course.pricing_mode != Course.PricingMode.PAID:
+            raise ValidationError("Access codes can only belong to paid courses.")
+        serializer.save()
+
     @action(detail=True, methods=["post"])
     def revoke(self, request, pk=None):
         code = self.get_object()
@@ -1096,10 +1145,15 @@ class QuizAttemptViewSet(viewsets.GenericViewSet, viewsets.mixins.ListModelMixin
         return Response({"status": "saved", "answered": answer.answered})
 
 
-class StaffQuizViewSet(viewsets.ModelViewSet):
+class StaffQuizViewSet(TenantParentMixin, viewsets.ModelViewSet):
     """Staff CRUD for quizzes - owner-scoped."""
+
     serializer_class = QuizSerializer
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
+    parent_messages = {
+        "course": "You can only attach a paper to your own batches.",
+        "series": "You can only attach a paper to your own test series.",
+    }
     filter_backends = [filters.OrderingFilter, filters.SearchFilter]
     search_fields = ["title", "description", "instructions"]
     ordering_fields = ["title", "created_at", "is_published"]
@@ -1107,8 +1161,7 @@ class StaffQuizViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return Quiz.objects.all().select_related("series", "course")
         # Sub-admin sees only owned quizzes
         return Quiz.objects.filter(
@@ -1130,17 +1183,20 @@ class StaffQuizViewSet(viewsets.ModelViewSet):
         return Response({"status": "unpublished"})
 
 
-class StaffQuestionViewSet(viewsets.ModelViewSet):
+class StaffQuestionViewSet(TenantParentMixin, viewsets.ModelViewSet):
     """Staff CRUD for questions - owner-scoped."""
+
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
+    parent_messages = {
+        "quiz": "You can only add questions to your own papers.",
+    }
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["position", "created_at"]
     ordering = ["position", "id"]
     
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return Question.objects.all().select_related("quiz")
         return Question.objects.filter(
             Q(quiz__series__owner=user) | Q(quiz__course__owner=user)
@@ -1161,17 +1217,20 @@ class StaffQuestionViewSet(viewsets.ModelViewSet):
         return QuestionCreateSerializer
 
 
-class StaffChoiceViewSet(viewsets.ModelViewSet):
+class StaffChoiceViewSet(TenantParentMixin, viewsets.ModelViewSet):
     """Staff CRUD for choices - owner-scoped."""
+
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
+    parent_messages = {
+        "question": "You can only add options to your own questions.",
+    }
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["position", "created_at"]
     ordering = ["position", "id"]
     
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return Choice.objects.all().select_related("question")
         return Choice.objects.filter(
             Q(question__quiz__series__owner=user) | Q(question__quiz__course__owner=user)
@@ -1219,8 +1278,7 @@ class CsvImportJobViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return CsvImportJob.objects.all().select_related("quiz")
         return CsvImportJob.objects.filter(
             Q(quiz__series__owner=user) | Q(quiz__course__owner=user)
@@ -1233,8 +1291,7 @@ class CsvImportJobViewSet(viewsets.ModelViewSet):
 
     def _assert_can_manage(self, quiz):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return
         owned = (
             (quiz.series_id and quiz.series.owner_id == user.id)
@@ -1450,8 +1507,7 @@ class StaffTestSeriesViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
-        if profile and profile.role == Role.MAIN_ADMIN:
+        if policy.is_main_admin(user):
             return TestSeries.objects.all()
         return TestSeries.objects.filter(owner=user)
     
@@ -1720,11 +1776,14 @@ class StaffQuestionReportViewSet(
         )
 
 
-class StaffCourseFacultyViewSet(viewsets.ModelViewSet):
+class StaffCourseFacultyViewSet(TenantParentMixin, viewsets.ModelViewSet):
     """Staff CRUD for the teachers listed on a batch page, owner-scoped."""
 
     serializer_class = StaffCourseFacultySerializer
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
+    parent_messages = {
+        "course": "You can only list faculty on your own batches.",
+    }
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["position", "name"]
     ordering = ["position", "id"]
@@ -1735,10 +1794,3 @@ class StaffCourseFacultyViewSet(viewsets.ModelViewSet):
             return queryset
         return queryset.filter(course__owner=self.request.user)
 
-    def perform_create(self, serializer):
-        course = serializer.validated_data["course"]
-        if course.owner_id != self.request.user.id and not policy.is_main_admin(
-            self.request.user
-        ):
-            raise PermissionDenied("You can only list faculty on your own courses.")
-        serializer.save()
