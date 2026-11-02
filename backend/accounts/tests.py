@@ -1208,6 +1208,51 @@ class OTPDeliveryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class SharedCacheCheckTests(TestCase):
+    """Finding 8: a throttle counted per process is not a throttle."""
+
+    def run_checks(self):
+        from django.core.checks import run_checks
+
+        return run_checks()
+
+    def test_the_default_cache_is_local_memory(self):
+        """Which is why the production check exists."""
+        from django.conf import settings
+
+        self.assertIn("locmem", settings.CACHES["default"]["BACKEND"].lower())
+
+    @override_settings(
+        ENVIRONMENT="production",
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
+    )
+    def test_production_without_a_shared_cache_warns(self):
+        issues = {issue.id: issue for issue in self.run_checks()}
+        self.assertIn("accounts.W005", issues)
+        self.assertIn("REDIS_URL", issues["accounts.W005"].hint)
+
+    @override_settings(
+        ENVIRONMENT="production",
+        CACHES={
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": "redis://cache.internal:6379/0",
+            }
+        },
+    )
+    def test_production_with_redis_is_quiet(self):
+        ids = {issue.id for issue in self.run_checks()}
+        self.assertNotIn("accounts.W005", ids)
+
+    @override_settings(
+        ENVIRONMENT="development",
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
+    )
+    def test_development_is_not_nagged(self):
+        ids = {issue.id for issue in self.run_checks()}
+        self.assertNotIn("accounts.W005", ids)
+
+
 class EmailConfigurationCheckTests(TestCase):
     """`manage.py check` has to notice a deployment that cannot send mail."""
 

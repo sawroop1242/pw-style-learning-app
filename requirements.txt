@@ -9,3 +9,5 @@ whitenoise>=6.8,<7.0
 # Fernet encryption for Cloudflare R2 credentials stored in the database.
 # The backend never needs to write a plaintext secret anywhere.
 cryptography>=43,<47
+# Shared cache for DRF throttles in production (see CACHES in config/settings.py).
+redis>=5.0,<7.0

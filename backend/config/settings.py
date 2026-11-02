@@ -190,6 +190,33 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 
+# DRF's throttles count through the cache. Django's default is per-process
+# local memory, so with more than one worker — or on a serverless platform,
+# where every instance is its own process — a client gets the full allowance
+# from each of them. A shared cache is what makes the limit actually a limit.
+CACHE_URL = (
+    os.getenv("CACHE_URL", "").strip() or os.getenv("REDIS_URL", "").strip()
+)
+if CACHE_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": CACHE_URL,
+            # A throttle window is a minute; a day-long key would only keep
+            # counters alive after the incident that filled them.
+            "TIMEOUT": 300,
+        }
+    }
+else:
+    # Development and single-process use. `manage.py check` warns when this is
+    # reached in staging or production — see accounts/checks.py.
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "studyspace-local",
+        }
+    }
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication"
