@@ -73,10 +73,69 @@ function figure(label, value) {
     </div>`;
 }
 
-function renderFigures({ courses, progress, attempts, notes }) {
+/* ------------------------------------------------------------------ */
+/* What the numbers actually mean                                     */
+/* ------------------------------------------------------------------ */
+
+/** The reader's own calendar day for a timestamp, e.g. "2026-11-04". */
+function dayKey(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Consecutive days ending today.
+ *
+ * Yesterday is accepted as "still running" so the streak does not read zero
+ * every morning before the first lesson — but a day you did not study is never
+ * counted. Nothing here invents a day.
+ */
+function streakDays(progressRows) {
+  const days = new Set(
+    progressRows.filter((row) => row.completed && row.completed_at).map((row) => dayKey(row.completed_at))
+  );
+  if (!days.size) return 0;
+
+  const cursor = new Date();
+  if (!days.has(dayKey(cursor.toISOString()))) {
+    cursor.setDate(cursor.getDate() - 1);
+    if (!days.has(dayKey(cursor.toISOString()))) return 0;
+  }
+
+  let count = 0;
+  while (days.has(dayKey(cursor.toISOString()))) {
+    count += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return count;
+}
+
+/** Minutes of lessons completed in the last seven days. */
+function minutesThisWeek(progressRows) {
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  return progressRows
+    .filter((row) => row.completed && row.completed_at && new Date(row.completed_at).getTime() >= cutoff)
+    .reduce((sum, row) => sum + Number(row.lesson_duration_minutes || 0), 0);
+}
+
+function durationLabel(minutes) {
+  if (!minutes) return '0m';
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!hours) return `${rest}m`;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
+function renderFigures({ courses, progress, attempts, notes }, progressRows = []) {
+  const streak = streakDays(progressRows);
+  const week = minutesThisWeek(progressRows);
   $('#dash-figures').innerHTML = [
     figure('Batches', courses),
     figure('Lessons done', progress),
+    figure('Day streak', streak || (progressRows.length ? '0' : null)),
+    figure('This week', progressRows.length ? durationLabel(week) : null),
     figure('Attempts', attempts),
     figure('Notes', notes)
   ].join('');
@@ -86,7 +145,21 @@ function renderFigures({ courses, progress, attempts, notes }) {
 /* Continue learning                                                  */
 /* ------------------------------------------------------------------ */
 
-function renderContinue(progressRows, lessonMap) {
+/**
+ * How far a batch has come, from the batch's own lesson count.
+ *
+ * The old card drew a bar at a fixed 40% for anything merely opened. A bar is a
+ * claim; this one is only drawn when the claim can be computed.
+ */
+function batchProgress(row, courseMap, progressRows) {
+  const course = courseMap.get(row.course);
+  const total = Number(course?.lesson_count ?? course?.lessons ?? 0);
+  if (!total) return null;
+  const done = progressRows.filter((item) => item.course === row.course && item.completed).length;
+  return { done, total, percent: Math.max(0, Math.min(100, Math.round((done / total) * 100))) };
+}
+
+function renderContinue(progressRows, lessonMap, courseMap = new Map()) {
   const host = $('#continue-list');
 
   if (!progressRows.length) {
@@ -107,6 +180,12 @@ function renderContinue(progressRows, lessonMap) {
     .map((row) => {
       const lesson = lessonMap.get(row.lesson) || {};
       const title = row.lesson_title || lesson.title || `Lesson ${row.lesson}`;
+      const batch = batchProgress(row, courseMap, progressRows);
+      const meta = batch
+        ? `${batch.done} of ${batch.total} lessons · ${batch.percent}%`
+        : row.completed
+          ? 'Completed'
+          : 'Opened';
       return `
         <a class="continue-card" href="player.html?lesson=${row.lesson}">
           <span class="continue-thumb ${thumbTone(lesson.course_title || '')}">${esc(initials(title))}</span>
@@ -114,12 +193,12 @@ function renderContinue(progressRows, lessonMap) {
             <h3>${esc(title)}</h3>
             <small class="tiny subtle">${esc(lesson.course_title || 'Batch lesson')}</small>
             <div class="continue-meta">
-              <span class="tiny subtle">${row.completed ? 'Completed' : 'Opened'}${
+              <span class="tiny subtle">${esc(meta)}${
                 row.updated_at ? ` · ${shortDate(row.updated_at)}` : ''
               }</span>
               <span class="link" style="font-size:var(--text-xs)">${row.completed ? 'Revisit' : 'Continue'} ${icon('arrow-right')}</span>
             </div>
-            <div class="progress"><span style="width:${row.completed ? 100 : 40}%"></span></div>
+            ${batch ? `<div class="progress" role="img" aria-label="${esc(meta)}"><span style="width:${batch.percent}%"></span></div>` : ''}
           </div>
         </a>`;
     })
@@ -476,9 +555,14 @@ async function boot() {
   // Personal endpoints are only asked when there is an account to ask about:
   // an anonymous request for them is not an empty answer, it is a 401.
   const personal = (path) => (signedIn ? settle(path) : Promise.resolve({ ok: false }));
-  const [courses, progress, attempts, quizzes, notes, tasks] = await Promise.all([
+  const [courses, progress, finished, attempts, quizzes, notes, tasks] = await Promise.all([
     personal(`/courses/${apiQuery({ mine: 1, page_size: 20 })}`),
-    personal(`/progress/${apiQuery({ page_size: 20 })}`),
+    // Newest first: "continue" means the lesson you left, not the one that
+    // happens to sit first in the syllabus.
+    personal(`/progress/${apiQuery({ page_size: 60, ordering: '-updated_at' })}`),
+    // An exact count of *finished* lessons: the list above is capped at 60 rows
+    // and a page of opened-but-unfinished lessons would inflate the figure.
+    personal(`/progress/${apiQuery({ completed: 1, page_size: 1 })}`),
     personal(`/quiz-attempts/${apiQuery({ page_size: 20 })}`),
     settle(`/quizzes/${apiQuery({ page_size: 60 })}`),
     personal(`/notes/${apiQuery({ page_size: 10 })}`),
@@ -496,19 +580,24 @@ async function boot() {
   const noteRows = pick(notes);
   const taskRows = pick(tasks);
 
-  renderFigures({
-    courses: count(courses),
-    progress: count(progress),
-    attempts: count(attempts),
-    notes: count(notes)
-  });
+  renderFigures(
+    {
+      courses: count(courses),
+      progress: count(finished),
+      attempts: count(attempts),
+      notes: count(notes)
+    },
+    progressRows
+  );
+
+  const courseMap = new Map(courseRows.map((row) => [row.id, row]));
 
   const lessonMap = new Map();
   if (signedIn && progressRows.length) {
     const lessons = await settle(`/lessons/${apiQuery({ page_size: 60 })}`);
     if (lessons.ok) rows(lessons.payload).forEach((lesson) => lessonMap.set(lesson.id, lesson));
   }
-  renderContinue(progressRows, lessonMap);
+  renderContinue(progressRows, lessonMap, courseMap);
 
   const quizMap = new Map(quizRows.map((quiz) => [quiz.id, quiz]));
   renderTrend(attemptRows, quizMap);

@@ -723,11 +723,31 @@ class NoteSerializer(serializers.ModelSerializer):
 
 
 class ProgressSerializer(serializers.ModelSerializer):
+    """A lesson's progress row, with the two facts a dashboard needs.
+
+    The batch and the lesson's length travel with the row so a client can work
+    out "4 of 12 lessons" and "this week you studied 95 minutes" without a second
+    request per batch. Both are read-only and neither is a write surface.
+    """
+
     lesson_title = serializers.CharField(source="lesson.title", read_only=True)
+    course = serializers.IntegerField(source="lesson.course_id", read_only=True)
+    lesson_duration_minutes = serializers.IntegerField(
+        source="lesson.duration_minutes", read_only=True
+    )
 
     class Meta:
         model = Progress
-        fields = ["id", "lesson", "lesson_title", "completed", "completed_at", "updated_at"]
+        fields = [
+            "id",
+            "lesson",
+            "lesson_title",
+            "course",
+            "lesson_duration_minutes",
+            "completed",
+            "completed_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "updated_at", "completed_at"]
 
     def validate_lesson(self, lesson):

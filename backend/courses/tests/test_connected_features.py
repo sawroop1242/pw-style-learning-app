@@ -448,6 +448,37 @@ class LessonNoteAndProgressTests(ConnectedFeatureData):
         self.assertEqual(response.json()["count"], 1)
         self.assertFalse(response.json()["results"][0]["completed"])
 
+    def test_progress_carries_the_facts_a_dashboard_needs(self):
+        """A client should not need one request per batch to draw a progress bar.
+
+        `course` and the lesson's length travel with the row; both are read-only.
+        """
+        self.lesson.duration_minutes = 42
+        self.lesson.save(update_fields=["duration_minutes"])
+        self.client.post("/api/progress/", {"lesson": self.lesson.id}, format="json")
+
+        row = self.client.get("/api/progress/").json()["results"][0]
+
+        self.assertEqual(row["course"], self.course.id)
+        self.assertEqual(row["lesson_duration_minutes"], 42)
+
+    def test_finished_lessons_can_be_counted_without_counting_opened_ones(self):
+        other = Lesson.objects.create(
+            course=self.course, title="Momentum", is_published=True
+        )
+        self.client.post("/api/progress/", {"lesson": self.lesson.id}, format="json")
+        self.client.post(
+            "/api/progress/", {"lesson": other.id, "completed": True}, format="json"
+        )
+
+        finished = self.client.get("/api/progress/?completed=1")
+        opened = self.client.get("/api/progress/?completed=0")
+
+        self.assertEqual(finished.json()["count"], 1)
+        self.assertTrue(finished.json()["results"][0]["completed"])
+        self.assertEqual(opened.json()["count"], 1)
+        self.assertFalse(opened.json()["results"][0]["completed"])
+
     def test_progress_on_an_unknown_lesson_is_ignored_not_a_500(self):
         response = self.client.get("/api/progress/?lesson=abc")
         self.assertEqual(response.status_code, 200)
