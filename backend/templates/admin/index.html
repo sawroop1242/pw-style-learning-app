@@ -36,7 +36,7 @@
       </p>
     </div>
     <div class="ss-page-actions">
-      <a class="ss-btn" href="/">{% translate "View site" %}</a>
+      <a class="ss-btn" href="/" target="_blank" rel="noopener">{% translate "View site" %}</a>
     </div>
   </div>
 
@@ -86,7 +86,7 @@
     <h3>{% translate "My actions" %}</h3>
     {% get_admin_log 10 as admin_log for_user user %}
     {% if not admin_log %}
-      <p class="mini quiet" style="padding:0 18px 12px">{% translate "Nothing yet. Edits you make will show up here." %}</p>
+      <p class="mini quiet ss-empty-note">{% translate "Nothing yet. Edits you make will show up here." %}</p>
     {% else %}
       <ul class="actionlist">
         {% for entry in admin_log %}

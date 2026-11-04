@@ -1,27 +1,22 @@
 /* StudySpace admin — one stylesheet for every console screen.
  *
- * The shape is a dark navigation rail on the left, a light working area on the
- * right, and a top bar that answers three questions without a click: where am
- * I (breadcrumb), what can I jump to (search), and who am I (account chip).
+ * Shape: a dark navigation rail on the left, a light working area on the right,
+ * and a top bar that answers three questions without a click — where am I
+ * (breadcrumb), what can I jump to (search), and who am I (account menu).
  *
- * Every selector below either styles markup that staff/templates provide or
- * restyles Django's own admin DOM. Django's admin JS filters on a few class
- * names and element shapes (see nav_sidebar.js, inlines.js, calendar.js); those
- * stay intact. Everything else is ours.
+ * Everything here either styles markup our templates provide or restyles
+ * Django's own admin DOM. Django's JS filters on a few class names and element
+ * shapes (nav_sidebar.js, inlines.js, the filter bar); those stay intact.
  *
  * Palette, once:
- *   ink        #16203a   text
- *   muted      #6b7793   secondary text
- *   line       #e6e8f0   borders
- *   canvas     #f6f7fb   page background
- *   navy       #0e1729   rail
- *   violet     #6d5dfc   primary action
+ *   ink     #16203a    muted #5d6a86    line #e6e8f0
+ *   canvas  #f6f7fb    navy  #0e1729    violet #6d5dfc
  */
 
 :root {
   --ss-ink: #16203a;
   --ss-ink-soft: #37415c;
-  --ss-muted: #6b7793;
+  --ss-muted: #5d6a86;
   --ss-line: #e6e8f0;
   --ss-line-strong: #d5d9e5;
   --ss-canvas: #f6f7fb;
@@ -33,9 +28,9 @@
   --ss-violet: #6d5dfc;
   --ss-violet-dark: #5847f5;
   --ss-violet-wash: #f1efff;
-  --ss-green: #0f9d58;
+  --ss-green: #0a7a43;
   --ss-green-wash: #e9f8f0;
-  --ss-amber: #b26a00;
+  --ss-amber: #8f5500;
   --ss-amber-wash: #fff6e5;
   --ss-red: #c0392f;
   --ss-red-wash: #fdecea;
@@ -44,7 +39,6 @@
   --ss-radius: 14px;
   --ss-radius-sm: 9px;
   --ss-rail: 248px;
-  --ss-rail-collapsed: 76px;
   --ss-topbar: 68px;
   --ss-shadow: 0 1px 2px rgba(16, 24, 40, .05);
   --ss-shadow-lg: 0 12px 32px rgba(16, 24, 40, .12);
@@ -53,13 +47,66 @@
   --ss-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* ---------------------------------------------------------------- reset-ish */
-
-html[data-theme="dark"] {
-  /* The console is deliberately light-only. Django's theme switch writes this
-   * attribute; neutralising its variables keeps one palette on every machine. */
+/* Django writes data-theme on <html> and swaps its whole palette under each
+ * value; `dark_mode.css` also fires on prefers-color-scheme alone. The console
+ * is light-only by decision, so Django's own variables are pinned here — its
+ * remaining rules (forms, inlines, widgets) read these names, and a half-pinned
+ * palette is how a dark OS turns a white card's labels white. */
+html[data-theme="auto"],
+html[data-theme="light"],
+html[data-theme="dark"],
+html:not([data-theme]),
+:root {
   color-scheme: light;
+
+  --primary: #6d5dfc;
+  --secondary: #5847f5;
+  --accent: #8f7bff;
+  --primary-fg: #ffffff;
+
+  --body-fg: #16203a;
+  --body-bg: #f6f7fb;
+  --body-quiet-color: #5d6a86;
+  --body-medium-color: #4a5670;
+  --body-loud-color: #0e1729;
+
+  --header-color: #ffffff;
+  --header-branding-color: #ffffff;
+  --header-bg: #0e1729;
+  --header-link-color: #ffffff;
+
+  --breadcrumbs-fg: #5d6a86;
+  --breadcrumbs-link-fg: #37415c;
+  --breadcrumbs-bg: #ffffff;
+
+  --link-fg: #1d63d1;
+  --link-hover-color: #14479b;
+  --link-selected-fg: #5847f5;
+
+  --hairline-color: #e6e8f0;
+  --border-color: #d5d9e5;
+
+  --error-fg: #c0392f;
+  --message-success-bg: #e9f8f0;
+  --message-warning-bg: #fff6e5;
+  --message-error-bg: #fdecea;
+
+  --darkened-bg: #f1f2f7;
+  --selected-bg: #f1efff;
+  --selected-row: #fafaff;
+
+  --button-bg: #ffffff;
+  --button-fg: #16203a;
+  --button-hover-bg: #f4f5fa;
+  --default-button-bg: #6d5dfc;
+  --default-button-hover-bg: #5847f5;
+  --close-button-bg: #8c93a8;
+  --close-button-hover-bg: #6b7793;
+  --delete-button-bg: #c0392f;
+  --delete-button-hover-bg: #a8332a;
 }
+
+/* ---------------------------------------------------------------- reset-ish */
 
 body.ss-admin {
   margin: 0;
@@ -109,6 +156,26 @@ body.ss-admin {
   border: 0;
 }
 
+/* Django ships a skip link; make it visible when it takes focus. */
+.ss-admin .skip-to-content-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 200;
+  transform: translateY(-200%);
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--ss-violet);
+  color: #fff;
+  font-weight: 650;
+  box-shadow: var(--ss-shadow-lg);
+}
+
+.ss-admin .skip-to-content-link:focus {
+  transform: none;
+  color: #fff;
+}
+
 /* ------------------------------------------------------------------ layout */
 
 .ss-admin #container {
@@ -123,16 +190,20 @@ body.ss-admin {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 0 26px 0 0;
+  padding: 0 22px 0 0;
   background: var(--ss-card);
   border-bottom: 1px solid var(--ss-line);
+  transition: box-shadow .18s ease;
+}
+
+.ss-admin #header.is-scrolled {
+  box-shadow: 0 6px 18px rgba(16, 24, 40, .07);
 }
 
 .ss-admin #branding {
   flex: 0 0 var(--ss-rail);
   display: flex;
   align-items: center;
-  gap: 10px;
   height: 100%;
   padding-left: 22px;
   background: var(--ss-navy);
@@ -140,36 +211,36 @@ body.ss-admin {
 
 .ss-admin #site-name,
 .ss-admin #site-name a {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -.01em;
   display: flex;
   align-items: center;
   gap: 9px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  color: #fff;
   text-decoration: none;
 }
 
 .ss-admin #site-name a::before {
   content: "";
+  flex: none;
   width: 26px;
   height: 26px;
   border-radius: 8px;
   background: linear-gradient(135deg, var(--ss-violet), #9a7bff);
   box-shadow: 0 4px 10px rgba(109, 93, 252, .45);
-  flex: none;
 }
 
 .ss-admin .ss-admin-tag {
+  padding-left: 2px;
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
   letter-spacing: .09em;
+  text-transform: uppercase;
   color: var(--ss-rail-text);
-  padding-left: 2px;
 }
 
-/* Top bar pieces added by staff/templates/admin/base_site.html */
+/* Top bar pieces from staff/templates/admin/base_site.html */
 .ss-admin .ss-topbar-main {
   display: flex;
   align-items: center;
@@ -199,81 +270,195 @@ body.ss-admin {
   text-decoration: none;
 }
 
-.ss-admin .ss-breadcrumbs .ss-crumb-sep {
+.ss-admin .ss-crumb-sep {
   color: var(--ss-line-strong);
 }
 
-.ss-admin .ss-breadcrumbs .ss-crumb-current {
+.ss-admin .ss-crumb-current {
   color: var(--ss-ink);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Django's own user tools are replaced by the account menu. */
+.ss-admin #user-tools,
+.ss-admin .theme-toggle {
+  display: none;
+}
+
+/* --------------------------------------------------------------- jump box */
+
 .ss-admin .ss-jump {
-  margin-left: auto;
   position: relative;
+  margin-left: auto;
   flex: 0 1 300px;
+  display: flex;
+  align-items: center;
 }
 
 .ss-admin .ss-jump input {
   width: 100%;
   height: 38px;
-  padding: 0 12px 0 38px;
+  padding: 0 34px 0 36px;
   border: 1px solid var(--ss-line);
   border-radius: 10px;
   background: var(--ss-canvas);
   color: var(--ss-ink);
   font: inherit;
   font-size: 13px;
+  transition: border-color .14s ease, background .14s ease, box-shadow .14s ease;
 }
 
-.ss-admin .ss-jump input::placeholder {
-  color: var(--ss-muted);
+.ss-admin .ss-jump input:focus {
+  background: #fff;
+  border-color: var(--ss-violet);
+  box-shadow: 0 0 0 3px rgba(109, 93, 252, .16);
+  outline: none;
 }
 
 .ss-admin .ss-jump::before {
   content: "";
   position: absolute;
-  left: 13px;
-  top: 50%;
+  left: 12px;
   width: 15px;
   height: 15px;
-  transform: translateY(-50%);
   background: currentColor;
   color: var(--ss-muted);
-  -webkit-mask: var(--ss-icon-search) center / contain no-repeat;
-  mask: var(--ss-icon-search) center / contain no-repeat;
+  -webkit-mask: var(--ss-i-search) center / contain no-repeat;
+  mask: var(--ss-i-search) center / contain no-repeat;
   pointer-events: none;
 }
 
-.ss-admin .ss-account {
+.ss-admin .ss-jump-key {
+  position: absolute;
+  right: 9px;
+  padding: 1px 6px;
+  border: 1px solid var(--ss-line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ss-muted);
+  font-family: var(--ss-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.ss-admin .ss-jump input:focus ~ .ss-jump-key,
+.ss-admin .ss-jump input:not(:placeholder-shown) ~ .ss-jump-key {
+  display: none;
+}
+
+.ss-admin .ss-jump-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 336px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--ss-line);
+  border-radius: 12px;
+  box-shadow: var(--ss-shadow-lg);
+}
+
+.ss-admin .ss-jump-results li {
+  margin: 0;
+}
+
+.ss-admin .ss-jump-results a,
+.ss-admin .ss-jump-results button {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-left: 16px;
-  border-left: 1px solid var(--ss-line);
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ss-ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ss-admin .ss-jump-results a:hover,
+.ss-admin .ss-jump-results li[aria-selected="true"] a,
+.ss-admin .ss-jump-results a:focus {
+  background: var(--ss-violet-wash);
+  color: var(--ss-violet-dark);
+  text-decoration: none;
+}
+
+.ss-admin .ss-jump-results .ss-jump-group {
+  margin-left: auto;
+  color: var(--ss-muted);
+  font-size: 11.5px;
+}
+
+.ss-admin .ss-jump-results .ss-jump-none {
+  padding: 10px 12px;
+  color: var(--ss-muted);
+  font-size: 12.5px;
+}
+
+/* ----------------------------------------------------------- account menu */
+
+.ss-admin .ss-account {
+  position: relative;
   flex: none;
 }
 
+.ss-admin .ss-account > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-left: 1px solid var(--ss-line);
+  border-radius: 0 10px 10px 0;
+}
+
+.ss-admin .ss-account > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ss-admin .ss-account > summary:hover {
+  background: var(--ss-canvas);
+}
+
+.ss-admin .ss-account[open] > summary {
+  background: var(--ss-canvas);
+}
+
 .ss-admin .ss-avatar {
+  display: grid;
+  place-items: center;
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
+  background: linear-gradient(140deg, #6d5dfc, #8f7bff);
+  color: #fff;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
-  background: linear-gradient(140deg, #6d5dfc, #8f7bff);
   letter-spacing: .02em;
+}
+
+.ss-admin .ss-account-text {
+  display: grid;
+  line-height: 1.2;
 }
 
 .ss-admin .ss-account-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--ss-ink);
-  line-height: 1.2;
 }
 
 .ss-admin .ss-account-role {
@@ -281,24 +466,75 @@ body.ss-admin {
   color: var(--ss-muted);
 }
 
-.ss-admin .ss-account-links {
-  display: flex;
-  gap: 10px;
+.ss-admin .ss-chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--ss-muted);
+  transition: transform .16s ease;
+}
+
+.ss-admin .ss-account[open] .ss-chevron {
+  transform: rotate(180deg);
+}
+
+.ss-admin .ss-account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 232px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid var(--ss-line);
+  border-radius: 12px;
+  box-shadow: var(--ss-shadow-lg);
+}
+
+.ss-admin .ss-account-menu-head {
+  margin: 4px 8px 8px;
+  color: var(--ss-muted);
   font-size: 12px;
-  color: var(--ss-muted);
 }
 
-.ss-admin .ss-account-links a {
-  color: var(--ss-muted);
+.ss-admin .ss-account-menu-head strong {
+  color: var(--ss-ink);
 }
 
-.ss-admin .ss-account-links a:hover {
-  color: var(--ss-violet);
+.ss-admin .ss-account-menu a,
+.ss-admin .ss-account-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ss-ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
 }
 
-/* Django's own user tools are replaced by the account chip above. */
-.ss-admin #user-tools {
-  display: none;
+.ss-admin .ss-account-menu a:hover,
+.ss-admin .ss-account-menu button:hover {
+  background: var(--ss-violet-wash);
+  color: var(--ss-violet-dark);
+  text-decoration: none;
+}
+
+.ss-admin .ss-account-menu form {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--ss-line);
+}
+
+.ss-admin .ss-account-menu form button {
+  color: var(--ss-red);
+}
+
+.ss-admin .ss-account-menu form button:hover {
+  background: var(--ss-red-wash);
+  color: var(--ss-red);
 }
 
 /* ------------------------------------------------------------------- rail */
@@ -309,7 +545,7 @@ body.ss-admin {
   bottom: 0;
   left: 0;
   width: var(--ss-rail);
-  padding: 14px 12px 84px;
+  padding: 16px 12px 28px;
   background: var(--ss-navy);
   overflow-y: auto;
   overflow-x: hidden;
@@ -335,18 +571,33 @@ body.ss-admin {
 }
 
 .ss-admin .ss-nav-group {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .ss-admin #nav-sidebar caption {
   caption-side: top;
   text-align: left;
   padding: 0 12px 8px;
+}
+
+.ss-admin .ss-nav-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #63719a;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: #63719a;
+}
+
+.ss-admin .ss-nav-caption::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  -webkit-mask: var(--ss-i-layers) center / contain no-repeat;
+  mask: var(--ss-i-layers) center / contain no-repeat;
 }
 
 .ss-admin #nav-sidebar tr {
@@ -367,7 +618,7 @@ body.ss-admin {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   margin-bottom: 2px;
   border-radius: 10px;
   color: var(--ss-rail-text);
@@ -380,13 +631,13 @@ body.ss-admin {
 
 .ss-admin #nav-sidebar th a::before {
   content: "";
+  flex: none;
   width: 16px;
   height: 16px;
-  flex: none;
   background: currentColor;
   opacity: .9;
-  -webkit-mask: var(--ss-icon-dot) center / contain no-repeat;
-  mask: var(--ss-icon-dot) center / contain no-repeat;
+  -webkit-mask: var(--ss-i-dot) center / contain no-repeat;
+  mask: var(--ss-i-dot) center / contain no-repeat;
 }
 
 .ss-admin #nav-sidebar th a:hover {
@@ -436,32 +687,19 @@ body.ss-admin {
   color: #64729a;
 }
 
+.ss-admin #nav-filter:focus {
+  border-color: var(--ss-violet);
+  box-shadow: 0 0 0 3px rgba(109, 93, 252, .25);
+  outline: none;
+}
+
+.ss-admin #nav-sidebar tr[hidden] {
+  display: none;
+}
+
+/* Mobile-only drawer handle. */
 .ss-admin #toggle-nav-sidebar {
-  position: fixed;
-  z-index: 45;
-  left: 0;
-  bottom: 18px;
-  width: var(--ss-rail);
-  height: 46px;
-  border: 0;
-  border-top: 1px solid #1d2942;
-  border-radius: 0;
-  background: var(--ss-navy-soft);
-  color: var(--ss-rail-text);
-  font-size: 0;
-  cursor: pointer;
-}
-
-.ss-admin #toggle-nav-sidebar::before {
-  content: "Collapse menu";
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: .02em;
-}
-
-.ss-admin #toggle-nav-sidebar:hover {
-  background: #1b2740;
-  color: #fff;
+  display: none;
 }
 
 /* ------------------------------------------------------------------- main */
@@ -473,7 +711,7 @@ body.ss-admin {
 
 .ss-admin #main > #content-start {
   margin-left: var(--ss-rail);
-  padding: 26px 30px 60px;
+  padding: 26px 30px 64px;
   min-height: calc(100vh - var(--ss-topbar));
 }
 
@@ -493,7 +731,11 @@ body.ss-admin {
   font-weight: 650;
 }
 
-/* Page header: title on the left, the primary action on the right. */
+#footer {
+  display: none;
+}
+
+/* Page head: title on the left, the primary action on the right. */
 .ss-admin .ss-page-head {
   display: flex;
   align-items: flex-end;
@@ -505,11 +747,17 @@ body.ss-admin {
 
 .ss-admin .ss-page-head h1 {
   margin-bottom: 2px;
+  overflow-wrap: anywhere;
 }
 
 .ss-admin .ss-page-sub {
+  margin: 0;
   color: var(--ss-muted);
   font-size: 13px;
+}
+
+.ss-admin .ss-page-quiet {
+  color: var(--ss-muted);
 }
 
 .ss-admin .ss-page-actions {
@@ -550,7 +798,7 @@ body.ss-admin {
 .ss-admin input[type="submit"].default,
 .ss-admin .submit-row input.default,
 .ss-admin .ss-btn-primary,
-.ss-admin .object-tools a.ss-add-primary {
+.ss-admin .object-tools .ss-none {
   background: var(--ss-violet);
   border-color: var(--ss-violet);
   color: #fff;
@@ -560,27 +808,10 @@ body.ss-admin {
 .ss-admin .button.default:hover,
 .ss-admin input[type="submit"].default:hover,
 .ss-admin .ss-btn-primary:hover,
-.ss-admin .object-tools a.ss-add-primary:hover {
+.ss-admin .object-tools .ss-none:hover {
   background: var(--ss-violet-dark);
   border-color: var(--ss-violet-dark);
   color: #fff;
-}
-
-.ss-admin .ss-btn-ghost {
-  background: transparent;
-  border-color: transparent;
-  color: var(--ss-muted);
-}
-
-.ss-admin .ss-btn-danger {
-  background: #fff;
-  border-color: #f1c9c5;
-  color: var(--ss-red);
-}
-
-.ss-admin .ss-btn-danger:hover {
-  background: var(--ss-red-wash);
-  border-color: #e5a7a1;
 }
 
 /* Django puts object-tools in a floating list; make it a header action. */
@@ -605,17 +836,31 @@ body.ss-admin {
   gap: 8px;
   padding: 10px 15px;
   border-radius: 10px;
+  border: 1px solid var(--ss-line-strong);
+  background: #fff;
+  color: var(--ss-ink);
   font-size: 13.5px;
   font-weight: 600;
-  background: #fff;
-  border: 1px solid var(--ss-line-strong);
-  color: var(--ss-ink);
   text-decoration: none;
 }
 
 .ss-admin .object-tools a:hover {
   background: #f4f5fa;
   text-decoration: none;
+}
+
+/* The "Add …" link is the one primary action a list screen has. */
+.ss-admin .object-tools a.addlink {
+  background: var(--ss-violet);
+  border-color: var(--ss-violet);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(109, 93, 252, .28);
+}
+
+.ss-admin .object-tools a.addlink:hover {
+  background: var(--ss-violet-dark);
+  border-color: var(--ss-violet-dark);
+  color: #fff;
 }
 
 .ss-admin .object-tools a.addlink::before {
@@ -629,10 +874,8 @@ body.ss-admin {
 
 .ss-admin .ss-card,
 .ss-admin .module,
-.ss-admin #changelist,
 .ss-admin fieldset.module,
-.ss-admin .inline-group,
-.ss-admin .ss-panel {
+.ss-admin .inline-group {
   background: var(--ss-card);
   border: 1px solid var(--ss-line);
   border-radius: var(--ss-radius);
@@ -642,21 +885,13 @@ body.ss-admin {
 .ss-admin .module h2,
 .ss-admin .module caption,
 .ss-admin .module > h3 {
+  padding: 16px 20px 0;
+  border: 0;
   background: transparent;
   color: var(--ss-ink);
-  border: 0;
-  padding: 16px 20px 0;
   font-size: 15px;
   font-weight: 650;
   letter-spacing: -.01em;
-}
-
-.ss-admin .module table caption {
-  padding: 14px 20px 10px;
-  background: transparent;
-  color: var(--ss-ink);
-  font-size: 15px;
-  font-weight: 650;
   text-align: left;
 }
 
@@ -670,34 +905,44 @@ body.ss-admin {
 }
 
 .ss-admin .ss-stat {
-  background: var(--ss-card);
-  border: 1px solid var(--ss-line);
-  border-radius: var(--ss-radius);
-  padding: 16px 18px;
-  box-shadow: var(--ss-shadow);
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 16px 18px;
+  background: var(--ss-card);
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow);
+  text-decoration: none;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.ss-admin a.ss-stat:hover {
+  transform: translateY(-2px);
+  border-color: #cfc7ff;
+  box-shadow: 0 10px 24px rgba(16, 24, 40, .1);
+  text-decoration: none;
 }
 
 .ss-admin .ss-stat-label {
-  font-size: 12.5px;
   color: var(--ss-muted);
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: .01em;
 }
 
 .ss-admin .ss-stat-value {
+  color: var(--ss-ink);
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -.02em;
   line-height: 1.15;
-  color: var(--ss-ink);
+  font-variant-numeric: tabular-nums;
 }
 
 .ss-admin .ss-stat-hint {
-  font-size: 12px;
   color: var(--ss-muted);
+  font-size: 12px;
 }
 
 .ss-admin .ss-stat--violet {
@@ -732,15 +977,15 @@ body.ss-admin {
 }
 
 .ss-admin .ss-card-blurb {
+  margin: 0 0 12px;
   color: var(--ss-muted);
   font-size: 12.8px;
-  margin: 0 0 12px;
 }
 
 .ss-admin .ss-card ul {
-  list-style: none;
   margin: 0;
   padding: 0;
+  list-style: none;
 }
 
 .ss-admin .ss-card li {
@@ -752,9 +997,9 @@ body.ss-admin {
 }
 
 .ss-admin .ss-model {
-  font-weight: 550;
-  font-size: 13.5px;
   color: var(--ss-ink);
+  font-size: 13.5px;
+  font-weight: 550;
 }
 
 .ss-admin .ss-model:hover {
@@ -763,17 +1008,17 @@ body.ss-admin {
 }
 
 .ss-admin .ss-count {
-  margin-left: auto;
   min-width: 26px;
-  text-align: center;
+  margin-left: auto;
   padding: 2px 8px;
+  border: 1px solid var(--ss-line);
   border-radius: 999px;
   background: var(--ss-canvas);
-  border: 1px solid var(--ss-line);
   color: var(--ss-muted);
   font-size: 12px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .ss-admin .ss-count[data-empty="1"] {
@@ -781,12 +1026,12 @@ body.ss-admin {
 }
 
 .ss-admin .ss-add {
-  font-size: 12px;
-  font-weight: 650;
-  color: var(--ss-violet);
   padding: 4px 9px;
   border-radius: 8px;
   background: var(--ss-violet-wash);
+  color: var(--ss-violet);
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .ss-admin .ss-add:hover {
@@ -794,22 +1039,39 @@ body.ss-admin {
   text-decoration: none;
 }
 
+/* The console home is two columns: the work, then the activity. */
+.ss-admin.dashboard #content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 322px;
+  gap: 22px;
+  align-items: start;
+}
+
+.ss-admin.dashboard #content-main {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.ss-admin.dashboard #content-related {
+  grid-column: 2;
+}
+
 /* ---------------------------------------------------------------- messages */
 
 .ss-admin .messagelist {
-  list-style: none;
-  margin: 0 0 18px;
-  padding: 0;
   display: grid;
   gap: 10px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
 }
 
 .ss-admin .messagelist li,
 .ss-admin .ss-alert {
   margin: 0;
-  padding: 13px 16px;
-  border-radius: 12px;
+  padding: 12px 16px;
   border: 1px solid var(--ss-line);
+  border-radius: 12px;
   background: #fff;
   font-size: 13.5px;
   box-shadow: var(--ss-shadow);
@@ -834,16 +1096,18 @@ body.ss-admin {
   font-size: 13px;
 }
 
-/* ----------------------------------------------------------------- tables */
+/* ------------------------------------------------------- list: the card */
 
 .ss-admin #changelist {
-  border: 0;
+  display: flex;
+  flex-direction: column;
   background: transparent;
+  border: 0;
   box-shadow: none;
-  display: block;
 }
 
-.ss-admin #changelist .ss-table-card {
+.ss-admin #changelist .changelist-form-container {
+  order: 1;
   background: var(--ss-card);
   border: 1px solid var(--ss-line);
   border-radius: var(--ss-radius);
@@ -851,54 +1115,111 @@ body.ss-admin {
   overflow: hidden;
 }
 
-.ss-admin #changelist-form .actions {
-  background: #fff;
-  border-bottom: 1px solid var(--ss-line);
-  padding: 12px 18px;
-  font-size: 13px;
-  color: var(--ss-muted);
+.ss-admin #changelist-filter {
+  order: 0;
+}
+
+/* Search row */
+.ss-admin .ss-search {
   display: flex;
   align-items: center;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ss-line);
+  background: #fdfdfe;
+}
+
+.ss-admin .ss-search-field {
+  position: relative;
+  flex: 1 1 260px;
+  display: flex;
+}
+
+.ss-admin .ss-search-field::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  transform: translateY(-50%);
+  background: currentColor;
+  color: var(--ss-muted);
+  -webkit-mask: var(--ss-i-search) center / contain no-repeat;
+  mask: var(--ss-i-search) center / contain no-repeat;
+  pointer-events: none;
+}
+
+.ss-admin .ss-search input[type="search"] {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 36px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.ss-admin .ss-search .button,
+.ss-admin .ss-search .ss-btn {
+  height: 38px;
+  padding: 0 16px;
+}
+
+.ss-admin .ss-search .help {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--ss-muted);
+  font-size: 12.3px;
+}
+
+/* Bulk-action row */
+.ss-admin #changelist-form .actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ss-line);
+  background: #fff;
+  color: var(--ss-muted);
+  font-size: 13px;
 }
 
 .ss-admin #changelist-form .actions label {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--ss-ink);
+  font-size: 13px;
   font-weight: 550;
 }
 
-.ss-admin select,
-.ss-admin input[type="text"],
-.ss-admin input[type="number"],
-.ss-admin input[type="url"],
-.ss-admin input[type="email"],
-.ss-admin input[type="password"],
-.ss-admin input[type="search"],
-.ss-admin input[type="date"],
-.ss-admin input[type="time"],
-.ss-admin textarea,
-.ss-admin .vTextField {
-  font: inherit;
-  font-size: 13.5px;
-  padding: 9px 11px;
-  border: 1px solid var(--ss-line-strong);
-  border-radius: 9px;
-  background: #fff;
-  color: var(--ss-ink);
-  max-width: 100%;
+.ss-admin .action-counter {
+  color: var(--ss-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
 }
 
-.ss-admin select:focus,
-.ss-admin input:focus,
-.ss-admin textarea:focus {
-  border-color: var(--ss-violet);
-  box-shadow: 0 0 0 3px rgba(109, 93, 252, .16);
-  outline: none;
+.ss-admin .all,
+.ss-admin .none {
+  color: var(--ss-muted);
+  font-size: 12.5px;
 }
 
+.ss-admin .all a,
+.ss-admin .none a {
+  color: var(--ss-violet);
+  font-weight: 600;
+}
+
+/* Table */
 .ss-admin .results {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.ss-admin .results table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
@@ -906,32 +1227,61 @@ body.ss-admin {
 }
 
 .ss-admin .results thead th {
-  background: #fbfbfe;
+  padding: 11px 14px;
   border-bottom: 1px solid var(--ss-line);
-  padding: 12px 14px;
+  background: #fbfbfe;
+  color: var(--ss-muted);
   font-size: 11.5px;
   font-weight: 700;
   letter-spacing: .07em;
   text-transform: uppercase;
-  color: var(--ss-muted);
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .ss-admin .results thead th a {
   color: inherit;
 }
 
+.ss-admin .results thead th a:hover {
+  color: var(--ss-ink);
+  text-decoration: none;
+}
+
 .ss-admin .results thead th.sorted {
   color: var(--ss-ink);
 }
 
+/* Django's sprite arrows are replaced by one chevron that matches the type. */
+.ss-admin .results .sortoptions {
+  display: none;
+}
+
+.ss-admin .results th.sorted .text a::after {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-left: 6px;
+  vertical-align: -1px;
+  background: currentColor;
+  -webkit-mask: var(--ss-i-chevron-up) center / contain no-repeat;
+  mask: var(--ss-i-chevron-up) center / contain no-repeat;
+}
+
+.ss-admin .results th.sorted.descending .text a::after {
+  -webkit-mask-image: var(--ss-i-chevron-down);
+  mask-image: var(--ss-i-chevron-down);
+}
+
 .ss-admin .results tbody td,
 .ss-admin .results tbody th {
-  padding: 13px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--ss-line);
+  background: #fff;
   color: var(--ss-ink);
   font-weight: 400;
-  background: #fff;
+  vertical-align: middle;
 }
 
 .ss-admin .results tbody th {
@@ -960,7 +1310,7 @@ body.ss-admin {
 
 .ss-admin .results .action-checkbox,
 .ss-admin .results .action-checkbox-column {
-  width: 42px;
+  width: 44px;
   padding-left: 18px;
 }
 
@@ -975,20 +1325,24 @@ body.ss-admin {
   white-space: nowrap;
 }
 
-/* Status pills, produced by list_display callables and object links. */
+.ss-admin .results td a {
+  color: var(--ss-blue);
+}
+
+/* Status chips */
 .ss-admin .ss-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
+  border: 1px solid transparent;
   border-radius: 999px;
+  background: var(--ss-canvas);
+  color: var(--ss-muted);
   font-size: 12px;
   font-weight: 650;
   line-height: 1.5;
   white-space: nowrap;
-  background: var(--ss-canvas);
-  color: var(--ss-muted);
-  border: 1px solid transparent;
 }
 
 .ss-admin .ss-pill::before {
@@ -1006,12 +1360,39 @@ body.ss-admin {
 .ss-admin .ss-pill--info { background: var(--ss-blue-wash); color: var(--ss-blue); }
 .ss-admin .ss-pill--muted { background: var(--ss-canvas); color: var(--ss-muted); }
 
+/* Empty list */
+.ss-admin .ss-empty {
+  padding: 46px 24px 54px;
+  text-align: center;
+}
+
+.ss-admin .ss-empty-title {
+  margin: 0 0 6px;
+  color: var(--ss-ink);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.ss-admin .ss-empty-body {
+  max-width: 46ch;
+  margin: 0 auto 18px;
+  color: var(--ss-muted);
+  font-size: 13.5px;
+}
+
+.ss-admin .ss-empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+}
+
 /* ------------------------------------------------------------------ chips */
 
 .ss-admin #changelist-filter {
   float: none;
   width: auto;
-  margin: 0 0 18px;
+  margin: 0 0 16px;
   padding: 0;
   background: transparent;
   border: 0;
@@ -1021,29 +1402,28 @@ body.ss-admin {
   display: none;
 }
 
-.ss-admin #changelist-filter h3 {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--ss-muted);
-  margin: 0 2px 6px;
-}
-
 .ss-admin .ss-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
-  margin-bottom: 16px;
+  gap: 22px;
+  padding: 14px 18px;
   background: #fff;
   border: 1px solid var(--ss-line);
   border-radius: var(--ss-radius);
-  padding: 14px 18px;
   box-shadow: var(--ss-shadow);
 }
 
 .ss-admin .ss-filter-group {
-  min-width: 150px;
+  min-width: 140px;
+}
+
+.ss-admin .ss-filter-group h3 {
+  margin: 0 2px 7px;
+  color: var(--ss-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 
 .ss-admin .ss-filter-chips {
@@ -1057,8 +1437,8 @@ body.ss-admin {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 999px;
   border: 1px solid var(--ss-line-strong);
+  border-radius: 999px;
   background: #fff;
   color: var(--ss-ink-soft);
   font-size: 12.5px;
@@ -1076,8 +1456,13 @@ body.ss-admin {
 .ss-admin .ss-chip.is-selected {
   background: var(--ss-violet-wash);
   border-color: #cfc7ff;
-  color: var(--ss-violet);
+  color: var(--ss-violet-dark);
   font-weight: 650;
+}
+
+.ss-admin .ss-chip--reset {
+  border-style: dashed;
+  color: var(--ss-muted);
 }
 
 /* ------------------------------------------------------------- pagination */
@@ -1086,20 +1471,24 @@ body.ss-admin {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
   flex-wrap: wrap;
+  gap: 12px;
   margin: 0;
-  padding: 14px 18px;
+  padding: 12px 18px;
   border-top: 1px solid var(--ss-line);
-  background: #fff;
-  font-size: 13px;
+  background: #fdfdfe;
   color: var(--ss-muted);
+  font-size: 13px;
 }
 
-.ss-admin .paginator .ss-page-links {
+.ss-admin .ss-page-range {
+  font-variant-numeric: tabular-nums;
+}
+
+.ss-admin .ss-page-links {
   display: flex;
-  gap: 6px;
   align-items: center;
+  gap: 6px;
 }
 
 .ss-admin .paginator a,
@@ -1109,8 +1498,8 @@ body.ss-admin {
   min-width: 32px;
   height: 32px;
   padding: 0 9px;
-  border-radius: 9px;
   border: 1px solid var(--ss-line-strong);
+  border-radius: 9px;
   background: #fff;
   color: var(--ss-ink);
   font-size: 12.5px;
@@ -1130,6 +1519,12 @@ body.ss-admin {
   text-decoration: none;
 }
 
+.ss-admin .paginator .showall {
+  margin-left: 4px;
+  border-style: dashed;
+  color: var(--ss-muted);
+}
+
 /* ------------------------------------------------------------------ forms */
 
 .ss-admin #content-main {
@@ -1144,88 +1539,107 @@ body.ss-admin {
 }
 
 .ss-admin fieldset.module > h2,
-.ss-admin .aligned fieldset > h2 {
-  padding: 16px 20px;
+.ss-admin .aligned fieldset > h2,
+.ss-admin .fieldset-heading {
+  padding: 15px 20px;
   border-bottom: 1px solid var(--ss-line);
   font-size: 14.5px;
 }
 
+.ss-admin fieldset.module .description {
+  padding: 12px 20px 0;
+  color: var(--ss-muted);
+  font-size: 12.8px;
+}
+
 .ss-admin .aligned .form-row {
+  display: block;
+  padding: 13px 20px;
   border: 0;
-  padding: 14px 20px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 24px;
-  align-items: flex-start;
 }
 
 .ss-admin .aligned .form-row + .form-row {
   border-top: 1px solid #f1f2f7;
 }
 
-.ss-admin .aligned .form-row > label,
-.ss-admin .aligned .form-row > div > label {
-  flex: 0 0 210px;
-  max-width: 210px;
+/* Django 5 wraps a field in .flex-container: label, control, then .help. */
+.ss-admin .aligned .form-row .flex-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 20px;
+}
+
+.ss-admin .aligned .form-row .flex-container > label {
+  flex: 0 0 190px;
+  max-width: 190px;
+  padding-top: 9px;
+  color: var(--ss-ink-soft);
   font-size: 13px;
   font-weight: 600;
-  color: var(--ss-ink-soft);
-  padding-top: 9px;
 }
 
-.ss-admin .aligned .form-row .help,
-.ss-admin .aligned .form-row p.help {
-  flex-basis: 100%;
-  margin: 0;
-  font-size: 12.3px;
-  color: var(--ss-muted);
-  padding-left: 234px;
+.ss-admin .aligned .form-row .flex-container > label.required::after {
+  content: " *";
+  color: var(--ss-violet);
 }
 
-.ss-admin .aligned .form-row .readonly {
+.ss-admin .aligned .form-row .flex-container > input[type="text"],
+.ss-admin .aligned .form-row .flex-container > input[type="url"],
+.ss-admin .aligned .form-row .flex-container > input[type="email"],
+.ss-admin .aligned .form-row .flex-container > input[type="number"],
+.ss-admin .aligned .form-row .flex-container > input[type="password"],
+.ss-admin .aligned .form-row .flex-container > select,
+.ss-admin .aligned .form-row .flex-container > textarea,
+.ss-admin .aligned .form-row .flex-container > .vTextField,
+.ss-admin .aligned .form-row .flex-container > .vURLField,
+.ss-admin .aligned .form-row .flex-container > .vLargeTextField,
+.ss-admin .aligned .form-row .flex-container > .readonly {
+  flex: 1 1 320px;
+  min-width: 0;
+  max-width: 760px;
+}
+
+.ss-admin .aligned .form-row .flex-container > textarea {
+  min-height: 92px;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.ss-admin .aligned .form-row .flex-container > .readonly {
   padding-top: 9px;
   font-weight: 550;
 }
 
-.ss-admin .aligned .form-row .vTextField,
-.ss-admin .aligned .form-row .vURLField,
-.ss-admin .aligned .form-row select,
-.ss-admin .aligned .form-row textarea {
-  min-width: 320px;
-}
-
-.ss-admin .aligned .form-row textarea {
-  min-height: 90px;
-}
-
-.ss-admin .aligned .form-row .checkbox-row,
-.ss-admin .aligned .checkbox-row {
-  display: flex;
+.ss-admin .aligned .form-row .flex-container.checkbox-row {
   align-items: center;
   gap: 9px;
-  padding-top: 6px;
 }
 
-.ss-admin .aligned .form-row .checkbox-row label {
-  font-size: 13.5px;
+.ss-admin .aligned .form-row .flex-container.checkbox-row > label,
+.ss-admin .aligned .form-row .flex-container.checkbox-row > label.vCheckboxLabel {
+  flex: 0 0 auto;
+  max-width: none;
+  padding-top: 0;
   font-weight: 500;
   color: var(--ss-ink);
 }
 
-.ss-admin .aligned .form-row .errors,
-.ss-admin .errornote {
-  background: var(--ss-red-wash);
-  border: 1px solid #f3c6c1;
-  color: #8a2019;
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 13px;
-  margin: 10px 20px;
-  flex-basis: 100%;
+.ss-admin .aligned .form-row .flex-container.checkbox-row > input[type="checkbox"] {
+  flex: none;
+  margin: 0;
+}
+
+.ss-admin .aligned .form-row .help {
+  margin: 2px 0 0;
+  padding-left: 210px;
+  color: var(--ss-muted);
+  font-size: 12.3px;
 }
 
 .ss-admin .aligned .form-row .errorlist {
-  margin: 4px 0 0;
+  display: block;
+  margin: 4px 0 0 210px;
   padding: 0;
   list-style: none;
   color: var(--ss-red);
@@ -1234,36 +1648,134 @@ body.ss-admin {
 }
 
 .ss-admin .aligned .form-row .errorlist li {
+  display: block;
   margin: 0;
 }
 
-/* The sticky action bar at the foot of an edit screen. */
-.ss-admin .submit-row {
-  position: sticky;
-  bottom: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin: 24px 0 0;
+.ss-admin .aligned .form-row .errors {
+  margin: 0 0 10px;
+}
+
+/* Django marks the control with aria-invalid; the border should agree with it. */
+.ss-admin .form-row.errors input,
+.ss-admin .form-row.errors select,
+.ss-admin .form-row.errors textarea,
+.ss-admin input[aria-invalid="true"],
+.ss-admin select[aria-invalid="true"],
+.ss-admin textarea[aria-invalid="true"] {
+  border-color: #e5a7a1;
+  background: #fffafa;
+}
+
+.ss-admin .form-row.errors input:focus,
+.ss-admin .form-row.errors select:focus,
+.ss-admin .form-row.errors textarea:focus,
+.ss-admin input[aria-invalid="true"]:focus,
+.ss-admin select[aria-invalid="true"]:focus,
+.ss-admin textarea[aria-invalid="true"]:focus {
+  border-color: var(--ss-red);
+  box-shadow: 0 0 0 3px rgba(192, 57, 47, .14);
+}
+
+.ss-admin .aligned .form-row .checkbox-row + .help {
+  padding-left: 0;
+}
+
+/* The error summary at the top of a failed form. Django's own one-line note is
+ * hidden while this is present: same message, plus the list. */
+.ss-admin .ss-form-errors {
+  margin: 0 0 16px;
   padding: 14px 18px;
-  background: rgba(255, 255, 255, .94);
-  backdrop-filter: blur(6px);
+  border: 1px solid #f3c6c1;
+  border-radius: 12px;
+  background: var(--ss-red-wash);
+  color: #8a2019;
+  font-size: 13px;
+}
+
+.ss-admin .ss-form-errors:focus {
+  outline: 2px solid var(--ss-red);
+  outline-offset: 2px;
+}
+
+.ss-admin .ss-form-errors-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+
+.ss-admin .ss-form-errors ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ss-admin .ss-form-errors li {
+  margin: 2px 0;
+}
+
+.ss-admin .ss-form-errors a {
+  color: #8a2019;
+  font-weight: 650;
+  text-decoration: underline;
+}
+
+.ss-admin .ss-form-errors ~ div > .errornote {
+  display: none;
+}
+
+.ss-admin .errornote {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid #f3c6c1;
+  border-radius: 12px;
+  background: var(--ss-red-wash);
+  color: #8a2019;
+  font-size: 13px;
+}
+
+/* Save bars: one compact at the top, one that follows the scroll at the end. */
+.ss-admin .ss-submit-top .submit-row {
+  position: static;
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow);
+}
+
+.ss-admin .ss-submit-bottom {
+  position: sticky;
+  bottom: 12px;
+  z-index: 25;
+}
+
+.ss-admin .ss-submit-bottom .submit-row {
+  position: static;
+  margin: 24px 0 0;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, .96);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--ss-line);
   border-radius: var(--ss-radius);
   box-shadow: var(--ss-shadow-lg);
 }
 
+.ss-admin .submit-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .ss-admin .submit-row a.deletelink {
   margin-left: auto;
   padding: 10px 15px;
+  border: 1px solid #f3c6c1;
   border-radius: 10px;
   background: var(--ss-red-wash);
   color: var(--ss-red);
   font-size: 13px;
   font-weight: 650;
-  border: 1px solid #f3c6c1;
 }
 
 .ss-admin .submit-row a.deletelink:hover {
@@ -1271,18 +1783,25 @@ body.ss-admin {
   text-decoration: none;
 }
 
-.ss-admin .submit-row .ss-save-note {
-  margin-left: auto;
-  font-size: 12.5px;
+.ss-admin .submit-row a.closelink {
+  padding: 10px 15px;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: 10px;
   color: var(--ss-muted);
+  font-size: 13px;
 }
 
-/* Inline groups (questions inside a test, choices inside a question). */
+/* Inline groups (sections in a batch, questions in a test). */
+.ss-admin .inline-group {
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
 .ss-admin .inline-group h2 {
-  padding: 16px 20px;
+  padding: 15px 20px;
   border-bottom: 1px solid var(--ss-line);
-  font-size: 14.5px;
   background: #fff;
+  font-size: 14.5px;
 }
 
 .ss-admin .inline-group .tabular table {
@@ -1290,24 +1809,47 @@ body.ss-admin {
 }
 
 .ss-admin .inline-group .tabular th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ss-line);
   background: #fbfbfe;
+  color: var(--ss-muted);
   font-size: 11.5px;
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: var(--ss-muted);
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--ss-line);
 }
 
 .ss-admin .inline-group .tabular td {
   padding: 10px 12px;
   border-bottom: 1px solid #f1f2f7;
+  vertical-align: middle;
 }
 
-.ss-admin .inline-group .add-row {
+.ss-admin .inline-group .tabular td.original p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ss-muted);
+}
+
+.ss-admin .inline-group .tabular td.original .inlinechangelink {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ss-admin .inline-group .tabular tr.add-row td {
   padding: 12px 18px;
   background: #fbfbfe;
   border-top: 1px solid var(--ss-line);
+  border-bottom: 0;
+}
+
+.ss-admin .inline-group .tabular tr.add-row a {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.ss-admin .inline-group .tabular .delete {
+  width: 34px;
 }
 
 /* --------------------------------------------------------------- sidebar */
@@ -1315,38 +1857,63 @@ body.ss-admin {
 .ss-admin #content-related {
   float: none;
   width: auto;
-  margin: 0 0 20px;
+  margin: 0;
 }
 
 .ss-admin #content-related .module {
+  padding-bottom: 6px;
   background: #fff;
   border: 1px solid var(--ss-line);
   border-radius: var(--ss-radius);
   box-shadow: var(--ss-shadow);
-  padding-bottom: 6px;
 }
 
-.ss-admin #content-related .module h2,
-.ss-admin #content-related .module h3 {
-  padding: 14px 18px 6px;
+.ss-admin #content-related .module h2 {
+  padding: 15px 18px 4px;
   font-size: 13px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ss-muted);
+}
+
+.ss-admin #content-related .module h3 {
+  padding: 4px 18px 8px;
+  font-size: 14px;
 }
 
 .ss-admin #recent-actions-module .actionlist {
-  list-style: none;
   margin: 0;
   padding: 0 18px 10px;
+  list-style: none;
 }
 
 .ss-admin #recent-actions-module .actionlist li {
-  padding: 9px 0;
+  padding: 10px 0;
   border-top: 1px solid var(--ss-line);
   font-size: 13px;
+  line-height: 1.45;
+}
+
+.ss-admin #recent-actions-module .actionlist li a {
+  color: var(--ss-ink);
+  font-weight: 550;
+}
+
+.ss-admin #recent-actions-module .actionlist li a:hover {
+  color: var(--ss-violet);
+  text-decoration: none;
 }
 
 .ss-admin .mini.quiet {
   color: var(--ss-muted);
   font-size: 11.5px;
+}
+
+.ss-admin .ss-empty-note {
+  margin: 0;
+  padding: 0 18px 14px;
+  color: var(--ss-muted);
+  font-size: 12.5px;
 }
 
 /* ---------------------------------------------------------- breadcrumbs */
@@ -1357,96 +1924,151 @@ body.ss-admin {
 
 /* ----------------------------------------------------------------- login */
 
+body.ss-admin.login,
+body.ss-admin:not(.dashboard):not(.change-form):not(.change-list) {
+  background: var(--ss-canvas);
+}
+
 body.ss-admin.login {
-  background: radial-gradient(1200px 600px at 20% -10%, #1b2542, var(--ss-navy));
   display: grid;
   place-items: start center;
-  padding-top: 8vh;
+  padding: 7vh 20px 40px;
+  background: radial-gradient(1100px 520px at 15% -10%, #1c2745, var(--ss-navy));
 }
 
 body.ss-admin.login #container {
   width: 100%;
-  max-width: 420px;
+  max-width: 430px;
+  min-height: 0;
 }
 
 body.ss-admin.login #header {
   position: static;
   height: auto;
-  padding: 0 0 18px;
+  justify-content: center;
+  padding: 0 0 20px;
   background: transparent;
   border: 0;
-  justify-content: center;
+  box-shadow: none;
 }
 
 body.ss-admin.login #branding {
-  background: transparent;
-  padding: 0;
   flex: none;
+  padding: 0;
+  background: transparent;
 }
 
 body.ss-admin.login #main {
   padding: 0;
 }
 
-body.ss-admin.login #main > #content-start,
-body.ss-admin.login #content {
+body.ss-admin.login #main > #content-start {
   margin: 0;
   padding: 0;
+  min-height: 0;
+}
+
+body.ss-admin.login #content {
   max-width: none;
+  margin: 0;
+  padding: 26px 26px 22px;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 26px 60px rgba(4, 10, 26, .45);
 }
 
 body.ss-admin.login #content-main {
-  background: #fff;
-  border-radius: 18px;
-  padding: 26px 26px 20px;
-  box-shadow: 0 24px 60px rgba(4, 10, 26, .45);
+  padding: 0;
+  margin: 0;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
-body.ss-admin.login #content-main h1 {
-  font-size: 19px;
-  margin-bottom: 4px;
+body.ss-admin.login .ss-login-head {
+  margin-bottom: 18px;
+}
+
+body.ss-admin.login .ss-login-head h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+body.ss-admin.login .ss-login-head p {
+  margin: 0;
+  color: var(--ss-muted);
+  font-size: 13px;
 }
 
 body.ss-admin.login .form-row {
+  margin-bottom: 14px;
   padding: 0;
   border: 0;
-  margin-bottom: 14px;
 }
 
 body.ss-admin.login .form-row label {
-  font-size: 12.5px;
-  font-weight: 650;
-  color: var(--ss-ink-soft);
   display: block;
   margin-bottom: 6px;
+  color: var(--ss-ink-soft);
+  font-size: 12.5px;
+  font-weight: 650;
 }
 
-body.ss-admin.login .form-row input {
+body.ss-admin.login .form-row input[type="text"],
+body.ss-admin.login .form-row input[type="password"] {
   width: 100%;
+  height: 42px;
 }
 
 body.ss-admin.login .submit-row {
-  position: static;
-  border: 0;
-  box-shadow: none;
-  padding: 0;
-  background: transparent;
   margin: 18px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 body.ss-admin.login .submit-row input {
   width: 100%;
+  height: 42px;
+  background: var(--ss-violet);
+  border-color: var(--ss-violet);
+  color: #fff;
+}
+
+body.ss-admin.login .submit-row input:hover {
+  background: var(--ss-violet-dark);
 }
 
 body.ss-admin.login .errornote {
-  margin: 0 0 14px;
+  margin-bottom: 14px;
+}
+
+body.ss-admin.login .password-reset-link {
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+
+body.ss-admin.login .ss-login-foot {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ss-muted);
 }
 
 /* --------------------------------------------------------------- responsive */
 
 @media (max-width: 1180px) {
-  .ss-admin #content-start {
-    padding: 22px 20px 60px;
+  .ss-admin #main > #content-start {
+    padding: 22px 20px 64px;
+  }
+
+  .ss-admin.dashboard #content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ss-admin.dashboard #content-related {
+    grid-column: 1;
   }
 }
 
@@ -1457,8 +2079,8 @@ body.ss-admin.login .errornote {
 
   .ss-admin #branding {
     flex-basis: auto;
-    background: transparent;
     padding-left: 16px;
+    background: transparent;
   }
 
   .ss-admin #site-name a {
@@ -1476,14 +2098,15 @@ body.ss-admin.login .errornote {
   }
 
   .ss-admin #header {
-    padding-right: 16px;
+    padding-right: 14px;
   }
 
   .ss-admin #nav-sidebar {
     transform: translateX(-100%);
     transition: transform .2s ease;
-    width: 260px;
+    width: 264px;
     box-shadow: 0 20px 60px rgba(4, 10, 26, .4);
+    z-index: 50;
   }
 
   .ss-admin.nav-open #nav-sidebar {
@@ -1491,25 +2114,30 @@ body.ss-admin.login .errornote {
   }
 
   .ss-admin #toggle-nav-sidebar {
-    left: 12px;
-    bottom: 14px;
-    width: 46px;
-    height: 46px;
-    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    position: fixed;
+    left: 14px;
+    bottom: 16px;
+    z-index: 45;
+    width: 48px;
+    height: 48px;
+    padding: 0;
     border: 1px solid #26334f;
-    box-shadow: 0 10px 24px rgba(4, 10, 26, .35);
+    border-radius: 15px;
+    background: var(--ss-navy);
+    color: #dbe3f3;
+    box-shadow: 0 12px 26px rgba(4, 10, 26, .35);
+    font-size: 0;
   }
 
   .ss-admin #toggle-nav-sidebar::before {
     content: "";
-    display: block;
-    width: 18px;
-    height: 18px;
-    margin: 0 auto;
+    width: 19px;
+    height: 19px;
     background: currentColor;
-    -webkit-mask: var(--ss-icon-menu) center / contain no-repeat;
-    mask: var(--ss-icon-menu) center / contain no-repeat;
-    color: #dbe3f3;
+    -webkit-mask: var(--ss-i-menu) center / contain no-repeat;
+    mask: var(--ss-i-menu) center / contain no-repeat;
   }
 
   .ss-admin #main > #content-start {
@@ -1520,24 +2148,31 @@ body.ss-admin.login .errornote {
     padding-top: 64px;
   }
 
-  .ss-admin .ss-jump {
-    flex: 1 1 auto;
-    max-width: 320px;
+  .ss-admin .ss-breadcrumbs {
+    display: none;
   }
 
-  .ss-admin .ss-account-name,
-  .ss-admin .ss-account-role {
+  .ss-admin .ss-jump {
+    flex: 1 1 auto;
+    max-width: 340px;
+  }
+
+  .ss-admin .ss-account-text {
     display: none;
+  }
+
+  .ss-admin .ss-account > summary {
+    padding-left: 10px;
   }
 }
 
 @media (max-width: 760px) {
   .ss-admin #header {
     height: auto;
+    min-height: 60px;
     flex-wrap: wrap;
     gap: 10px;
     padding: 10px 14px;
-    top: 0;
   }
 
   .ss-admin #branding {
@@ -1549,21 +2184,13 @@ body.ss-admin.login .errornote {
     flex-basis: 100%;
   }
 
-  .ss-admin .ss-breadcrumbs {
-    display: none;
-  }
-
   .ss-admin .ss-jump {
     flex: 1 1 100%;
     max-width: none;
   }
 
-  .ss-admin #main {
-    padding-top: 112px;
-  }
-
-  .ss-admin #content-start {
-    padding: 16px 14px 80px;
+  .ss-admin #main > #content-start {
+    padding: 16px 14px 84px;
   }
 
   .ss-admin #content h1 {
@@ -1587,32 +2214,36 @@ body.ss-admin.login .errornote {
     grid-template-columns: 1fr;
   }
 
-  .ss-admin .aligned .form-row > label,
-  .ss-admin .aligned .form-row > div > label {
+  .ss-admin .aligned .form-row .flex-container > label {
     flex-basis: 100%;
     max-width: none;
     padding-top: 0;
   }
 
-  .ss-admin .aligned .form-row .help,
-  .ss-admin .aligned .form-row p.help {
-    padding-left: 0;
-  }
-
-  .ss-admin .aligned .form-row .vTextField,
-  .ss-admin .aligned .form-row .vURLField,
-  .ss-admin .aligned .form-row select,
-  .ss-admin .aligned .form-row textarea {
-    min-width: 0;
+  .ss-admin .aligned .form-row .flex-container > input,
+  .ss-admin .aligned .form-row .flex-container > select,
+  .ss-admin .aligned .form-row .flex-container > textarea,
+  .ss-admin .aligned .form-row .flex-container > .readonly {
+    flex-basis: 100%;
+    max-width: none;
     width: 100%;
   }
 
-  .ss-admin #changelist .ss-table-card {
-    overflow-x: auto;
+  .ss-admin .aligned .form-row .help,
+  .ss-admin .aligned .form-row .errorlist {
+    padding-left: 0;
+    margin-left: 0;
   }
 
-  .ss-admin .results {
-    min-width: 620px;
+  .ss-admin .ss-filters {
+    gap: 16px;
+    padding: 12px 14px;
+  }
+
+  .ss-admin .ss-search,
+  .ss-admin #changelist-form .actions,
+  .ss-admin .paginator {
+    padding: 12px 14px;
   }
 }
 
@@ -1623,21 +2254,16 @@ body.ss-admin.login .errornote {
   }
 }
 
-/* ------------------------------------------------------------------ icons */
-
-.ss-admin {
-  --ss-icon-dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3.2' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E");
-  --ss-icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='4.6' fill='none' stroke='black' stroke-width='1.6'/%3E%3Cpath d='M10.6 10.6 14 14' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
-  --ss-icon-menu: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 4h12M2 8h12M2 12h12' stroke='black' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E");
-}
-
-/* Print: the console is used to check a row, not to be printed. */
+/* Print: a row is checked on screen, not on paper. */
 @media print {
   .ss-admin #header,
   .ss-admin #nav-sidebar,
   .ss-admin #toggle-nav-sidebar,
-  .ss-admin .submit-row,
-  .ss-admin .object-tools {
+  .ss-admin .ss-submit-bottom,
+  .ss-admin .ss-submit-top,
+  .ss-admin .object-tools,
+  .ss-admin .ss-filters,
+  .ss-admin .ss-search {
     display: none !important;
   }
 
@@ -1645,67 +2271,299 @@ body.ss-admin.login .errornote {
     margin: 0;
     padding: 0;
   }
+
+  .ss-admin #changelist .changelist-form-container {
+    border: 0;
+    box-shadow: none;
+  }
 }
 
-/* A quiet button that reads as a link (logout lives inside a POST form). */
-.ss-admin .ss-link-button {
-  padding: 0;
-  border: 0;
-  background: none;
+/* ------------------------------------------------------------------ icons
+ * Masked 24px glyphs, generated from one path table so every row in the
+ * rail draws at the same weight. A mask takes its colour from the text,
+ * which is what makes the current row light up on hover.
+ */
+
+.ss-admin {
+  --ss-i-layers: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%203%203%208l9%205%209-5-9-5Z%20M3%2012l9%205%209-5%20M3%2016l9%205%209-5%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-folder: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M3%207a2%202%200%200%201%202-2h4l2%202h8a2%202%200%200%201%202%202v8a2%202%200%200%201-2%202H5a2%202%200%200%201-2-2V7Z%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-play: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M3%2012a9%209%200%201%200%2018%200%209%209%200%201%200-18%200%20M10%208.5l6%203.5-6%203.5v-7Z%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-file: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M6%203h8l4%204v14H6V3Z%20M14%203v4h4%20M9%2012h6%20M9%2016h6%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-users: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M8%2011a3%203%200%201%200%200-6%203%203%200%200%200%200%206Z%20M2%2020c0-3.3%202.7-6%206-6s6%202.7%206%206%20M16%205.6a3%203%200%200%201%200%205.8%20M17%2014.2c2.4.7%204%202.9%204%205.8%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-stack: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%203%203%207.5%2012%2012l9-4.5L12%203Z%20M3%2012l9%204.5L21%2012%20M3%2016.5%2012%2021l9-4.5%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-clipboard: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M9%204h6v3H9V4Z%20M7%205H5v16h14V5h-2%20M9%2012l2%202%204-4%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-help: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2021a9%209%200%201%200%200-18%209%209%200%200%200%200%2018Z%20M9.8%209.1a2.3%202.3%200%201%201%203.5%202c-.8.5-1.3%201.1-1.3%202%20M12%2016.8h.01%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-upload: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2016V4%20M8%208l4-4%204%204%20M4%2015v3a2%202%200%200%200%202%202h12a2%202%200%200%200%202-2v-3%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-key: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M9%2012.6a3.6%203.6%200%201%201%200-7.2%203.6%203.6%200%200%201%200%207.2Z%20M11.5%2012.2%2020%2020.7%20M16.4%2017.1l2.4-2.4%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-lock: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M6%2011h12v9H6v-9Z%20M9%2011V8a3%203%200%200%201%206%200v3%20M12%2015v2%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-unlock: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M6%2011h12v9H6v-9Z%20M9%2011V8a3%203%200%200%201%206%200%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-megaphone: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M4%2010v4h4l7%204V6l-7%204H4Z%20M18%209.2a3%203%200%200%201%200%205.6%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-flag: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M6%2021V4%20M6%204.5h11l-2%204%202%204H6%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-activity: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M3%2012h4l3%207%204-14%203%207h4%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-check-square: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M5%204h14v16H5V4Z%20M9%2012l2%202%204-4%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-pencil: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M4%2020h4l10-10-4-4L4%2016v4Z%20M14%206l4%204%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-trend: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M3%2017.5l6-6%204%204%208-8%20M15%207.5h6v6%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-bookmark: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M7%204h10v17l-5-4-5%204V4Z%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-rotate: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M20%2012a8%208%200%201%201-2.4-5.7%20M20.5%204v5h-5%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-check-circle: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2021a9%209%200%201%200%200-18%209%209%200%200%200%200%2018Z%20M8.4%2012.2l2.5%202.5%204.7-5.2%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-user: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2012a4%204%200%201%200%200-8%204%204%200%200%200%200%208Z%20M4%2021c0-4.4%203.6-8%208-8s8%203.6%208%208%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-id-card: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M3%206h18v12H3V6Z%20M8%2014.5a2.2%202.2%200%201%200%200-4.4%202.2%202.2%200%200%200%200%204.4Z%20M5.4%2016.4c.5-1.3%201.4-1.9%202.6-1.9s2.1.6%202.6%201.9%20M14%2010h4%20M14%2014h4%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-cloud: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M7%2018a4%204%200%200%201%20.6-8%205.5%205.5%200%200%201%2010.4%201.4A3.3%203.3%200%200%201%2017.5%2018H7Z%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-database: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%208c4.4%200%208-1.1%208-2.5S16.4%203%2012%203%204%204.1%204%205.5%207.6%208%2012%208Z%20M4%205.5v13C4%2019.9%207.6%2021%2012%2021s8-1.1%208-2.5v-13%20M4%2012c0%201.4%203.6%202.5%208%202.5s8-1.1%208-2.5%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-shield: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2021c5-2%208-5.5%208-10V6l-8-3-8%203v5c0%204.5%203%208%208%2010Z%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-dot: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M12%2015.2a3.2%203.2%200%201%200%200-6.4%203.2%203.2%200%200%200%200%206.4Z%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-search: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M11%2017a6%206%200%201%200%200-12%206%206%200%200%200%200%2012Z%20M15.5%2015.5%2021%2021%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-chevron-up: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M6%2015%2012%209l6%206%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-chevron-down: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M6%209l6%206%206-6%27%2F%3E%3C%2Fsvg%3E");
+  --ss-i-menu: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M3%206h18%20M3%2012h18%20M3%2018h18%27%2F%3E%3C%2Fsvg%3E");
+}
+
+/* One glyph per model, so the rail can be read without reading it. */
+.ss-admin #nav-sidebar tr.model-course th a::before { -webkit-mask-image: var(--ss-i-layers); mask-image: var(--ss-i-layers); }
+.ss-admin #nav-sidebar tr.model-coursefolder th a::before { -webkit-mask-image: var(--ss-i-folder); mask-image: var(--ss-i-folder); }
+.ss-admin #nav-sidebar tr.model-lesson th a::before { -webkit-mask-image: var(--ss-i-play); mask-image: var(--ss-i-play); }
+.ss-admin #nav-sidebar tr.model-pdfresource th a::before { -webkit-mask-image: var(--ss-i-file); mask-image: var(--ss-i-file); }
+.ss-admin #nav-sidebar tr.model-coursefaculty th a::before { -webkit-mask-image: var(--ss-i-users); mask-image: var(--ss-i-users); }
+.ss-admin #nav-sidebar tr.model-testseries th a::before { -webkit-mask-image: var(--ss-i-stack); mask-image: var(--ss-i-stack); }
+.ss-admin #nav-sidebar tr.model-quiz th a::before { -webkit-mask-image: var(--ss-i-clipboard); mask-image: var(--ss-i-clipboard); }
+.ss-admin #nav-sidebar tr.model-question th a::before { -webkit-mask-image: var(--ss-i-help); mask-image: var(--ss-i-help); }
+.ss-admin #nav-sidebar tr.model-csvimportjob th a::before { -webkit-mask-image: var(--ss-i-upload); mask-image: var(--ss-i-upload); }
+.ss-admin #nav-sidebar tr.model-accesscode th a::before { -webkit-mask-image: var(--ss-i-key); mask-image: var(--ss-i-key); }
+.ss-admin #nav-sidebar tr.model-courseaccessgrant th a::before { -webkit-mask-image: var(--ss-i-unlock); mask-image: var(--ss-i-unlock); }
+.ss-admin #nav-sidebar tr.model-communitypost th a::before { -webkit-mask-image: var(--ss-i-megaphone); mask-image: var(--ss-i-megaphone); }
+.ss-admin #nav-sidebar tr.model-questionreport th a::before { -webkit-mask-image: var(--ss-i-flag); mask-image: var(--ss-i-flag); }
+.ss-admin #nav-sidebar tr.model-quizattempt th a::before { -webkit-mask-image: var(--ss-i-activity); mask-image: var(--ss-i-activity); }
+.ss-admin #nav-sidebar tr.model-attemptanswer th a::before { -webkit-mask-image: var(--ss-i-check-square); mask-image: var(--ss-i-check-square); }
+.ss-admin #nav-sidebar tr.model-note th a::before { -webkit-mask-image: var(--ss-i-pencil); mask-image: var(--ss-i-pencil); }
+.ss-admin #nav-sidebar tr.model-progress th a::before { -webkit-mask-image: var(--ss-i-trend); mask-image: var(--ss-i-trend); }
+.ss-admin #nav-sidebar tr.model-bookmark th a::before { -webkit-mask-image: var(--ss-i-bookmark); mask-image: var(--ss-i-bookmark); }
+.ss-admin #nav-sidebar tr.model-revisionitem th a::before { -webkit-mask-image: var(--ss-i-rotate); mask-image: var(--ss-i-rotate); }
+.ss-admin #nav-sidebar tr.model-studytask th a::before { -webkit-mask-image: var(--ss-i-check-circle); mask-image: var(--ss-i-check-circle); }
+.ss-admin #nav-sidebar tr.model-user th a::before { -webkit-mask-image: var(--ss-i-user); mask-image: var(--ss-i-user); }
+.ss-admin #nav-sidebar tr.model-group th a::before { -webkit-mask-image: var(--ss-i-users); mask-image: var(--ss-i-users); }
+.ss-admin #nav-sidebar tr.model-profile th a::before { -webkit-mask-image: var(--ss-i-id-card); mask-image: var(--ss-i-id-card); }
+.ss-admin #nav-sidebar tr.model-passwordresetotp th a::before { -webkit-mask-image: var(--ss-i-lock); mask-image: var(--ss-i-lock); }
+.ss-admin #nav-sidebar tr.model-auditevent th a::before { -webkit-mask-image: var(--ss-i-shield); mask-image: var(--ss-i-shield); }
+.ss-admin #nav-sidebar tr.model-r2account th a::before { -webkit-mask-image: var(--ss-i-cloud); mask-image: var(--ss-i-cloud); }
+.ss-admin #nav-sidebar tr.model-r2bucket th a::before { -webkit-mask-image: var(--ss-i-database); mask-image: var(--ss-i-database); }
+.ss-admin #nav-sidebar tr.model-outstandingtoken th a::before { -webkit-mask-image: var(--ss-i-key); mask-image: var(--ss-i-key); }
+.ss-admin #nav-sidebar tr.model-blacklistedtoken th a::before { -webkit-mask-image: var(--ss-i-key); mask-image: var(--ss-i-key); }
+
+/* And one per group heading. */
+.ss-admin .ss-nav-group[data-group="content"] .ss-nav-caption::before { -webkit-mask-image: var(--ss-i-layers); mask-image: var(--ss-i-layers); }
+.ss-admin .ss-nav-group[data-group="tests"] .ss-nav-caption::before { -webkit-mask-image: var(--ss-i-clipboard); mask-image: var(--ss-i-clipboard); }
+.ss-admin .ss-nav-group[data-group="access"] .ss-nav-caption::before { -webkit-mask-image: var(--ss-i-key); mask-image: var(--ss-i-key); }
+.ss-admin .ss-nav-group[data-group="storage"] .ss-nav-caption::before { -webkit-mask-image: var(--ss-i-cloud); mask-image: var(--ss-i-cloud); }
+.ss-admin .ss-nav-group[data-group="messages"] .ss-nav-caption::before { -webkit-mask-image: var(--ss-i-megaphone); mask-image: var(--ss-i-megaphone); }
+.ss-admin .ss-nav-group[data-group="learners"] .ss-nav-caption::before { -webkit-mask-image: var(--ss-i-activity); mask-image: var(--ss-i-activity); }
+.ss-admin .ss-nav-group[data-group="people"] .ss-nav-caption::before { -webkit-mask-image: var(--ss-i-user); mask-image: var(--ss-i-user); }
+.ss-admin .ss-nav-group[data-group="other"] .ss-nav-caption::before { -webkit-mask-image: var(--ss-i-dot); mask-image: var(--ss-i-dot); }
+
+/* ------------------------------------------------- read-only helpers */
+
+/* Muted text inside a readonly value (the cover, telegram and shortcut rows). */
+.ss-admin .ss-muted {
   color: var(--ss-muted);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
 }
 
-.ss-admin .ss-link-button:hover {
-  color: var(--ss-violet);
-  background: none;
-  text-decoration: underline;
-}
-
-.ss-admin .ss-empty-note {
-  padding: 0 18px 14px;
-  margin: 0;
-  color: var(--ss-muted);
-  font-size: 12.5px;
-}
-
-/* The filter card sits above the table even though Django renders it after. */
-.ss-admin #changelist {
+/* The "next step" links on a batch: "+ Add a class", "+ Add a section". They
+ * are the shortest path from one screen to the work it enables, so they sit in
+ * a row of their own rather than in a paragraph. */
+.ss-admin .ss-shortcuts {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
 }
 
-.ss-admin #changelist .changelist-form-container {
-  order: 1;
+.ss-admin .ss-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ss-ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
 }
 
-.ss-admin #changelist-filter {
-  order: 0;
+.ss-admin .ss-shortcut:hover {
+  border-color: var(--ss-violet);
+  background: var(--ss-violet-wash);
+  color: var(--ss-violet-dark);
+  text-decoration: none;
 }
 
-/* List rows are a card of their own, so the table's corners are clipped. */
-.ss-admin #changelist-form #result_list {
+/* A cover preview is an image, so give it an image's frame. */
+.ss-admin .readonly img {
+  max-width: 260px;
+  height: auto;
+  border: 1px solid var(--ss-line);
+  border-radius: 10px;
+}
+
+/* Long read-only values (a JSON blob, a description) should not push the card. */
+.ss-admin .readonly {
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------- secondary screens */
+
+/* History, delete and the password screens hand their body to Django, so the
+ * card wraps whatever Django rendered rather than re-implementing it. */
+.ss-admin .ss-page-body > #content-main {
+  margin: 0;
+}
+
+.ss-admin .ss-page-body .module {
+  padding: 0 0 6px;
+}
+
+.ss-admin .ss-page-body--danger .module,
+.ss-admin .ss-page-body--danger > p,
+.ss-admin .ss-page-body--danger > h2,
+.ss-admin .ss-page-body--danger > ul {
+  background: #fff;
+  border: 1px solid #f3c6c1;
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow);
+  margin: 0 0 14px;
+  padding: 16px 20px;
+}
+
+.ss-admin .ss-page-body--danger > form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: #fff;
   border: 1px solid var(--ss-line);
   border-radius: var(--ss-radius);
   box-shadow: var(--ss-shadow);
-  overflow: hidden;
 }
 
-.ss-admin #changelist-form .actions + #result_list {
-  margin-top: 0;
+.ss-admin .ss-page-body--danger > form > div {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
-.ss-admin #changelist .paginator {
-  border: 1px solid var(--ss-line);
-  border-top: 0;
-  border-radius: 0 0 var(--ss-radius) var(--ss-radius);
-  margin-top: -4px;
+.ss-admin .ss-page-body--danger input[type="submit"] {
+  background: var(--ss-red);
+  border-color: var(--ss-red);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(192, 57, 47, .24);
 }
 
-.ss-admin .ss-page-of {
+.ss-admin .ss-page-body--danger input[type="submit"]:hover {
+  background: #a8332a;
+  border-color: #a8332a;
+}
+
+.ss-admin #change-history table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.ss-admin #change-history thead th {
+  padding: 11px 18px;
+  background: #fbfbfe;
+  border-bottom: 1px solid var(--ss-line);
   color: var(--ss-muted);
-  font-size: 12.5px;
-  padding: 0 4px;
+  font-size: 11.5px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.ss-admin #change-history tbody th,
+.ss-admin #change-history tbody td {
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--ss-line);
+  font-size: 13.5px;
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+}
+
+.ss-admin #change-history tbody th {
+  color: var(--ss-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ss-admin #change-history > p {
+  margin: 0;
+  padding: 14px 18px;
+  color: var(--ss-muted);
+  font-size: 13px;
+}
+
+.ss-admin #deleted-objects {
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+
+.ss-admin #deleted-objects li {
+  margin: 3px 0;
+}
+
+/* Signed out: no rail is rendered, so the card belongs in the middle. */
+body.ss-admin.logged-out {
+  background: radial-gradient(1100px 520px at 15% -10%, #1c2745, var(--ss-navy));
+}
+
+body.ss-admin.logged-out #main > #content-start {
+  margin-left: 0;
+  padding: 0;
+}
+
+body.ss-admin.logged-out #header {
+  position: static;
+  height: auto;
+  justify-content: center;
+  padding: 26px 0 0;
+  background: transparent;
+  border: 0;
+}
+
+body.ss-admin.logged-out #branding {
+  background: transparent;
+}
+
+.ss-admin .ss-login-card {
+  max-width: 430px;
+  margin: 7vh auto 0;
+  padding: 28px 26px;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: var(--ss-shadow-lg);
+  text-align: center;
+}
+
+.ss-admin .ss-login-card h1 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.ss-admin .ss-login-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 20px 0 0;
+}
+
+/* Inline edit forms on the change form (a question's choices) sit in a card
+ * of their own, already handled above; this keeps their help text readable. */
+.ss-admin .inline-group .tabular td p.help,
+.ss-admin .inline-group .tabular td .help {
+  margin: 4px 0 0;
+  color: var(--ss-muted);
+  font-size: 11.8px;
 }

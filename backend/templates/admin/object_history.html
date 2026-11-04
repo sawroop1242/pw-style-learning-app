@@ -1,0 +1,33 @@
+{% extends "admin/object_history.html" %}
+{% load i18n admin_urls %}
+
+{% comment %}
+    The history screen, framed like every other: a page head that names the
+    object, a way back, and the entries in a card.
+
+    Django's own markup is not copied — `{{ block.super }}` keeps its table,
+    its pagination and its "no history" sentence exactly as they ship, so a
+    Django upgrade cannot silently break this screen.
+{% endcomment %}
+
+{% block content_title %}
+  <div class="ss-page-head">
+    <div>
+      <h1>{% translate "Change history" %}</h1>
+      <p class="ss-page-sub">{{ object|truncatewords:"18" }}</p>
+    </div>
+    <div class="ss-page-actions">
+      <ul class="object-tools">
+        <li>
+          <a href="{% url opts|admin_urlname:'change' object.pk|admin_urlquote %}">
+            {% translate "Back to edit" %}
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="ss-page-body">{{ block.super }}</div>
+{% endblock %}

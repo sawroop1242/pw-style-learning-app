@@ -72,9 +72,47 @@ Fieldsets are cards, the save bar is sticky, and `History` sits in the page head
 Nothing about Django's validation, inlines, autocomplete or permissions changed:
 if a field is added to a model and a ModelAdmin lists it, it appears here.
 
+### Secondary screens
+
+History, delete (single and bulk), password change and the signed-out page share
+the same head-and-card frame. Each of those templates extends the Django
+original and calls `{{ block.super }}` for the body, so the POST form, the CSRF
+token and Django's pagination survive an upgrade untouched.
+
+### Signed out
+
+The login screen keeps the brand and gains a heading, but drops everything that
+implies a session: no jump box, no account menu, no sign-out. `has_permission`
+is `True` for anonymous users on the login page, so those parts are gated on the
+screen having `opts` — not on `has_permission` alone.
+
+## Behaviour in the browser
+
+`backend/static/staff/admin.js` is one IIFE, no inline handlers (the CSP blocks
+those). It adds:
+
+| Control | Keys | What it does |
+| --- | --- | --- |
+| Jump box (`/` to focus) | `↑` `↓` `Enter` `Esc` | Starts-with matches first, then contains; the list is `role="listbox"` and the input points at the active option with `aria-activedescendant`. |
+| Rail filter | — | Hides non-matching rows, then hides groups with nothing left. |
+| Account menu | `Esc` / click outside | `details`-based, so it opens without JavaScript. |
+| Rail drawer (≤1024px) | `Esc` | Closes on escape, on a click outside, and after a screen is chosen. |
+
+It also labels the bare widgets inside a tabular inline from their column head
+and drops `aria-describedby` references to elements Django did not render.
+
+## Colour
+
+One palette, light only. Django's own variables are pinned in the same block, so
+a machine set to a dark OS theme still gets the light console rather than a
+half-converted one. Every text pair used in the console was measured against
+AA (4.5:1) when this was written; the muted grey, the green and the amber pills
+were darkened to get there.
+
 ## Tests
 
 `courses/tests/test_admin_theme.py` renders the home, a list, a filtered list, an
-edit screen and an add screen, and asserts the shape above — a template that
-loses a block or a tag that stops existing fails there. `objectstore/tests/` covers
-the storage screens; `courses/tests/test_admin.py` covers the scoping.
+empty list, an edit screen, an add screen, the login page and the signed-out
+shell, and asserts the shape above — a template that loses a block or a tag that
+stops existing fails there. `objectstore/tests/` covers the storage screens;
+`courses/tests/test_admin.py` covers the scoping.

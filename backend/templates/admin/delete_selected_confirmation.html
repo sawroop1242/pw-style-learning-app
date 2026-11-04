@@ -1,0 +1,22 @@
+{% extends "admin/delete_selected_confirmation.html" %}
+{% load i18n %}
+
+{% comment %}
+    The bulk version of the same screen: one head, the same warning treatment,
+    Django's form and its "Yes, I'm sure" button untouched.
+{% endcomment %}
+
+{% block content_title %}
+  <div class="ss-page-head">
+    <div>
+      <h1>{% translate "Delete selected" %}</h1>
+      <p class="ss-page-sub">
+        {% blocktranslate count counter=deletable_objects|length %}{{ counter }} row selected{% plural %}{{ counter }} rows selected{% endblocktranslate %}
+      </p>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="ss-page-body ss-page-body--danger">{{ block.super }}</div>
+{% endblock %}

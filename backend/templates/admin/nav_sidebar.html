@@ -24,10 +24,10 @@
   {% for group in groups %}
     <div class="module ss-nav-group" data-group="{{ group.key }}">
       <table>
-        <caption>{{ group.title }}</caption>
+        <caption><span class="ss-nav-caption">{{ group.title }}</span></caption>
         <tbody>
           {% for model in group.models %}
-            <tr class="model-{{ model.slug }}{% if model.is_current %} current-model{% endif %}">
+            <tr class="model-{{ model.model_name }}{% if model.is_current %} current-model{% endif %}">
               <th scope="row">
                 {% if model.url %}
                   <a href="{{ model.url }}"{% if model.is_current %} aria-current="page"{% endif %}>{{ model.name }}</a>

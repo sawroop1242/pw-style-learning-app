@@ -1,0 +1,51 @@
+{% load i18n %}
+{% comment %}
+    Django's results table, plus a caption.
+
+    A table without a name is announced as "table" and nothing else, so a
+    screen-reader user who jumps between tables never learns which list they
+    landed in. The caption is visually hidden because the page head above
+    already says it; this is for the accessibility tree, not the eye.
+
+    Everything else is Django's template verbatim, so sorting, the select-all
+    checkbox, non-field errors and the hidden fields keep working exactly as
+    the admin expects.
+{% endcomment %}
+{% if result_hidden_fields %}
+<div class="hiddenfields">{# DIV for HTML validation #}
+{% for item in result_hidden_fields %}{{ item }}{% endfor %}
+</div>
+{% endif %}
+{% if results %}
+<div class="results">
+<table id="result_list">
+<caption class="visually-hidden">
+  {% if cl %}{{ cl.opts.verbose_name_plural|capfirst }}{% else %}{% translate "Results" %}{% endif %}{% if cl.query %} — {% translate "search results for" %} “{{ cl.query }}”{% endif %}
+</caption>
+<thead>
+<tr>
+{% for header in result_headers %}
+<th scope="col"{{ header.class_attrib }}>
+   {% if header.sortable and header.sort_priority > 0 %}
+       <div class="sortoptions">
+         <a class="sortremove" href="{{ header.url_remove }}" title="{% translate "Remove from sorting" %}"></a>
+         {% if num_sorted_fields > 1 %}<span class="sortpriority" title="{% blocktranslate with priority_number=header.sort_priority %}Sorting priority: {{ priority_number }}{% endblocktranslate %}">{{ header.sort_priority }}</span>{% endif %}
+         <a href="{{ header.url_toggle }}" class="toggle {{ header.ascending|yesno:'ascending,descending' }}" title="{% translate "Toggle sorting" %}"></a>
+       </div>
+   {% endif %}
+   <div class="text">{% if header.sortable %}<a href="{{ header.url_primary }}">{{ header.text|capfirst }}</a>{% else %}<span>{{ header.text|capfirst }}</span>{% endif %}</div>
+   <div class="clear"></div>
+</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for result in results %}
+{% if result.form and result.form.non_field_errors %}
+    <tr><td colspan="{{ result|length }}">{{ result.form.non_field_errors }}</td></tr>
+{% endif %}
+<tr>{% for item in result %}{{ item }}{% endfor %}</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}

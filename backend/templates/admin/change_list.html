@@ -1,14 +1,14 @@
 {% extends "admin/change_list.html" %}
-{% load i18n admin_list %}
+{% load i18n admin_list admin_urls %}
 
 {% comment %}
     A list screen: a page head with the primary action on the right, filter
-    chips above the table, the table itself as a card, and a footer that says
+    chips, a search row, the table inside a single card, and a footer that says
     which rows you are looking at and how many there are.
 
-    Everything Django provides underneath — the action form, the search box,
-    the fieldset for list-editable rows, the query-string handling in the
-    filters — is left exactly as it is. Only the framing changes.
+    Everything Django provides underneath — the action form, the search
+    parameters, the fieldset for list-editable rows, the query-string handling
+    in the filters — is left exactly as it is. Only the framing changes.
 {% endcomment %}
 
 {% block title %}
@@ -16,7 +16,7 @@
 {% endblock %}
 
 {% comment %}
-    Django floats a "Add …" button as object-tools above the table. The command
+    Django floats an "Add …" button as object-tools above the table. The command
     belongs in the page head, on the right, where the eye looks for the one
     action a list screen has.
 {% endcomment %}
@@ -27,10 +27,20 @@
     <div class="ss-page-head">
       <div>
         <h1>{{ cl.opts.verbose_name_plural|capfirst }}</h1>
-        <p class="ss-page-sub">
-          {% blocktranslate count counter=cl.result_count %}{{ counter }} row{% plural %}{{ counter }} rows{% endblocktranslate %}
-          {% if cl.has_active_filters %} · <a href="{{ cl.clear_all_filters_qs }}">{% translate "clear filters" %}</a>{% endif %}
-        </p>
+        {% with plural=cl.opts.verbose_name_plural|default:cl.opts.verbose_name %}
+          <p class="ss-page-sub">
+            {% if cl.full_result_count != cl.result_count %}
+              {# Filtered: the total is plural even when one row matched. #}
+              {{ cl.result_count }} {% translate "of" %} {{ cl.full_result_count }} {{ plural }}
+            {% else %}
+              {{ cl.result_count }}
+              {% if cl.result_count == 1 %}{{ cl.opts.verbose_name }}{% else %}{{ plural }}{% endif %}
+            {% endif %}
+            {% if cl.query %}
+              <span class="ss-page-quiet">{% translate "matching" %} “{{ cl.query }}”</span>
+            {% endif %}
+          </p>
+        {% endwith %}
       </div>
       <div class="ss-page-actions">
         <ul class="object-tools">{% change_list_object_tools %}</ul>
@@ -41,6 +51,39 @@
   {% endif %}
 {% endblock %}
 
+{% comment %}
+    The search field, restyled and moved into the card's first row. Django's own
+    markup carries a sprite label and a bare submit; this carries a placeholder,
+    a clear chip when a search is active, and the hidden inputs that keep the
+    current filters while the search changes.
+{% endcomment %}
+{% block search %}
+  {% if cl.search_fields %}
+    <form id="changelist-search" class="ss-search" method="get" role="search">
+      <label class="visually-hidden" for="searchbar">
+        {% blocktranslate with name=cl.opts.verbose_name_plural %}Search {{ name }}{% endblocktranslate %}
+      </label>
+      <span class="ss-search-field">
+        <input type="search" name="q" value="{{ cl.query }}" id="searchbar"
+               placeholder="{% blocktranslate with name=cl.opts.verbose_name_plural %}Search {{ name }}…{% endblocktranslate %}"
+               {% if cl.search_help_text %}aria-describedby="searchbar_helptext"{% endif %}>
+      </span>
+      <button class="ss-btn" type="submit">{% translate "Search" %}</button>
+      {% if cl.query %}
+        <a class="ss-chip" href="?{% for pair in cl.params.items %}{% if pair.0 != "q" %}{{ pair.0 }}={{ pair.1|urlencode }}&amp;{% endif %}{% endfor %}">
+          {% translate "Clear search" %}
+        </a>
+      {% endif %}
+      {% if cl.search_help_text %}
+        <p class="help" id="searchbar_helptext">{{ cl.search_help_text }}</p>
+      {% endif %}
+      {% for pair in cl.params.items %}
+        {% if pair.0 != "q" %}<input type="hidden" name="{{ pair.0 }}" value="{{ pair.1 }}">{% endif %}
+      {% endfor %}
+    </form>
+  {% endif %}
+{% endblock %}
+
 {% block filters %}
   {% if cl.has_filters %}
     <nav id="changelist-filter" aria-labelledby="changelist-filter-header">
@@ -48,14 +91,61 @@
       <div class="ss-filters">
         {% for spec in cl.filter_specs %}{% admin_list_filter cl spec %}{% endfor %}
         {% if cl.has_active_filters %}
-          <div class="ss-filter-group">
-            <h3>{% translate "Selected" %}</h3>
-            <a class="ss-chip" href="{{ cl.clear_all_filters_qs }}">{% translate "Clear all" %}</a>
+          <div class="ss-filter-group ss-filter-group--reset">
+            <h3>{% translate "Filters" %}</h3>
+            <div class="ss-filter-chips">
+              <a class="ss-chip ss-chip--reset" href="{{ cl.clear_all_filters_qs }}">
+                {% translate "Clear all" %}
+              </a>
+            </div>
           </div>
         {% endif %}
       </div>
     </nav>
   {% endif %}
+{% endblock %}
+
+{% block result_list %}
+  {% if action_form and actions_on_top and cl.show_admin_actions %}{% admin_actions %}{% endif %}
+  {% if cl.result_count %}
+    {% result_list cl %}
+  {% else %}
+    <div class="ss-empty">
+      <p class="ss-empty-title">
+        {% if cl.query or cl.has_active_filters %}
+          {% translate "Nothing matches this view" %}
+        {% else %}
+          {% blocktranslate with name=cl.opts.verbose_name_plural %}No {{ name }} yet{% endblocktranslate %}
+        {% endif %}
+      </p>
+      <p class="ss-empty-body">
+        {% if cl.query %}
+          {% translate "No row contains that search. Try a shorter phrase, or clear the search." %}
+        {% elif cl.has_active_filters %}
+          {% translate "The filters above exclude every row. Clear them to see the whole list." %}
+        {% elif has_add_permission %}
+          {% translate "Nothing has been added yet. Rows appear here as soon as they exist." %}
+        {% else %}
+          {% translate "Nothing has been added yet, and this account cannot add it." %}
+        {% endif %}
+      </p>
+      {% comment %}
+        One action, not two. A filtered view offers the way back; a list that is
+        genuinely empty offers the add form, because the page head's Add button
+        is written in the language of the toolbar, not of the blank page.
+      {% endcomment %}
+      <p class="ss-empty-actions">
+        {% if cl.query or cl.has_active_filters %}
+          <a class="ss-btn ss-btn-primary" href="?">{% translate "Clear this view" %}</a>
+        {% elif has_add_permission %}
+          <a class="ss-btn ss-btn-primary" href="{% url cl.opts|admin_urlname:'add' %}">
+            {% blocktranslate with name=cl.opts.verbose_name %}Add {{ name }}{% endblocktranslate %}
+          </a>
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+  {% if action_form and actions_on_bottom and cl.show_admin_actions %}{% admin_actions %}{% endif %}
 {% endblock %}
 
 {% comment %}
@@ -69,17 +159,19 @@
       {% widthratio page|add:"-1" 1 per_page as offset %}
       {% with first=offset|add:"1" last=offset|add:rows %}
         <div class="paginator">
-          <span>
+          <span class="ss-page-range">
             {% blocktranslate with start=first end=last total=cl.result_count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktranslate %}
           </span>
-          <span class="ss-page-links">
-            {% if pagination_required %}
-              {% for i in page_range %}{% paginator_number cl i %}{% endfor %}
-            {% endif %}
-            {% if show_all_url %}
-              <a class="showall" href="{{ show_all_url }}">{% translate "Show all" %}</a>
-            {% endif %}
-          </span>
+          {% if pagination_required or show_all_url %}
+            <span class="ss-page-links">
+              {% if pagination_required %}
+                {% for i in page_range %}{% paginator_number cl i %}{% endfor %}
+              {% endif %}
+              {% if show_all_url %}
+                <a class="showall" href="{{ show_all_url }}">{% translate "Show all" %}</a>
+              {% endif %}
+            </span>
+          {% endif %}
         </div>
       {% endwith %}
     {% endwith %}
