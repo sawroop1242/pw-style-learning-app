@@ -1,0 +1,181 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% comment %}
+    The outline screen: the batch's sections and classes as one list you can
+    move things around in.
+
+    The order is the content. A column of `position` integers asked an editor to
+    compute a new numbering in their head and retype it in two tables; this asks
+    them to drag a card. The save at the bottom posts the whole order at once, so
+    the database never sits in a half-renumbered state.
+
+    The markup carries the contract `staff/outline.js` reads: `data-outline` on
+    the form, `data-outline-section` with `data-folder` (empty for the "no
+    section" bucket), `data-outline-list`, and `data-outline-lesson`. Every
+    control the script needs also exists without it: the ↑ / ↓ buttons and the
+    section menu are the non-dragging way to do the same thing (WCAG 2.5.7), and
+    the lists are readable when no script runs at all.
+{% endcomment %}
+
+{% block title %}{% translate "Outline" %} — {{ course.title }} | {% translate "StudySpace admin" %}{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script src="{% static 'staff/outline.js' %}" defer></script>
+{% endblock %}
+
+{% block content_subtitle %}{% endblock %}
+
+{% block content_title %}
+  <div class="ss-page-head">
+    <div>
+      <h1>{% translate "Outline" %}</h1>
+      <p class="ss-page-sub">
+        {{ course.title }} <span class="ss-page-quiet">· {{ summary }}</span>
+      </p>
+    </div>
+    <div class="ss-page-actions">
+      <a class="ss-btn" href="{{ change_url }}">{% translate "Back to the batch" %}</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <form class="ss-outline" method="post" id="outline-form"
+        data-outline data-revision="{{ revision }}" data-save-url="{{ request.path }}">
+    {% csrf_token %}
+
+    <p class="ss-outline-help" id="outline-help">
+      {% translate "Drag a section or a class by its handle, or use the arrow buttons. A class can also move by picking another section from its menu." %}
+    </p>
+
+    <noscript>
+      <p class="ss-outline-noscript">
+        {% translate "Arranging the outline needs JavaScript. You can still change a section's position in the batch form." %}
+        <a href="{{ change_url }}">{% translate "Open the batch" %}</a>
+      </p>
+    </noscript>
+
+    {% if sections %}
+      <ol class="ss-outline-sections" data-outline-sections aria-describedby="outline-help">
+        {% for section in sections %}
+          <li class="ss-outline-section{% if section.is_loose %} ss-outline-section--loose{% endif %}"
+              data-outline-section data-folder="{{ section.folder_id|default_if_none:'' }}">
+            <div class="ss-outline-head" data-outline-head>
+              <button type="button" class="ss-outline-handle" data-outline-handle
+                      aria-label="{% blocktranslate with name=section.title %}Drag to reorder the section “{{ name }}”{% endblocktranslate %}"
+                      aria-describedby="outline-help">
+                <span class="ss-outline-grip" aria-hidden="true"></span>
+              </button>
+              <span class="ss-outline-title">{{ section.title }}</span>
+              <span class="ss-pill ss-pill--muted">
+                {{ section.lessons|length }} class{{ section.lessons|length|pluralize:"es" }}
+              </span>
+              <span class="ss-outline-actions">
+                <button type="button" class="ss-outline-move" data-outline-move="up"
+                        aria-label="{% blocktranslate with name=section.title %}Move the section “{{ name }}” up{% endblocktranslate %}">
+                  <span aria-hidden="true">↑</span>
+                </button>
+                <button type="button" class="ss-outline-move" data-outline-move="down"
+                        aria-label="{% blocktranslate with name=section.title %}Move the section “{{ name }}” down{% endblocktranslate %}">
+                  <span aria-hidden="true">↓</span>
+                </button>
+                {% if section.folder %}
+                  <a class="ss-outline-edit" href="{% url 'admin:courses_coursefolder_change' section.folder.pk %}">
+                    {% translate "Edit section" %}
+                  </a>
+                {% endif %}
+              </span>
+            </div>
+
+            <ol class="ss-outline-lessons" data-outline-list
+                data-folder="{{ section.folder_id|default_if_none:'' }}">
+              {% for lesson in section.lessons %}
+                <li class="ss-outline-lesson" data-outline-lesson data-lesson="{{ lesson.pk }}">
+                  <button type="button" class="ss-outline-handle" data-outline-handle
+                          aria-label="{% blocktranslate with name=lesson.title %}Drag to reorder the class “{{ name }}”{% endblocktranslate %}"
+                          aria-describedby="outline-help">
+                    <span class="ss-outline-grip" aria-hidden="true"></span>
+                  </button>
+                  <span class="ss-outline-lesson-title">{{ lesson.title }}</span>
+                  {% if not lesson.is_published %}
+                    <span class="ss-pill ss-pill--info">{% translate "Draft" %}</span>
+                  {% endif %}
+                  <span class="ss-outline-meta">
+                    {% if lesson.duration_minutes %}
+                      {{ lesson.duration_minutes }} {% translate "min" %}
+                    {% else %}
+                      <span class="ss-muted">{% translate "no duration" %}</span>
+                    {% endif %}
+                  </span>
+                  <span class="ss-outline-actions">
+                    <label class="visually-hidden" for="section-for-{{ lesson.pk }}">
+                      {% blocktranslate with name=lesson.title %}Section for “{{ name }}”{% endblocktranslate %}
+                    </label>
+                    <select class="ss-outline-pick" id="section-for-{{ lesson.pk }}" data-outline-pick>
+                      <option value=""{% if section.is_loose %} selected{% endif %}>{% translate "No section" %}</option>
+                      {% for option in sections %}
+                        {% if option.folder %}
+                          <option value="{{ option.folder_id }}"
+                                  {% if option.folder_id == section.folder_id %}selected{% endif %}>
+                            {{ option.title }}
+                          </option>
+                        {% endif %}
+                      {% endfor %}
+                    </select>
+                    <button type="button" class="ss-outline-move" data-outline-move="up"
+                            aria-label="{% blocktranslate with name=lesson.title %}Move the class “{{ name }}” up{% endblocktranslate %}">
+                      <span aria-hidden="true">↑</span>
+                    </button>
+                    <button type="button" class="ss-outline-move" data-outline-move="down"
+                            aria-label="{% blocktranslate with name=lesson.title %}Move the class “{{ name }}” down{% endblocktranslate %}">
+                      <span aria-hidden="true">↓</span>
+                    </button>
+                    <a class="ss-outline-edit" href="{% url 'admin:courses_lesson_change' lesson.pk %}">
+                      {% translate "Edit" %}
+                    </a>
+                  </span>
+                </li>
+              {% endfor %}
+            </ol>
+
+            <p class="ss-outline-empty" data-outline-empty{% if section.lessons %} hidden{% endif %}>
+              {% if section.is_loose %}
+                {% translate "Every class is in a section." %}
+              {% else %}
+                {% translate "No classes in this section yet. Drag one here, or add it from the batch form." %}
+              {% endif %}
+            </p>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <div class="ss-outline-none">
+        <h2>{% translate "This batch has no sections yet" %}</h2>
+        <p>
+          {% translate "A section groups classes — the “Mechanics” row on the student's batch page. Add one, then come back here to arrange it." %}
+        </p>
+        <p class="ss-outline-none-actions">
+          <a class="ss-btn ss-btn-primary" href="{{ change_url }}">{% translate "Add a section" %}</a>
+        </p>
+      </div>
+    {% endif %}
+
+    {% if sections %}
+      <div class="ss-outline-bar">
+        <p class="ss-outline-status" id="outline-status" role="status" aria-live="polite">
+          {% translate "Nothing changed yet." %}
+        </p>
+        <div class="ss-outline-bar-actions">
+          <button type="button" class="ss-btn" data-outline-reset disabled>
+            {% translate "Undo changes" %}
+          </button>
+          <button type="submit" class="ss-btn ss-btn-primary" data-outline-save disabled>
+            {% translate "Save order" %}
+          </button>
+        </div>
+      </div>
+    {% endif %}
+  </form>
+{% endblock %}

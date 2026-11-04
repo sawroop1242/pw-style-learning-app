@@ -72,6 +72,34 @@ Fieldsets are cards, the save bar is sticky, and `History` sits in the page head
 Nothing about Django's validation, inlines, autocomplete or permissions changed:
 if a field is added to a model and a ModelAdmin lists it, it appears here.
 
+### The outline screen
+
+`/admin/courses/course/<id>/outline/` — reached from the batch form's "What is
+in this batch" card — is the order of the batch as one list. Sections are cards,
+classes are rows inside them, and both move by dragging the handle, by the ↑ / ↓
+buttons, or (for a class) by picking another section from its menu. Nothing is
+sent until **Save order**; the whole order goes in one request.
+
+The screen is not one of the thirty in the atlas. It exists because the atlas's
+screen 03 expresses order as a `position` column in two separate inlines, where
+"make this third class first" means retyping the neighbours and hoping no two
+rows end up claiming the same number. Frappe's `CourseOutline.vue` (see
+`REFERENCE_STUDY.md` §3, P6) does it as a drag-and-drop list; so does this.
+
+- **The server decides whether the order is valid, once.** `courses/outline.py`
+  refuses a payload that omits a class, names one twice, or mentions another
+  batch's rows, and it applies nothing in that case. A refused save cannot leave
+  the batch half-renumbered.
+- **Two editors cannot overwrite each other by accident.** The page carries a
+  revision built from the current order; a save made against an older revision
+  is answered `409` with a sentence and a reload link, not applied.
+- **Dragging is not the only way.** WCAG 2.2 asks for the same outcome without a
+  dragging movement: the arrow buttons and the section menu do exactly what the
+  handle does, with one pointer. Arrow keys on a focused handle move the row too.
+- **The batch's History says so.** A save that changes the order writes one
+  `LogEntry` ("Reordered the outline (3 sections and 7 classes)"); a save that
+  changes nothing writes none.
+
 ### Secondary screens
 
 History, delete (single and bulk), password change and the signed-out page share
@@ -116,3 +144,12 @@ empty list, an edit screen, an add screen, the login page and the signed-out
 shell, and asserts the shape above — a template that loses a block or a tag that
 stops existing fails there. `objectstore/tests/` covers the storage screens;
 `courses/tests/test_admin.py` covers the scoping.
+
+The outline has two suites of its own: `courses/tests/test_admin_outline.py`
+(33 tests — who may open it, what it renders, and every way a payload can be
+wrong) and `tools/checks/outline.js` (40 checks), which loads the real
+`backend/static/staff/outline.js` in jsdom and drives the buttons, the section
+menu, the arrow keys, Save, Undo, a `409`, and a pointer drag with stubbed
+row geometry — including a class crossing into another section. What jsdom
+cannot prove is the browser's own pointer capture, so the gesture still wants
+one manual pass in a real pointer device.

@@ -2567,3 +2567,322 @@ body.ss-admin.logged-out #branding {
   color: var(--ss-muted);
   font-size: 11.8px;
 }
+
+/* A disabled button must not look like a live one. The console has real
+ * states where a control is inert — "Save order" before anything moved, the
+ * first row's ↑ — and without this they read as clickable and do nothing. */
+.ss-admin button:disabled,
+.ss-admin .button:disabled,
+.ss-admin input[type="submit"]:disabled,
+.ss-admin input[type="button"]:disabled,
+.ss-admin .ss-btn:disabled,
+.ss-admin .ss-btn[aria-disabled="true"] {
+  opacity: .45;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* The batch form's shortcut row has one action that is not "add": arranging
+ * what is already there. It is the one people look for, so it leads the row. */
+.ss-admin .ss-shortcut--primary {
+  border-color: var(--ss-violet);
+  background: var(--ss-violet-wash);
+  color: var(--ss-violet-dark);
+}
+
+/* ============================= BATCH OUTLINE ==============================
+ * The order of a batch's sections and classes, as one draggable list.
+ *
+ * A section is a card; its classes are rows inside it. Both carry a handle, a
+ * pair of arrow buttons and an explicit "Edit" link, because dragging is not
+ * available to everyone (keyboard, switch access, a phone in a hurry) and the
+ * arrows do the same job with one pointer.
+ */
+
+.ss-admin .ss-outline {
+  max-width: 1040px;
+}
+
+.ss-admin .ss-outline-help {
+  margin: 0 0 14px;
+  color: var(--ss-muted);
+  font-size: 12.8px;
+}
+
+.ss-admin .ss-outline-noscript {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid #f0dcb4;
+  border-radius: 10px;
+  background: var(--ss-amber-wash);
+  color: var(--ss-amber);
+  font-size: 12.8px;
+}
+
+.ss-admin .ss-outline-sections {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ss-admin .ss-outline-section {
+  padding: 6px 10px 10px;
+  background: var(--ss-card);
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow);
+}
+
+/* The bucket for classes no section has claimed. Dashed, because it is not a
+ * section — it is the absence of one, and it disappears once it is empty. */
+.ss-admin .ss-outline-section--loose {
+  border-style: dashed;
+  background: #fbfcfe;
+}
+
+.ss-admin .ss-outline-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px 8px;
+}
+
+.ss-admin .ss-outline-title {
+  color: var(--ss-ink);
+  font-size: 14.5px;
+  font-weight: 650;
+}
+
+.ss-admin .ss-outline-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.ss-admin .ss-outline-handle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ss-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.ss-admin .ss-outline-handle:hover {
+  border-color: var(--ss-line-strong);
+  background: var(--ss-violet-wash);
+  color: var(--ss-violet-dark);
+}
+
+.ss-admin .ss-outline-handle:focus-visible {
+  outline: 2px solid var(--ss-violet);
+  outline-offset: 1px;
+}
+
+.ss-admin .ss-outline-grip {
+  width: 10px;
+  height: 16px;
+  background-image: radial-gradient(currentColor 1.1px, transparent 1.2px);
+  background-size: 5px 5px;
+  opacity: .85;
+}
+
+.ss-admin .ss-outline-move {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--ss-ink-soft);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.ss-admin .ss-outline-edit {
+  padding: 4px 2px;
+  color: var(--ss-violet-dark);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ss-admin .ss-outline-edit:hover {
+  text-decoration: underline;
+}
+
+.ss-admin .ss-outline-lessons {
+  display: grid;
+  gap: 4px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ss-admin .ss-outline-lesson {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  background: #fbfcfe;
+  border: 1px solid var(--ss-line);
+  border-radius: 10px;
+}
+
+.ss-admin .ss-outline-lesson-title {
+  color: var(--ss-ink-soft);
+  font-size: 13px;
+}
+
+.ss-admin .ss-outline-meta {
+  color: var(--ss-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.ss-admin .ss-outline-pick {
+  max-width: 170px;
+  height: 30px;
+  padding: 2px 6px;
+  border: 1px solid var(--ss-line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ss-ink-soft);
+  font-size: 12px;
+}
+
+/* What is moving, and where it would land. */
+.ss-admin .ss-outline-section.is-dragging,
+.ss-admin .ss-outline-lesson.is-dragging {
+  border-color: var(--ss-violet);
+  background: var(--ss-violet-wash);
+  opacity: .7;
+}
+
+.ss-admin .ss-outline-sections.is-dragging,
+.ss-admin .ss-outline-lessons.is-dragging {
+  cursor: grabbing;
+}
+
+.ss-admin .ss-outline-lessons.is-drop-target {
+  outline: 2px dashed var(--ss-violet);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.ss-admin .ss-outline-empty {
+  margin: 6px 2px 2px;
+  color: var(--ss-muted);
+  font-size: 12.5px;
+}
+
+.ss-admin .ss-outline-empty[hidden] {
+  display: none;
+}
+
+/* The save bar follows the viewport: a long outline should never hide the one
+ * control the screen exists for. */
+.ss-admin .ss-outline-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  background: var(--ss-card);
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: 0 10px 26px rgba(16, 24, 40, .1);
+}
+
+.ss-admin .ss-outline-status {
+  margin: 0;
+  color: var(--ss-muted);
+  font-size: 13px;
+}
+
+.ss-admin .ss-outline-status.is-dirty {
+  color: var(--ss-amber);
+  font-weight: 600;
+}
+
+.ss-admin .ss-outline-status.is-error {
+  color: var(--ss-red);
+  font-weight: 600;
+}
+
+.ss-admin .ss-outline-status a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.ss-admin .ss-outline-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ss-admin .ss-outline-none {
+  padding: 22px 24px;
+  background: var(--ss-card);
+  border: 1px solid var(--ss-line);
+  border-radius: var(--ss-radius);
+  box-shadow: var(--ss-shadow);
+}
+
+.ss-admin .ss-outline-none h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.ss-admin .ss-outline-none p {
+  max-width: 62ch;
+  color: var(--ss-muted);
+  font-size: 13px;
+}
+
+.ss-admin .ss-outline-none-actions {
+  margin: 16px 0 0;
+}
+
+/* A phone gets the same rows, stacked: the title keeps the width, the controls
+ * sit under it where a thumb can reach them. */
+@media (max-width: 760px) {
+  .ss-admin .ss-outline-head,
+  .ss-admin .ss-outline-lesson {
+    flex-wrap: wrap;
+  }
+
+  .ss-admin .ss-outline-actions {
+    width: 100%;
+    margin-left: 34px;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .ss-admin .ss-outline-pick {
+    max-width: none;
+    flex: 1 1 140px;
+  }
+
+  .ss-admin .ss-outline-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .ss-admin .ss-outline-bar-actions {
+    justify-content: flex-end;
+  }
+}

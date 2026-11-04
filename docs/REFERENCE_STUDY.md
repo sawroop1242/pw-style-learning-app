@@ -106,7 +106,7 @@ worst possible way to express an order.
 | P3 | Weak-topic analysis from marked answers | PW (G2 reviews), edX analytics | new `/api/insights/topics/` | M |
 | P4 | Batch page as tabs: overview / classes / notes / papers / teachers | PW batch-overview URL | `course.html` (shipped) | M |
 | P5 | Schedule ("today's classes") | PW, Frappe `lms_batch_timetable` | needs a schedule field on lessons | L |
-| P6 | Drag-and-drop outline in the console | Frappe `CourseOutline.vue` | new admin view for a course | M |
+| P6 | Drag-and-drop outline in the console | Frappe `CourseOutline.vue` | `/admin/courses/course/<id>/outline/` (shipped) | M |
 | P7 | Faceted catalogue filters | Unacademy, richie | `courses.html` + API facet list | M |
 | P8 | Goal-first entry ("what are you preparing for?") | Unacademy landing | home hero | S |
 | P9 | Command palette in the console | Frappe `CommandPalette.vue`, unfold | we have the jump box; extend to actions | S |
@@ -159,10 +159,25 @@ worst possible way to express an order.
 - Each tab counts what is behind it (`3` classes, `2` notes, …) and hides the
   badge at zero — "Notes 0" is noise, not information.
 
-P6 — the drag-and-drop outline in the console, so a course's sections and
-lessons are ordered by moving them rather than by typing integers — is the next
-milestone, followed by P3 (weak-topic analysis from `Question.topic` and the
-marked `AttemptAnswer` rows).
+**P6 shipped** — the console now has a drag-and-drop outline, the pattern this
+study found in `lms/public/js/courseOutline/CourseOutline.vue` (§2, above).
+
+- `/admin/courses/course/<id>/outline/` arranges a batch's sections and classes
+  as one list: drag a handle, press ↑ / ↓, or pick another section for a class.
+  The batch form's "What is in this batch" card links to it.
+- The order is saved as a whole, once. `courses/outline.py` validates the
+  payload against the batch — every section once, every class once, no foreign
+  rows — and applies nothing when the validation fails, so a refused save
+  cannot leave two rows claiming the same position.
+- A revision travels with the page: a save built on an order somebody else has
+  since changed is answered `409` with a reload link rather than overwriting
+  their work.
+- The arrows and the section menu are the same operation without a dragging
+  movement (WCAG 2.2, 2.5.7), and the handle answers ↑ / ↓ for keyboard use.
+
+P3 — weak-topic analysis from `Question.topic` and the marked `AttemptAnswer`
+rows — is the next milestone, and the one that makes the product feel *smart*
+rather than merely tidy.
 
 Each later item gets the same treatment: a pattern named, its source cited, its
 landing place in this codebase agreed before any code is written.

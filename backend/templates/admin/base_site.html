@@ -51,7 +51,12 @@
         <nav class="ss-breadcrumbs" aria-label="{% translate 'Breadcrumb' %}">
           <a href="{% url 'admin:index' %}">{% translate "Admin" %}</a>
           {% if opts %}
-            {% if opts.app_config.verbose_name != opts.verbose_name_plural %}
+            {% comment %}
+              "Courses / Courses" is not a trail: the app and the model are the
+              same word here, and Django's verbose names differ only in case
+              ("Courses" app, "courses" model). One crumb is enough.
+            {% endcomment %}
+            {% if opts.app_config.verbose_name|lower != opts.verbose_name_plural|lower %}
               <span class="ss-crumb-sep" aria-hidden="true">/</span>
               <a href="{% url 'admin:app_list' opts.app_config.label %}">{{ opts.app_config.verbose_name }}</a>
             {% endif %}
