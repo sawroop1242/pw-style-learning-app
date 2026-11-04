@@ -435,6 +435,36 @@
 }
 .tab:hover { color: var(--text-strong); background: var(--surface-raised); }
 .tab[aria-selected="true"] { color: var(--text-invert); font-weight: 700; background: var(--violet-600); }
+
+/* How much sits behind each tab — lessons, notes, papers, teachers. The badge
+   is written by `renderCounts` and stays hidden at zero, so an empty tab reads
+   "Notes" rather than "Notes 0". `display` has to be restated for `[hidden]`,
+   because an explicit display beats the attribute's `display: none`. */
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 7px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  vertical-align: 1px;
+}
+.tab[aria-selected="true"] .tab-count {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.22);
+  color: var(--text-invert);
+}
+.tab-count[hidden] { display: none; }
+
 .tab-panel[hidden] { display: none; }
 
 /* A tab strip is a primary control, so on a phone its labels wrap inside the
@@ -462,6 +492,21 @@
     line-height: 1.25;
     min-height: 40px;
   }
+
+  /* Five tabs share a phone's strip, so the count shrinks rather than pushing
+     its label onto a second line. */
+  .tab-count {
+    min-width: 18px;
+    height: 18px;
+    margin-left: 4px;
+    padding: 0 5px;
+  }
+}
+
+/* Five labels do not divide evenly into four columns: at an auto-fit width the
+   fifth drops alone onto its own line. Three and two reads as a strip. */
+@media (max-width: 420px) {
+  #batch-tabs.tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .prose { font-size: var(--text-base); line-height: 1.75; color: var(--text-muted); }

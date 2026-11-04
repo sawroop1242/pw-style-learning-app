@@ -244,11 +244,24 @@ const FIXTURES = [
     const detail = await api(`/api/courses/${rowsOf(courses)[0].id}/`);
     const { doc, errors } = await liveBoot('course.html', ['core', 'content', 'ui', 'course'], `?slug=${slug}`);
     check('headline is the API title', text(doc.querySelector('#course-headline')).includes(detail.title), text(doc.querySelector('#course-headline')).slice(0, 60));
-    const folders = [...doc.querySelectorAll('#panel-curriculum .card')];
-    check('curriculum renders server folders', folders.length === (detail.folders || []).length, `${folders.length}/${(detail.folders || []).length}`);
-    const lessonsRendered = doc.querySelectorAll('#panel-curriculum .lesson-item').length;
+    const folders = [...doc.querySelectorAll('#panel-classes .card')];
+    check('the classes panel renders server folders', folders.length === (detail.folders || []).length, `${folders.length}/${(detail.folders || []).length}`);
+    const lessonsRendered = doc.querySelectorAll('#panel-classes .lesson-item').length;
     const lessonsExpected = (detail.folders || []).reduce((n, f) => n + (f.lessons || []).length, 0);
     check('every server lesson is listed', lessonsRendered === lessonsExpected, `${lessonsRendered}/${lessonsExpected}`);
+
+    // The PDFs moved out of the lesson list into their own tab; the count on
+    // that tab has to match the number of PDFs the API actually holds.
+    const pdfsExpected = (detail.folders || []).reduce((n, f) => n + (f.pdf_resources || []).length, 0);
+    const pdfsRendered = doc.querySelectorAll('#panel-notes .pdf-row').length;
+    check('the notes panel lists every server PDF', pdfsRendered === pdfsExpected, `${pdfsRendered}/${pdfsExpected}`);
+    const notesBadge = doc.querySelector('.tab-count[data-count="notes"]');
+    check(
+      'the Notes tab counts them, or hides at zero',
+      pdfsExpected > 0 ? notesBadge.textContent.trim() === String(pdfsExpected) && !notesBadge.hidden : notesBadge.hidden,
+      `${notesBadge?.textContent?.trim()}/${pdfsExpected}`
+    );
+    check('the classes panel does not repeat them', doc.querySelectorAll('#panel-classes .pdf-row').length === 0);
     check('aside shows the real price', /Free|₹/.test(text(doc.querySelector('#course-aside'))), text(doc.querySelector('#course-aside')).slice(0, 50));
     check('no console errors', errors.length === 0, errors[0]);
   }
@@ -388,11 +401,12 @@ const FIXTURES = [
     const { doc, errors } = await liveBoot('course.html', ['core', 'content', 'ui', 'course'], `?slug=${course.slug}`);
 
     if ((detail.faculty || []).length) {
-      const cards = doc.querySelectorAll('#panel-faculty .faculty-card');
+      const cards = doc.querySelectorAll('#panel-teachers .faculty-card');
       check('every seeded teacher is on the page', cards.length === detail.faculty.length, `${cards.length}/${detail.faculty.length}`);
-      check('the page names the same people', text(doc.querySelector('#panel-faculty')).includes(detail.faculty[0].name));
+      check('the page names the same people', text(doc.querySelector('#panel-teachers')).includes(detail.faculty[0].name));
+      check('the Teachers tab counts them', text(doc.querySelector('.tab-count[data-count="teachers"]')) === String(detail.faculty.length), text(doc.querySelector('.tab-count[data-count="teachers"]')));
     } else {
-      check('a batch without faculty says so', Boolean(doc.querySelector('#panel-faculty .empty-state')));
+      check('a batch without faculty says so', Boolean(doc.querySelector('#panel-teachers .empty-state')));
     }
     check('no console errors', errors.length === 0, errors[0]);
   }
