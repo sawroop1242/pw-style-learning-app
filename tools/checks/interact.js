@@ -440,8 +440,15 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     console.log('\ndashboard.html (signed in)');
     const { window, doc, errors } = await open('dashboard.html', ['core', 'content', 'ui', 'dashboard'], { signedIn: true });
 
-    check('figures come from the API counts', [...doc.querySelectorAll('.dash-figure strong')].map((n) => n.textContent.trim()).join(',') === '2,1,1,1', [...doc.querySelectorAll('.dash-figure strong')].map((n) => n.textContent.trim()).join(','));
-    check('continue card from progress', doc.querySelectorAll('#continue-list .continue-card').length === 1);
+    check('figures come from the API counts', [...doc.querySelectorAll('.dash-figure strong')].map((n) => n.textContent.trim()).join(',') === '2,1,1,45m,1,1', [...doc.querySelectorAll('.dash-figure strong')].map((n) => n.textContent.trim()).join(','));
+    check('the streak counts finished lessons, not opened ones', [...doc.querySelectorAll('.dash-figure span')].some((n) => n.textContent.trim() === 'Day streak'));
+    check('the week total uses lesson durations', [...doc.querySelectorAll('.dash-figure strong')].some((n) => n.textContent.trim() === '45m'));
+    check('continue card from progress', doc.querySelectorAll('#continue-list .continue-card').length === 2);
+    // The bar used to be a fixed 40% for anything merely opened. It is now the
+    // batch's real share: 1 finished lesson of 5.
+    const bars = [...doc.querySelectorAll('#continue-list .progress > span')].map((n) => n.style.width);
+    check('batch progress is computed, not a placeholder', bars.length === 2 && bars.every((w) => w === '33%'), bars.join('|'));
+    check('a finished lesson is marked as such', /1 of 3 lessons/.test(doc.querySelector('#continue-list').textContent));
 
     // One graded paper is a figure, not a one-bar chart: a 0%-height bar in a
     // 140px panel reads as a broken chart.

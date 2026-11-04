@@ -459,11 +459,22 @@ function makeStub({
       );
     }
 
-    if (path === '/progress/') {
+    if (path === '/progress/' && method === 'GET') {
       if (!authed && !signedIn) return json({ detail: 'Authentication credentials were not provided.' }, 401);
       const lesson = url.searchParams.get('lesson');
-      const rows = [{ id: 1, lesson: 1, lesson_title: 'Units and measurement', completed: false, updated_at: '2026-10-26T10:00:00Z' }];
-      return json(page(lesson ? rows.filter((row) => String(row.lesson) === String(lesson)) : rows));
+      // Two rows: one finished lesson (it feeds the streak and the week total)
+      // and one merely opened (it is what "continue" should offer next).
+      const finishedAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      const rows = [
+        { id: 2, lesson: 21, lesson_title: 'Cell — the unit of life', course: 2, lesson_duration_minutes: 45, completed: true, completed_at: finishedAt, updated_at: finishedAt },
+        { id: 1, lesson: 21, lesson_title: 'Cell — the unit of life', course: 2, lesson_duration_minutes: 40, completed: false, completed_at: null, updated_at: '2026-10-26T10:00:00Z' }
+      ];
+      let out = rows;
+      if (lesson) out = out.filter((row) => String(row.lesson) === String(lesson));
+      const only = url.searchParams.get('completed');
+      if (only === '1') out = out.filter((row) => row.completed);
+      if (only === '0') out = out.filter((row) => !row.completed);
+      return json(page(out));
     }
 
     if (path === '/study-tasks/' && method === 'POST') {
@@ -502,7 +513,6 @@ function makeStub({
         201
       );
     }
-    if (path === '/progress/') return authed || signedIn ? json(page([{ id: 1, lesson: 12, lesson_title: 'Kinematics in one dimension', completed: false, updated_at: '2026-10-26T10:00:00Z' }])) : json({ detail: 'Authentication credentials were not provided.' }, 401);
     if (path === '/study-tasks/') return authed || signedIn ? json(page([{ id: 1, title: 'Revise mole concept', due_at: '2026-10-28T10:00:00Z', is_completed: false }])) : json({ detail: 'Authentication credentials were not provided.' }, 401);
     if (path === '/quiz-attempts/' || path === '/quiz-attempts') return authed || signedIn ? json(page(ATTEMPTS)) : json(page([]));
     if (path === '/auth/me/') return authed || signedIn ? json({ id: 1, username: 'stub_student', email: 'student@example.test', role: 'student', date_joined: '2026-09-01T10:00:00Z' }) : json({ detail: 'Authentication credentials were not provided.' }, 401);

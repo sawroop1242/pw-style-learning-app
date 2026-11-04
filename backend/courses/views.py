@@ -798,6 +798,13 @@ class ProgressViewSet(viewsets.ModelViewSet):
         lesson = self.request.query_params.get("lesson")
         if lesson:
             queryset = queryset.filter(lesson_id=_positive_int(lesson))
+        # A progress row exists from the moment a lesson is opened, so "how many
+        # lessons have I finished" cannot be answered by the row count alone.
+        completed = (self.request.query_params.get("completed") or "").lower()
+        if completed in {"1", "true", "yes"}:
+            queryset = queryset.filter(completed=True)
+        elif completed in {"0", "false", "no"}:
+            queryset = queryset.filter(completed=False)
         return queryset
 
     @transaction.atomic
