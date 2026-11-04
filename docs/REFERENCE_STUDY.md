@@ -110,7 +110,7 @@ worst possible way to express an order.
 | P4 | Batch page as tabs: overview / classes / notes / papers / teachers | PW batch-overview URL | `course.html` (shipped) | M |
 | P5 | Schedule ("today's classes") | PW, Frappe `lms_batch_timetable` | needs a schedule field on lessons | L |
 | P6 | Drag-and-drop outline in the console | Frappe `CourseOutline.vue` | `/admin/courses/course/<id>/outline/` (shipped) | M |
-| P7 | Faceted catalogue filters | Unacademy, richie | `courses.html` + API facet list | M |
+| P7 | Faceted catalogue filters | Unacademy, richie | `courses.html` + `/api/courses/facets/` (shipped) | M |
 | P8 | Goal-first entry ("what are you preparing for?") | Unacademy landing | home hero | S |
 | P9 | Command palette in the console | Frappe `CommandPalette.vue`, unfold | we have the jump box; extend to actions | S |
 | P10 | Certificates on completion | Frappe `lms_certificate` | out of scope until batches have rules | – |
@@ -209,9 +209,36 @@ analytics.
 - **The import follows.** CSV schema v2 adds a `topic` column next to `section`
   (`docs/CSV_QUESTION_IMPORT.md`); v1 files still import, untagged.
 
+**P7 shipped** — the faceted catalogue, the pattern Unacademy opens with and the
+one PW's own reviewers call the platform's weak spot ("finding the right batch").
+
+- **The facets are counted on the server.** `GET /api/courses/facets/` returns a
+  count for every value, and each group is counted with the *other* groups
+  applied and **its own left out**. That is the whole rule: ticking Physics must
+  not erase Biology from the panel, and "Physics (3)" must mean "three batches
+  if this is the only subject ticked", not "three of the six cards currently on
+  screen". The old panel counted the current page, so on page 2 of 3 it offered
+  a different set of subjects than page 1.
+- **Two fields earned their place.** `Course.exam` and `Course.level` (`0012`):
+  PW's batch finder is exam-first, and a subject list cannot express "JEE vs
+  NEET vs SSC". Both are blank-able, and a blank is not a value — the batch
+  stays listed, it just never claims an exam nobody chose.
+- **Multi-select, honestly.** Repeated query parameters (`?exam=JEE&exam=NEET`)
+  mean either; the panel draws checkbox groups, keeps a ticked value visible
+  even when another filter has emptied its group (a filter you cannot see is one
+  you cannot remove), and never prints an empty heading.
+- **The state lives in the URL**, so a filtered catalogue can be reloaded,
+  bookmarked or sent to a classmate and come back the same.
+- **The panel is reachable at 320px.** It used to be `display: none` below
+  900px with no way to open it; now a Filters button opens the sheet, Escape
+  closes it, the button reports the number of active filters, and the checkbox
+  inputs are visually hidden but still in the tab order (`display: none` had
+  made the whole panel keyboard-inaccessible).
+- **`mine` keeps its meaning.** The counts follow it, so "My batches" never
+  advertises a filter that would empty it.
+
 The next milestone is a decision, not a queue: P5 (a real class schedule) is the
-largest remaining item, P7 (faceted catalogue) is the one PW's own reviewers
-name as the weak spot, and P9 (console command palette) is the cheapest.
+largest remaining item, and P9 (console command palette) is the cheapest.
 
 Each later item gets the same treatment: a pattern named, its source cited, its
 landing place in this codebase agreed before any code is written.

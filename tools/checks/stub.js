@@ -20,6 +20,7 @@ const COURSES = [
     description: 'Physics, Chemistry and Mathematics for the January session.',
     subject: 'Physics',
     exam: 'JEE Main',
+    level: 'Class 12',
     pricing_mode: 'paid',
     price: '4499.00',
     has_access: false,
@@ -39,6 +40,7 @@ const COURSES = [
     description: 'Class 11 biology, chapter by chapter.',
     subject: 'Biology',
     exam: 'NEET',
+    level: 'Class 12',
     pricing_mode: 'free',
     price: '0.00',
     has_access: true,
@@ -55,6 +57,7 @@ const COURSES = [
     description: 'Arithmetic and advanced maths for tier 1 and tier 2.',
     subject: 'Quantitative Aptitude',
     exam: 'SSC CGL',
+    level: 'Graduate',
     pricing_mode: 'free',
     price: '0.00',
     has_access: true,
@@ -302,6 +305,34 @@ function makeStub({
   // so the stub keeps them too; otherwise "mark all read" could never clear.
   const readKeys = new Set();
 
+  /** The catalogue with the request's filters applied; `skip` omits one facet. */
+  function filterCourses(params, skip = null) {
+    let rows = pick(COURSES).filter((course) => course.is_published !== false);
+    const slug = params.get('slug');
+    if (slug) rows = rows.filter((course) => course.slug === slug);
+    if (params.get('mine') === '1') rows = rows.filter((course) => course.has_access);
+    const search = (params.get('search') || '').toLowerCase();
+    if (search) {
+      rows = rows.filter((course) =>
+        `${course.title} ${course.description || ''} ${course.subject} ${course.exam || ''} ${course.level || ''}`
+          .toLowerCase()
+          .includes(search)
+      );
+    }
+    for (const field of ['exam', 'subject', 'level']) {
+      if (field === skip) continue;
+      const values = params.getAll(field).map((value) => value.toLowerCase());
+      if (values.length) {
+        rows = rows.filter((course) => values.includes(String(course[field] || '').toLowerCase()));
+      }
+    }
+    if (skip !== 'pricing_mode') {
+      const pricing = params.get('pricing_mode');
+      if (pricing) rows = rows.filter((course) => course.pricing_mode === pricing);
+    }
+    return rows;
+  }
+
   return (rawUrl, init = {}) => {
     const url = new URL(rawUrl, 'https://stub.local');
     const path = url.pathname.replace(/^\/api/, '');
@@ -311,21 +342,28 @@ function makeStub({
     const guest = Boolean(headers['X-Attempt-Token']);
 
     if (path === '/courses/' || path === '/courses') {
-      const slug = url.searchParams.get('slug');
-      const mine = url.searchParams.get('mine');
-      let rows = pick(COURSES);
-      const pricing = url.searchParams.get('pricing_mode');
-      const subject = url.searchParams.get('subject');
-      const search = url.searchParams.get('search');
-      if (slug) rows = rows.filter((course) => course.slug === slug);
-      if (mine) rows = rows.filter((course) => course.has_access);
-      if (pricing) rows = rows.filter((course) => course.pricing_mode === pricing);
-      if (subject) rows = rows.filter((course) => course.subject === subject);
-      if (search) {
-        const needle = search.toLowerCase();
-        rows = rows.filter((course) => `${course.title} ${course.subject}`.toLowerCase().includes(needle));
+      return json(page(filterCourses(url.searchParams)));
+    }
+
+    // Counts the way the real viewset counts: each group is computed with the
+    // others applied and its own left out, so ticking one value never hides
+    // its siblings.
+    if (path === '/courses/facets/' || path === '/courses/facets') {
+      const groups = {};
+      for (const field of ['exam', 'subject', 'level']) {
+        const counts = new Map();
+        for (const course of filterCourses(url.searchParams, field)) {
+          if (course[field]) counts.set(course[field], (counts.get(course[field]) || 0) + 1);
+        }
+        groups[field] = [...counts.entries()]
+          .map(([value, count]) => ({ value, count }))
+          .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
       }
-      return json(page(rows));
+      const priced = filterCourses(url.searchParams, 'pricing_mode');
+      groups.pricing_mode = ['free', 'paid']
+        .map((value) => ({ value, count: priced.filter((course) => course.pricing_mode === value).length }))
+        .filter((row) => row.count > 0);
+      return json({ count: filterCourses(url.searchParams).length, facets: groups });
     }
 
     const courseDetail = path.match(/^\/courses\/(\d+)\/$/);

@@ -26,6 +26,12 @@ class Course(TimeStampedModel):
     slug = models.SlugField(max_length=200, unique=True)
     description = models.TextField(blank=True)
     subject = models.CharField(max_length=80, default="General", db_index=True)
+    #: The exam family the batch prepares for ("JEE", "NEET", "SSC CGL").
+    #: Blank means "not stated": the batch is still listed with no exam filter
+    #: on, but it never claims to belong to an exam nobody chose.
+    exam = models.CharField(max_length=60, blank=True, db_index=True)
+    #: The stage the batch is pitched at ("Class 12", "Graduate", "Dropper").
+    level = models.CharField(max_length=40, blank=True, db_index=True)
     image_url = models.URLField(blank=True)
     #: R2 object key for a cover uploaded through the admin. The URL is signed
     #: at read time; storing the key means the link never outlives its access.

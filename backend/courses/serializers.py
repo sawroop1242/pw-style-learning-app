@@ -259,7 +259,8 @@ class CourseListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = [
-            "id", "title", "slug", "description", "subject", "image_url",
+            "id", "title", "slug", "description", "subject", "exam", "level",
+            "image_url",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
             "telegram_dm",
             "is_published", "lesson_count", "folder_count", "quiz_count", "position",
@@ -318,7 +319,8 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = [
-            "id", "title", "slug", "description", "subject", "image_url",
+            "id", "title", "slug", "description", "subject", "exam", "level",
+            "image_url",
             "image_key",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
             "telegram_dm",

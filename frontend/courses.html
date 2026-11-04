@@ -45,7 +45,14 @@
 
         <section class="tab-panel" id="panel-all" role="tabpanel" aria-labelledby="tab-all">
           <div class="catalog-toolbar">
-            <p class="result-count" id="result-count">Loading batches…</p>
+            <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm filter-toggle" type="button" id="filter-toggle"
+                      aria-expanded="false" aria-controls="filter-panel">
+                <svg><use href="#i-filter"/></svg> Filters
+                <span class="filter-badge" id="filter-badge" hidden>0</span>
+              </button>
+              <p class="result-count" id="result-count">Loading batches…</p>
+            </div>
             <div class="toolbar-actions">
               <label class="visually-hidden" for="course-search">Search batches</label>
               <input class="input" id="course-search" type="search" placeholder="Search a batch or subject"
@@ -60,21 +67,19 @@
             </div>
           </div>
 
+          <div class="active-filters" id="active-filters" hidden></div>
+
           <div class="catalog-layout">
-            <aside class="filter-panel" id="filter-panel" aria-label="Filters">
-              <div class="filter-group">
-                <h2>Subject</h2>
-                <div class="filter-list" id="filter-subject"></div>
-              </div>
+            <aside class="filter-panel" id="filter-panel" aria-label="Filters" tabindex="-1">
+              <!-- Groups are drawn from the server's facet counts, so a value
+                   nobody publishes is never offered and every number says how
+                   many batches ticking it would show. -->
+              <div id="facet-groups"></div>
               <div class="filter-group">
                 <h2>Price</h2>
-                <div class="filter-list" id="filter-price">
-                  <label><span>All batches</span><input type="radio" name="price" value="all" data-price="all" checked></label>
-                  <label><span>Free only</span><input type="radio" name="price" value="free" data-price="free"></label>
-                  <label><span>Paid</span><input type="radio" name="price" value="paid" data-price="paid"></label>
-                </div>
+                <div class="filter-list" id="facet-price"></div>
               </div>
-              <button class="btn btn-ghost btn-block btn-sm" id="clear-filters">Clear all filters</button>
+              <button class="btn btn-ghost btn-block btn-sm" id="clear-filters" type="button">Clear all filters</button>
             </aside>
 
             <div>
