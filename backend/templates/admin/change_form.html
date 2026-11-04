@@ -1,27 +1,43 @@
 {% extends "admin/change_form.html" %}
-{% load i18n admin_urls %}
+{% load i18n admin_urls admin_modify %}
 
 {% comment %}
-    An edit screen: the title says what is being edited, the actions sit on the
-    right, and each fieldset is a card. Django's own fieldsets, inlines, media
-    and validation stay untouched underneath — this only changes the framing, so
-    a field added to a ModelAdmin appears here without a template edit.
+    An edit screen: the title is the thing being edited, a quiet line says what
+    kind of screen it is, the actions sit on the right, and each fieldset is a
+    card. Django's own fieldsets, inlines, media and validation stay untouched
+    underneath — this only changes the framing, so a field added to a
+    ModelAdmin appears here without a template edit.
+
+    Django would otherwise print the object's name twice: once in `subtitle`
+    (the block below is emptied) and once as `<h1>Change course</h1>`. Here the
+    name is the heading and "Change course" is the quiet line under it, which is
+    what someone scanning the page actually needs.
 {% endcomment %}
+
+{% block content_subtitle %}{% endblock %}
 
 {% block content_title %}
   <div class="ss-page-head">
     <div>
-      <h1>{{ title }}</h1>
-      <p class="ss-page-sub">
-        {% if original %}
+      <h1>
+        {% if add %}
+          {% blocktranslate with name=opts.verbose_name %}New {{ name }}{% endblocktranslate %}
+        {% elif original %}
           {{ original }}
         {% else %}
+          {{ title }}
+        {% endif %}
+      </h1>
+      <p class="ss-page-sub">
+        {% if add %}
           {% blocktranslate with name=opts.verbose_name %}A new {{ name }}. Nothing is saved until you press Save.{% endblocktranslate %}
+        {% else %}
+          {% blocktranslate with name=opts.verbose_name %}Editing this {{ name }}{% endblocktranslate %}
         {% endif %}
       </p>
     </div>
-    <div class="ss-page-actions">
-      {% if change and not is_popup %}
+    {% if change and not is_popup %}
+      <div class="ss-page-actions">
         <ul class="object-tools">
           {% if has_absolute_url %}
             <li><a href="{{ absolute_url }}" target="_blank" rel="noopener">{% translate "View on site" %}</a></li>
@@ -29,7 +45,27 @@
           {% url opts|admin_urlname:'history' original.pk|admin_urlquote as history_url %}
           <li><a href="{{ history_url }}">{% translate "History" %}</a></li>
         </ul>
-      {% endif %}
-    </div>
+      </div>
+    {% endif %}
   </div>
+{% endblock %}
+
+{% comment %}
+    Django renders the same History link again inside the form area. One is
+    enough, and it belongs in the head with the other actions.
+{% endcomment %}
+{% block object-tools %}{% endblock %}
+
+{% comment %}
+    Two submit bars (top and bottom) are useful on a long question form, but
+    only the bottom one floats: a bar that follows the pointer from the top of
+    the page covers the first fieldset. The class tells the stylesheet which is
+    which without changing Django's buttons.
+{% endcomment %}
+{% block submit_buttons_top %}
+  <div class="ss-submit-top">{% submit_row %}</div>
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+  <div class="ss-submit-bottom">{% submit_row %}</div>
 {% endblock %}

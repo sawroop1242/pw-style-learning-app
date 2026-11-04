@@ -32,6 +32,11 @@
     The whole top bar is ours. Django's header holds a brand, a greeting and a
     row of links; this holds a brand, where you are, what you can jump to, and
     who you are — in that order, which is the order the questions are asked.
+
+    Signed out (the login and password-reset screens) there is no "where am I"
+    and nothing to jump to, so only the brand renders. Without this the login
+    page offered a search box over screens it could not open, and a logout
+    button for nobody.
 {% endcomment %}
 {% block header %}
   <div id="header">
@@ -41,62 +46,83 @@
       </div>
     {% endblock %}
 
-    <div class="ss-topbar-main">
-      <nav class="ss-breadcrumbs" aria-label="{% translate 'Breadcrumb' %}">
-        <a href="{% url 'admin:index' %}">{% translate "Admin" %}</a>
-        {% if opts %}
-          <span class="ss-crumb-sep" aria-hidden="true">/</span>
-          <a href="{% url 'admin:app_list' opts.app_config.label %}">{{ opts.app_config.verbose_name }}</a>
-          <span class="ss-crumb-sep" aria-hidden="true">/</span>
-          <span class="ss-crumb-current">{{ opts.verbose_name_plural|capfirst }}</span>
-        {% elif title %}
-          <span class="ss-crumb-sep" aria-hidden="true">/</span>
-          <span class="ss-crumb-current">{{ title }}</span>
-        {% endif %}
-      </nav>
+    {% if has_permission %}
+      <div class="ss-topbar-main">
+        <nav class="ss-breadcrumbs" aria-label="{% translate 'Breadcrumb' %}">
+          <a href="{% url 'admin:index' %}">{% translate "Admin" %}</a>
+          {% if opts %}
+            {% if opts.app_config.verbose_name != opts.verbose_name_plural %}
+              <span class="ss-crumb-sep" aria-hidden="true">/</span>
+              <a href="{% url 'admin:app_list' opts.app_config.label %}">{{ opts.app_config.verbose_name }}</a>
+            {% endif %}
+            <span class="ss-crumb-sep" aria-hidden="true">/</span>
+            <span class="ss-crumb-current">{{ opts.verbose_name_plural|capfirst }}</span>
+          {% elif title %}
+            <span class="ss-crumb-sep" aria-hidden="true">/</span>
+            <span class="ss-crumb-current">{{ title }}</span>
+          {% endif %}
+        </nav>
 
-      {% comment %}
-        "Jump to" searches the models this account may open, not the rows: there
-        is no cross-model search index, and pretending there is one would return
-        a page of guesses. The datalist is filled from Django's own
-        permission-filtered `available_apps`.
-      {% endcomment %}
-      <form class="ss-jump" role="search" onsubmit="return false">
-        <label class="visually-hidden" for="ss-jump-input">{% translate "Jump to a screen" %}</label>
-        <input id="ss-jump-input" type="search" list="ss-jump-list" autocomplete="off"
-               placeholder="{% translate 'Jump to… ( / )' %}"
-               aria-describedby="ss-jump-help">
-        <span id="ss-jump-help" class="visually-hidden">
-          {% translate "Type a screen name and press Enter." %}
-        </span>
-        <datalist id="ss-jump-list">
-          {% for app in available_apps %}
-            {% for model in app.models %}
-              {% if model.admin_url %}
-                <option value="{{ model.name }}" data-url="{{ model.admin_url }}"></option>
-              {% endif %}
-            {% endfor %}
-          {% endfor %}
-        </datalist>
-      </form>
-
-      <div class="ss-account">
-        <span class="ss-avatar" aria-hidden="true">{{ user.get_username|slice:":2"|upper }}</span>
-        <span>
-          <span class="ss-account-name">{{ user.get_username }}</span><br>
-          <span class="ss-account-role">
-            {% if user.is_superuser %}{% translate "Owner" %}{% else %}{% translate "Staff" %}{% endif %}
+        {% comment %}
+          "Jump to" searches the screens this account may open, not the rows:
+          there is no cross-model search index, and pretending there is one
+          would return a page of guesses. The datalist is filled from Django's
+          own permission-filtered `available_apps`, and staff/admin.js turns it
+          into a keyboard-navigable listbox; without JavaScript the datalist is
+          what the browser shows.
+        {% endcomment %}
+        <form class="ss-jump" role="search" autocomplete="off">
+          <label class="visually-hidden" for="ss-jump-input">{% translate "Jump to a screen" %}</label>
+          <input id="ss-jump-input" type="text" list="ss-jump-list" autocomplete="off"
+                 role="combobox" aria-expanded="false" aria-controls="ss-jump-results"
+                 aria-autocomplete="list"
+                 placeholder="{% translate 'Jump to a screen…' %}"
+                 aria-describedby="ss-jump-help">
+          <kbd class="ss-jump-key" aria-hidden="true">/</kbd>
+          <span id="ss-jump-help" class="visually-hidden">
+            {% translate "Type a screen name, then press Enter. Press slash from anywhere to focus this box." %}
           </span>
-        </span>
-        {% if has_permission %}
-          <form class="ss-account-links" method="post" action="{% url 'admin:logout' %}">
-            {% csrf_token %}
-            <a href="{% url 'admin:password_change' %}">{% translate "Password" %}</a>
-            <button type="submit" class="ss-link-button">{% translate "Log out" %}</button>
-          </form>
-        {% endif %}
+          <datalist id="ss-jump-list">
+            {% for app in available_apps %}
+              {% for model in app.models %}
+                {% if model.admin_url %}
+                  <option value="{{ model.name }}" data-url="{{ model.admin_url }}"></option>
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+          </datalist>
+          <ul class="ss-jump-results" id="ss-jump-results" role="listbox"
+              aria-label="{% translate 'Matching screens' %}" hidden></ul>
+        </form>
+
+        <details class="ss-account" id="ss-account">
+          <summary class="ss-account-summary">
+            <span class="ss-avatar" aria-hidden="true">{{ user.get_username|slice:":2"|upper }}</span>
+            <span class="ss-account-text">
+              <span class="ss-account-name">{{ user.get_username }}</span>
+              <span class="ss-account-role">
+                {% if user.is_superuser %}{% translate "Owner" %}{% else %}{% translate "Staff" %}{% endif %}
+              </span>
+            </span>
+            <svg class="ss-chevron" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+              <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </summary>
+          <div class="ss-account-menu">
+            <p class="ss-account-menu-head">
+              {% blocktranslate with name=user.get_username %}Signed in as <strong>{{ name }}</strong>{% endblocktranslate %}
+            </p>
+            <a href="/">{% translate "View the site" %}</a>
+            <a href="{% url 'admin:password_change' %}">{% translate "Change password" %}</a>
+            <form method="post" action="{% url 'admin:logout' %}">
+              {% csrf_token %}
+              <button type="submit">{% translate "Log out" %}</button>
+            </form>
+          </div>
+        </details>
       </div>
-    </div>
+    {% endif %}
   </div>
 {% endblock %}
 

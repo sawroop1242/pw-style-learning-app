@@ -4,13 +4,25 @@
 {% comment %}
     One app's models. Reachable from the top-bar breadcrumb, and useful when the
     rail is collapsed; the rail and the console home remain the main routes.
+
+    The card heading repeats the page heading when the app has a single
+    registered group (the usual case), so it is kept for the landmark and hidden
+    from the eye; the visible line becomes a count, which is the fact the
+    reader actually wants. The app's URL is dropped — it is address-bar noise,
+    and a reader who wants a link already has the breadcrumb.
 {% endcomment %}
 
 {% block content_title %}
   <div class="ss-page-head">
     <div>
       <h1>{{ app_list.0.name|default:title }}</h1>
-      <p class="ss-page-sub">{% translate "Every screen in this app, in the order Django registers them." %}</p>
+      <p class="ss-page-sub">
+        {% blocktranslate count counter=app_list.0.models|length %}
+          {{ counter }} screen in this app
+        {% plural %}
+          {{ counter }} screens in this app
+        {% endblocktranslate %}
+      </p>
     </div>
   </div>
 {% endblock %}
@@ -19,8 +31,12 @@
 <div id="content-main">
   {% for app in app_list %}
     <section class="ss-card" aria-labelledby="ss-app-{{ app.app_label }}">
-      <h2 id="ss-app-{{ app.app_label }}">{{ app.name }}</h2>
-      <p class="ss-card-blurb">{{ app.app_url }}</p>
+      <h2 id="ss-app-{{ app.app_label }}"{% if app_list|length == 1 %} class="visually-hidden"{% endif %}>{{ app.name }}</h2>
+      {% if app_list|length > 1 %}
+        <p class="ss-card-blurb">
+          {% blocktranslate count counter=app.models|length %}{{ counter }} screen{% plural %}{{ counter }} screens{% endblocktranslate %}
+        </p>
+      {% endif %}
       <ul>
         {% for model in app.models %}
           <li>

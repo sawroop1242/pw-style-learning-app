@@ -1,0 +1,23 @@
+{% extends "admin/login.html" %}
+{% load i18n %}
+
+{% comment %}
+    The sign-in screen, with a title.
+
+    Django's template has no heading — the card opened straight into two inputs,
+    which reads like a page that failed to finish loading. The block below wraps
+    it: a heading, the form Django renders, and a way back to the site. The
+    errors Django prints stay where they are, directly above the fields they
+    belong to.
+{% endcomment %}
+
+{% block content %}
+  <div class="ss-login-head">
+    <h1>{% translate "Admin console" %}</h1>
+    <p>{% translate "Staff sign in. Learners use the app's own login page." %}</p>
+  </div>
+  {{ block.super }}
+  <p class="ss-login-foot">
+    <a href="/">{% translate "Back to the site" %}</a>
+  </p>
+{% endblock %}

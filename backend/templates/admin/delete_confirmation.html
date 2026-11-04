@@ -1,0 +1,23 @@
+{% extends "admin/delete_confirmation.html" %}
+{% load i18n %}
+
+{% comment %}
+    "Are you sure?" is the one screen where the answer matters, so it gets a
+    head that names the thing being deleted and the warning colour instead of
+    a paragraph above a list. Django's blocks (`delete_forbidden`,
+    `delete_protected`, `delete_confirm`) and its POST form are untouched: the
+    button still posts `post=yes` to the same URL.
+{% endcomment %}
+
+{% block content_title %}
+  <div class="ss-page-head">
+    <div>
+      <h1>{% translate "Delete" %} {{ object_name }}</h1>
+      <p class="ss-page-sub">{{ object }}</p>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="ss-page-body ss-page-body--danger">{{ block.super }}</div>
+{% endblock %}

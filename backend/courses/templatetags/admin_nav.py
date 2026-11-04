@@ -164,6 +164,9 @@ def _row(model_key, model, request, site, with_counts=True):
     return {
         "key": model_key,
         "name": model["name"],
+        # The model's own name, so the rail can draw the right glyph and the
+        # theme can colour a row without matching on translated text.
+        "model_name": model_name,
         "slug": app_label.lower(),
         "url": model["admin_url"],
         "add_url": model.get("add_url"),

@@ -1,0 +1,20 @@
+{% extends "registration/logged_out.html" %}
+{% load i18n %}
+
+{% block bodyclass %}{{ block.super }} logged-out{% endblock %}
+
+{% comment %}
+    Signed out. Django's version is two plain paragraphs; here it is a card in
+    the same place as the login form, with one way back in.
+{% endcomment %}
+
+{% block content %}
+  <div class="ss-login-card">
+    <h1>{% translate "Signed out" %}</h1>
+    <p class="ss-page-sub">{% translate "You are signed out of the admin console." %}</p>
+    <p class="ss-login-actions">
+      <a class="ss-btn ss-btn-primary" href="{% url 'admin:index' %}">{% translate "Sign in again" %}</a>
+      <a class="ss-btn" href="/">{% translate "View the site" %}</a>
+    </p>
+  </div>
+{% endblock %}

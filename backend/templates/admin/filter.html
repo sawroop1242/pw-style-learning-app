@@ -8,7 +8,7 @@
     the search term and the other filters.
 {% endcomment %}
 <div class="ss-filter-group">
-  <h3 id="ss-filter-{{ title|slugify }}">{{ title }}</h3>
+  <h3 id="ss-filter-{{ title|slugify }}">{{ title|capfirst }}</h3>
   <div class="ss-filter-chips" role="group" aria-labelledby="ss-filter-{{ title|slugify }}">
     {% for choice in choices %}
       <a class="ss-chip{% if choice.selected %} is-selected{% endif %}"
