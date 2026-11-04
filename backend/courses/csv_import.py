@@ -10,8 +10,11 @@ flag that flips to "imported".
 The rules this module enforces
 ------------------------------
 * **One column, one meaning.** Every column maps to exactly one stored field.
-  ``section`` is stored in ``Question.topic`` because that is the field the exam
-  window groups by; there is no second ``topic`` column to disagree with it.
+  ``section`` is the paper section the exam window draws its tabs from, and
+  ``topic`` is the chapter the result's analysis ranks. They are two columns
+  because they are two different questions: "which part of the paper" and
+  "which idea does this test". A file may leave ``topic`` blank; nothing is
+  guessed from ``section``.
 * **All or nothing.** A file is parsed and validated completely before a single
   row is written. A file with one bad row imports nothing, so a paper is never
   half-created.
@@ -47,13 +50,17 @@ from django.db.models import Max
 
 from .models import Choice, Question, Quiz, QuizAttempt
 
-SCHEMA_VERSION = "1"
+#: v2 added the ``topic`` column (the chapter the analysis ranks). A v1 file
+#: still imports — ``topic`` is optional — but a v1 *template* cannot express
+#: the chapter, so the version travels with the download.
+SCHEMA_VERSION = "2"
 
 #: The columns the template ships with, in order. The importer accepts any
 #: subset that still contains every required column; a column outside this list
 #: is rejected so a typo cannot silently drop data.
 COLUMNS: tuple[tuple[str, bool, str], ...] = (
     ("section", False, "Exam section the question belongs to, e.g. Physics. Blank = General."),
+    ("topic", False, "Chapter the question tests, e.g. Kinematics. Drives the result's weak-topic analysis. Blank = not tagged."),
     ("question_type", False, "single_choice (default), multiple_choice or true_false."),
     ("question_text", True, "The question itself. Required."),
     ("option_a", True, "First option."),
@@ -81,7 +88,7 @@ MAX_ROWS = 2000
 MAX_ERRORS = 200
 MAX_PROMPT_CHARS = 5000
 MAX_OPTION_CHARS = 400  # matches Choice.text
-MAX_SECTION_CHARS = 120  # matches Question.topic
+MAX_SECTION_CHARS = 120  # matches Question.section and Question.topic
 FETCH_TIMEOUT_SECONDS = 10
 
 DEFAULT_SECTION = "General"
@@ -119,6 +126,7 @@ class ParsedQuestion:
     marks: Decimal | None = None
     negative_marks: Decimal | None = None
     difficulty: str = ""
+    topic: str = ""
 
 
 @dataclass
@@ -143,6 +151,7 @@ class ImportReport:
             {
                 "row": q.row,
                 "section": q.section,
+                "topic": q.topic,
                 "question_type": q.question_type,
                 "prompt": q.prompt,
                 "options": q.options,
@@ -208,6 +217,7 @@ def template_csv() -> str:
     writer.writerow(
         [
             "Reasoning",
+            "Series",
             "single_choice",
             "Which number completes the series 3, 6, 12, 24, …?",
             "36",
@@ -225,6 +235,7 @@ def template_csv() -> str:
     writer.writerow(
         [
             "Reasoning",
+            "Number theory",
             "multiple_choice",
             "Which of these are prime numbers?",
             "2",
@@ -253,7 +264,8 @@ def export_quiz_csv(quiz: Quiz) -> str:
         choices = list(question.choices.all())
         letters = OPTION_LETTERS
         row = [
-            question.topic or DEFAULT_SECTION,
+            question.section or DEFAULT_SECTION,
+            question.topic,
             question.question_type,
             question.prompt,
         ]
@@ -510,6 +522,14 @@ def parse_questions_csv(text: str) -> ImportReport:
                 RowProblem(offset, f"section exceeds {MAX_SECTION_CHARS} characters.", "section", "section_too_long")
             )
 
+        # The chapter is optional and never inferred from the section: a wrong
+        # guess would be ranked as a weakness the student never had.
+        topic = cell("topic")
+        if len(topic) > MAX_SECTION_CHARS:
+            row_errors.append(
+                RowProblem(offset, f"topic exceeds {MAX_SECTION_CHARS} characters.", "topic", "topic_too_long")
+            )
+
         question_type = cell("question_type").lower() or "single_choice"
         if question_type not in QUESTION_TYPES:
             row_errors.append(
@@ -642,6 +662,7 @@ def parse_questions_csv(text: str) -> ImportReport:
                 marks=marks,
                 negative_marks=negative_marks,
                 difficulty=difficulty,
+                topic=topic,
             )
         )
 
@@ -705,7 +726,8 @@ def import_questions(
                 marks=parsed.marks,
                 negative_marks=parsed.negative_marks,
                 difficulty=parsed.difficulty,
-                topic=parsed.section,
+                section=parsed.section,
+                topic=parsed.topic,
                 position=start + offset,
             )
             for offset, parsed in enumerate(report.questions)

@@ -299,6 +299,7 @@ SERIES = [
                 "questions": [
                     (
                         "Physics",
+                        "Work, energy and power",
                         "A body of mass 2 kg moves with a velocity of 3 m/s. What is its kinetic energy?",
                         ["4.5 J", "9 J", "18 J", "36 J"],
                         1,
@@ -306,6 +307,7 @@ SERIES = [
                     ),
                     (
                         "Physics",
+                        "Electric charges and fields",
                         "The SI unit of electric flux is:",
                         ["N·m²/C", "V/m", "C/m²", "N/C"],
                         0,
@@ -313,6 +315,7 @@ SERIES = [
                     ),
                     (
                         "Chemistry",
+                        "Periodic classification",
                         "Which element has the highest first ionisation enthalpy?",
                         ["Na", "Mg", "Al", "Si"],
                         3,
@@ -320,6 +323,7 @@ SERIES = [
                     ),
                     (
                         "Chemistry",
+                        "Chemical bonding",
                         "The hybridisation of carbon in benzene is:",
                         ["sp³", "sp²", "sp", "sp³d"],
                         1,
@@ -327,6 +331,7 @@ SERIES = [
                     ),
                     (
                         "Mathematics",
+                        "Quadratic equations",
                         "If f(x) = x² − 4x + 4, the number of distinct real roots of f(x) = 0 is:",
                         ["0", "1", "2", "Infinite"],
                         1,
@@ -334,6 +339,7 @@ SERIES = [
                     ),
                     (
                         "Mathematics",
+                        "Definite integrals",
                         "The value of ∫₀¹ 2x dx is:",
                         ["1", "2", "0.5", "4"],
                         0,
@@ -350,6 +356,7 @@ SERIES = [
                 "questions": [
                     (
                         "Physics",
+                        "Laws of motion",
                         "A block slides down a frictionless incline of 30°. With g = 10 m/s², its acceleration along the incline is:",
                         ["2.5 m/s²", "5 m/s²", "8.7 m/s²", "10 m/s²"],
                         1,
@@ -357,6 +364,7 @@ SERIES = [
                     ),
                     (
                         "Physics",
+                        "Uniform circular motion",
                         "A body moves in a circle at constant speed. Which quantity stays constant?",
                         ["Velocity", "Acceleration", "Speed", "Momentum"],
                         2,
@@ -364,6 +372,7 @@ SERIES = [
                     ),
                     (
                         "Physics",
+                        "Work, energy and power",
                         "The work done by a force perpendicular to displacement is:",
                         ["Maximum", "Minimum but non-zero", "Zero", "Negative"],
                         2,
@@ -389,6 +398,7 @@ SERIES = [
                 "questions": [
                     (
                         "Reasoning",
+                        "Number series",
                         "Find the next term: 2, 6, 12, 20, 30, ?",
                         ["36", "40", "42", "44"],
                         2,
@@ -396,6 +406,7 @@ SERIES = [
                     ),
                     (
                         "Reasoning",
+                        "Coding-decoding",
                         "If CAT is coded as 3-1-20, how is DOG coded?",
                         ["4-15-7", "4-14-7", "3-15-7", "4-15-8"],
                         0,
@@ -403,6 +414,7 @@ SERIES = [
                     ),
                     (
                         "English",
+                        "Spelling",
                         "Choose the correctly spelt word.",
                         ["Occassion", "Ocassion", "Occasion", "Ocasion"],
                         2,
@@ -427,6 +439,7 @@ SERIES = [
                 "questions": [
                     (
                         "Biology",
+                        "Cell organelles",
                         "Which organelle is the primary site of ATP synthesis in a eukaryotic cell?",
                         ["Ribosome", "Mitochondrion", "Golgi body", "Lysosome"],
                         1,
@@ -434,6 +447,7 @@ SERIES = [
                     ),
                     (
                         "Biology",
+                        "Cell cycle",
                         "DNA replication in a eukaryotic cell occurs during:",
                         ["G1 phase", "S phase", "G2 phase", "M phase"],
                         1,
@@ -441,6 +455,7 @@ SERIES = [
                     ),
                     (
                         "Biology",
+                        "Plasma membrane",
                         "The fluid mosaic model describes the structure of the:",
                         ["Cell wall", "Plasma membrane", "Nucleolus", "Ribosome"],
                         1,
@@ -465,6 +480,7 @@ SERIES = [
                 "questions": [
                     (
                         "Quantitative Aptitude",
+                        "Simple interest",
                         "A sum doubles in 8 years at simple interest. What is the annual rate?",
                         ["10%", "12.5%", "15%", "8%"],
                         1,
@@ -472,6 +488,7 @@ SERIES = [
                     ),
                     (
                         "Quantitative Aptitude",
+                        "Ratio and proportion",
                         "The ratio of 45 minutes to 2 hours is:",
                         ["3 : 8", "3 : 4", "2 : 5", "1 : 3"],
                         0,
@@ -479,6 +496,7 @@ SERIES = [
                     ),
                     (
                         "English",
+                        "Vocabulary",
                         "Pick the synonym of 'diligent'.",
                         ["Careless", "Hard-working", "Lazy", "Hasty"],
                         1,
@@ -708,9 +726,9 @@ class Command(BaseCommand):
                     },
                 )
 
-                for position, (topic, prompt, options, correct, explanation) in enumerate(
-                    test_spec["questions"], start=1
-                ):
+                for position, (
+                    section, topic, prompt, options, correct, explanation
+                ) in enumerate(test_spec["questions"], start=1):
                     question, _ = Question.objects.update_or_create(
                         quiz=quiz,
                         position=position,
@@ -718,6 +736,7 @@ class Command(BaseCommand):
                             "prompt": prompt,
                             "explanation": explanation,
                             "question_type": Question.QuestionType.SINGLE_CHOICE,
+                            "section": section,
                             "topic": topic,
                             "difficulty": Question.Difficulty.MEDIUM,
                         },

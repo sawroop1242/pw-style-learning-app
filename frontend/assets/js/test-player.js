@@ -107,7 +107,11 @@ function apiQuestion(question, quiz) {
   const negative = question.negative_marks ?? quiz.negative_marks_per_wrong ?? 0;
   return {
     id: question.id,
-    section: question.topic || 'All questions',
+    // The paper's section draws the tab strip; the chapter is what the result
+    // analysis ranks. A paper written before the two were split has only a
+    // topic, so it still groups sensibly.
+    section: question.section || question.topic || 'All questions',
+    topic: question.topic || '',
     prompt: question.prompt,
     options: (question.choices || []).map((choice) => ({ id: choice.id, text: choice.text })),
     marks: Number(marks),
@@ -1348,11 +1352,13 @@ async function submitAttempt(auto) {
 }
 
 function normaliseServerResult(payload) {
-  const bySection = (payload.section_breakdown || []).map((row) => ({
-    name: row.section || 'Questions',
+  const byTopic = (payload.topic_breakdown || []).map((row) => ({
+    name: row.topic || 'Unlabelled',
     correct: row.correct,
     incorrect: row.incorrect,
     unanswered: row.unanswered,
+    answered: row.answered ?? row.correct + row.incorrect,
+    accuracy: row.accuracy ?? null,
     scored: Number(row.score),
     max: Number(row.max_score)
   }));
@@ -1367,7 +1373,7 @@ function normaliseServerResult(payload) {
     marked: payload.marked_for_review_count ?? 0,
     timeTaken: payload.time_taken_seconds ?? 0,
     passed: payload.passed,
-    bySection,
+    byTopic,
     solutions: (payload.answers_detail || []).map((row) => {
       const question = state.questions.find((q) => q.id === row.question);
       return {
@@ -1432,17 +1438,22 @@ function renderResult(auto) {
     )
     .join('');
 
-  $('#section-breakdown').innerHTML = !r.bySection.length
-    ? `<p class="small muted" style="margin:0">Section-wise detail is published with the solutions.</p>`
-    : r.bySection
+  $('#topic-breakdown').innerHTML = !r.byTopic.length
+    ? `<p class="small muted" style="margin:0">The chapter breakdown is published with the solutions.</p>`
+    : r.byTopic
     .map((row) => {
-      const pct = row.max ? clamp((row.scored / row.max) * 100, 0, 100) : 0;
+      // The bar is accuracy on the questions actually answered, so a chapter
+      // that was skipped is not drawn as a failure.
+      const pct = row.accuracy === null ? 0 : clamp(row.accuracy, 0, 100);
+      const verdict = row.accuracy === null
+        ? `${row.unanswered} left blank`
+        : `${row.answered} answered · ${row.accuracy}% right`;
       return `
         <div class="section-row">
           <div class="section-row-head">
             <strong>${esc(row.name)}</strong>
             <span>${row.correct} correct · ${row.incorrect} wrong · ${row.unanswered} left</span>
-            <b>${Math.round(row.scored * 10) / 10} / ${row.max}</b>
+            <b>${verdict}</b>
           </div>
           <div class="section-track"><i style="width:${pct}%"></i></div>
         </div>`;

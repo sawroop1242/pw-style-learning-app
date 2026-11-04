@@ -59,7 +59,9 @@ Support a documented versioned schema such as:
 - `marks` — optional positive/non-negative marks with a documented default
 - `negative_marks` — optional non-negative penalty with a documented default
 - `difficulty` — optional `easy`, `medium`, `hard`
-- `topic` — optional topic/tag
+- `section` — optional paper section (the exam window's tab), e.g. `Physics`
+- `topic` — optional chapter the question tests, e.g. `Kinematics`; this is what
+  the result's weak-topic analysis ranks, and it is never inferred from `section`
 - `question_image_url` — optional validated image URL if supported
 
 Keep this schema versioned and documented. The template and importer must agree exactly. If the existing data model cannot support a type, reject it clearly rather than silently downgrading or mis-scoring it.
@@ -152,7 +154,7 @@ Do not implement proctoring, webcam capture, microphone recording, invasive devi
 
 **How the immutable paper is implemented.** At start, `snapshot.build_paper()`
 copies the whole paper — every prompt, option, key, explanation, mark, negative
-mark, topic and the quiz's scoring policy — into `QuizAttempt.paper_snapshot`.
+mark, section, topic and the quiz's scoring policy — into `QuizAttempt.paper_snapshot`.
 Grading (`grading.grade_attempt`) and result review (`snapshot.review_rows`)
 read that copy and never the live question bank; `AttemptAnswer` keeps
 `question_snapshot_id` and `selected_choice_ids` so an answer row survives its

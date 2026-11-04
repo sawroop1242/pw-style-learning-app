@@ -8,7 +8,8 @@ grade it and to show it back to the student is copied into
 
 * quiz-level policy (marks default, negative default, pass threshold, timing,
   release policy),
-* every question: id, prompt, type, topic, marks, negative marks, explanation,
+* every question: id, prompt, type, section, topic, marks, negative marks,
+  explanation,
   and the position it occupied,
 * every choice: id, text, correctness and position.
 
@@ -61,6 +62,9 @@ def build_paper(quiz, questions, question_ids=None):
                 "position": position,
                 "prompt": question.prompt,
                 "question_type": question.question_type,
+                # The paper keeps the two labels apart: ``section`` draws the
+                # exam window's tabs, ``topic`` is the chapter the result ranks.
+                "section": question.section,
                 "topic": question.topic,
                 "difficulty": question.difficulty,
                 "marks": decimal_str(question.marks),
@@ -208,6 +212,8 @@ def review_rows(attempt):
                 "prompt": entry.get("prompt", ""),
                 "question_type": entry.get("question_type", ""),
                 "explanation": entry.get("explanation", ""),
+                "section": entry.get("section", ""),
+                "topic": entry.get("topic", ""),
                 "selected_choices": [
                     {"id": choice["id"], "text": choice["text"]}
                     for choice in entry.get("choices", [])
@@ -244,6 +250,7 @@ def public_paper(attempt):
                 "position": entry.get("position", 0),
                 "prompt": entry.get("prompt", ""),
                 "question_type": entry.get("question_type", ""),
+                "section": entry.get("section", ""),
                 "topic": entry.get("topic", ""),
                 "marks": entry.get("marks"),
                 "negative_marks": entry.get("negative_marks"),

@@ -20,7 +20,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
-from . import csv_import, grading, notifications, policy, snapshot
+from . import csv_import, grading, insights, notifications, policy, snapshot
 from .models import (
     AccessCode,
     AttemptAnswer,
@@ -1253,7 +1253,8 @@ class StaffQuestionViewSet(TenantParentMixin, viewsets.ModelViewSet):
                 model = Question
                 fields = [
                     "id", "quiz", "prompt", "explanation", "question_type",
-                    "marks", "negative_marks", "difficulty", "topic", "position"
+                    "marks", "negative_marks", "difficulty", "section", "topic",
+                    "position"
                 ]
                 read_only_fields = ["id"]
         
@@ -1716,6 +1717,7 @@ def api_root(request):
         "progress": "/api/progress/", 
         "token": "/api/token/",
         "quiz_attempts": "/api/quiz-attempts/",
+        "topic_insights": "/api/insights/topics/",
         "start_quiz": "/api/quizzes/start/",
         "pdfs": "/api/pdfs/",
         "community": "/api/community/",
@@ -1788,6 +1790,17 @@ class QuestionReportViewSet(
 def notifications_view(request):
     """The bell's inbox: derived from announcements, due tasks and results."""
     return Response(notifications.build_inbox(request.user))
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def topic_insights(request):
+    """Which chapters cost this learner marks, across every released paper.
+
+    Signed-in only: a guest attempt is reachable by its own opaque token and
+    nothing else, so guest results can never be pooled into a profile.
+    """
+    return Response(insights.topic_insights(request.user))
 
 
 @api_view(["POST"])

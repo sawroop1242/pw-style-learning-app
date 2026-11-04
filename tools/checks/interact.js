@@ -374,7 +374,7 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('clock is HH:MM:SS', digits.length === 3 && digits.every((d) => /^\d{2}$/.test(d)), digits.join(':'));
 
     const tabs = [...doc.querySelectorAll('#section-tabs .exam-tab')];
-    check('one section comes from the paper topic', tabs.length === 1, String(tabs.length));
+    check('one tab per paper section', tabs.length === 1, String(tabs.length));
     check('palette numbers the paper', doc.querySelectorAll('#palette-groups .pal-btn').length === 3);
     check('question number reads like the reference', /^Question No\. 1$/.test(doc.querySelector('#q-number').textContent));
     check('marks parsed from the decimal string', doc.querySelector('#q-marks').textContent === '+4', doc.querySelector('#q-marks').textContent);
@@ -430,6 +430,17 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     await wait(1200);
 
     check('result view replaces the exam', !doc.querySelector('#result-view').hidden && doc.querySelector('#exam-view').hidden);
+
+    // P3: the result says *which chapter* cost the marks, and a chapter nobody
+    // answered is not drawn as one answered wrongly.
+    const topicRows = [...doc.querySelectorAll('#topic-breakdown .section-row')];
+    check('the result breaks down by chapter', topicRows.length === 2, String(topicRows.length));
+    check('the weakest chapter is named', /Kinematics/.test(topicRows[0]?.textContent || ''), topicRows[0]?.textContent);
+    check(
+      'accuracy is shown only where questions were answered',
+      /100% right/.test(topicRows[0]?.textContent || '') && /1 left blank/.test(topicRows[1]?.textContent || ''),
+      `${topicRows[0]?.textContent} | ${topicRows[1]?.textContent}`
+    );
     check('score comes from the server', /8/.test(doc.querySelector('#result-hero').textContent || ''), doc.querySelector('#result-hero').textContent.replace(/\s+/g, ' ').slice(0, 70));
     check('solutions rendered', doc.querySelectorAll('#solutions .solution').length === 3, String(doc.querySelectorAll('#solutions .solution').length));
     check('no console errors', errors.length === 0, errors[0]);
@@ -462,7 +473,7 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
       prompt.textContent
     );
     check('the frozen options are the ones offered', doc.querySelectorAll('.qoption').length === 2, String(doc.querySelectorAll('.qoption').length));
-    check('the frozen section is used', [...doc.querySelectorAll('#section-tabs .exam-tab')].some((tab) => /Frozen section/.test(tab.textContent)));
+    check('the frozen section, not the chapter, draws the tabs', [...doc.querySelectorAll('#section-tabs .exam-tab')].some((tab) => /Frozen section/.test(tab.textContent)));
     check('no console errors', errors.length === 0, errors[0]);
   }
 
@@ -564,6 +575,14 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('single result shown as a figure', Boolean(single) && single.textContent.trim() === '67%', single ? single.textContent.trim() : 'no .chart-single');
     check('a lone attempt does not draw an empty chart', doc.querySelectorAll('#chart-bars .chart-bar').length === 0);
 
+    // P3: where to focus. The rows and the threshold both come from the API —
+    // the copy prints the rule the maths used rather than a hard-coded number.
+    const focusRows = [...doc.querySelectorAll('#focus-list .section-row')];
+    check('the weak chapter is named', focusRows.length === 1 && /Kinematics/.test(focusRows[0].textContent), focusRows.map((row) => row.textContent.trim()).join(' | '));
+    check('the bar is the measured accuracy', focusRows[0]?.querySelector('.section-track i')?.style.width === '20%', focusRows[0]?.querySelector('.section-track i')?.style.width);
+    check('the threshold is printed, not implied', /3 marked answers/.test(doc.querySelector('#focus-list').textContent) && /under 60%/.test(doc.querySelector('#focus-list').textContent), doc.querySelector('#focus-list').textContent.replace(/\s+/g, ' ').slice(-90));
+    check('the sub-line counts the papers behind it', /2 released papers/.test(doc.querySelector('#focus-sub').textContent), doc.querySelector('#focus-sub').textContent);
+
     check('notes listed', doc.querySelectorAll('#notes-list .note-preview').length === 1);
     check('study task listed', doc.querySelectorAll('#task-list .task-row').length === 1);
     check('an unfinished task offers its completion control', Boolean(doc.querySelector('#task-list [data-task-toggle]')));
@@ -592,6 +611,19 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('note saved through the API is added', doc.querySelectorAll('#notes-list .note-preview').length === 2, String(doc.querySelectorAll('#notes-list .note-preview').length));
     check('modal closes after saving', !doc.querySelector('#note-modal').classList.contains('is-open'));
     check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    // Nothing released yet: the panel must explain why it is empty instead of
+    // drawing an empty chart or, worse, inventing a weakness.
+    console.log('\ndashboard.html (nothing released)');
+    const { doc } = await boot('dashboard.html', ['core', 'content', 'ui', 'dashboard'], {
+      fetcher: makeStub({ signedIn: true, emptyInsights: true }),
+      seedStorage: SIGNED_IN
+    });
+
+    check('the empty focus panel says why', /No released papers yet/.test(doc.querySelector('#focus-list').textContent), doc.querySelector('#focus-list').textContent.replace(/\s+/g, ' ').slice(0, 80));
+    check('it points at the next step', doc.querySelector('#focus-list a[href="tests.html"]') !== null);
   }
 
   {

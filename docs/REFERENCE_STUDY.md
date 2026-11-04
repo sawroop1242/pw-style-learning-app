@@ -62,8 +62,11 @@ access-code path for paid content without a payment gateway.
    visible. We record `Progress.completed_at` and `Lesson.duration_minutes` and
    show neither as a habit signal.
 3. **No weak-topic analysis.** `Question.topic` and the per-question
-   `AttemptAnswer` rows already exist; nothing aggregates them. This is the
-   single most-praised PW feature and the cheapest differentiator we own.
+   `AttemptAnswer` rows already existed; nothing aggregated them. This is the
+   single most-praised PW feature and the cheapest differentiator we own. It is
+   now shipped as P3 (see §5) — the gap was also a data gap: the one label a
+   question carried was doing two jobs (section *and* chapter), so nothing could
+   rank a chapter without also breaking the exam window's tabs.
 4. **A batch is one long page.** PW puts overview / schedule / notes / tests /
    doubts in tabs. Our `course.html` stacks folders and lessons and leaves the
    tests and notes of the same batch elsewhere.
@@ -103,7 +106,7 @@ worst possible way to express an order.
 | --- | --- | --- | --- | --- |
 | P1 | Real progress, never a placeholder | Frappe `lms_course_progress` | `ProgressSerializer` + `dashboard.js` | S |
 | P2 | Streak and study time from completed work | PW / Unacademy dashboards | dashboard figures | S |
-| P3 | Weak-topic analysis from marked answers | PW (G2 reviews), edX analytics | new `/api/insights/topics/` | M |
+| P3 | Weak-topic analysis from marked answers | PW (G2 reviews), edX analytics | `/api/insights/topics/` + `dashboard.html` (shipped) | M |
 | P4 | Batch page as tabs: overview / classes / notes / papers / teachers | PW batch-overview URL | `course.html` (shipped) | M |
 | P5 | Schedule ("today's classes") | PW, Frappe `lms_batch_timetable` | needs a schedule field on lessons | L |
 | P6 | Drag-and-drop outline in the console | Frappe `CourseOutline.vue` | `/admin/courses/course/<id>/outline/` (shipped) | M |
@@ -175,9 +178,40 @@ study found in `lms/public/js/courseOutline/CourseOutline.vue` (§2, above).
 - The arrows and the section menu are the same operation without a dragging
   movement (WCAG 2.2, 2.5.7), and the handle answers ↑ / ↓ for keyboard use.
 
-P3 — weak-topic analysis from `Question.topic` and the marked `AttemptAnswer`
-rows — is the next milestone, and the one that makes the product feel *smart*
-rather than merely tidy.
+**P3 shipped** — weak-topic analysis, the pattern the study found in PW's
+"AI-based test analysis … weak chapters" reviews and in edX's per-topic
+analytics.
+
+- **The data had to be split first.** A question carried one label, `topic`,
+  used both as the exam window's section ("Physics") and as the thing a result
+  should rank ("Kinematics"). Those are different questions — *which part of the
+  paper* and *which idea does this test* — so `Question.section` now holds the
+  first and `Question.topic` the second. Migration `0011` keeps every existing
+  label as its section and leaves topics empty: nobody recorded the chapter, and
+  inventing one would put a number on a screen that was never measured.
+- **`GET /api/insights/topics/`** aggregates the signed-in learner's *released*
+  attempts into `{topic, questions, correct, incorrect, unanswered, answered,
+  accuracy, score, max_score, attempts}`, plus a `focus` list of the weakest
+  chapters. The thresholds travel in the payload (`rules.min_answered = 3`,
+  `rules.weak_below = 60`) so the screen prints the rule it used instead of
+  asserting a verdict.
+- **What it refuses to say.** Accuracy is `correct / (correct + incorrect)`: a
+  chapter that was skipped has `accuracy: null`, not 0%. A chapter with fewer
+  than three marked answers is never called weak. Unreleased results are not
+  read at all, guest attempts are never pooled into a profile, and the numbers
+  come from the frozen paper — renaming or deleting a question afterwards cannot
+  rewrite what was measured (`test_the_numbers_follow_the_frozen_paper…`).
+- **Where it lands.** The result screen's "Where the marks went" panel becomes
+  per-chapter, and `dashboard.html` gains "Where to focus": the weakest chapters
+  with the rule printed underneath, an honest empty state when nothing has been
+  released, and a "no chapter below the threshold" state that does not invent a
+  problem to fill the card.
+- **The import follows.** CSV schema v2 adds a `topic` column next to `section`
+  (`docs/CSV_QUESTION_IMPORT.md`); v1 files still import, untagged.
+
+The next milestone is a decision, not a queue: P5 (a real class schedule) is the
+largest remaining item, P7 (faceted catalogue) is the one PW's own reviewers
+name as the weak spot, and P9 (console command palette) is the cheapest.
 
 Each later item gets the same treatment: a pattern named, its source cited, its
 landing place in this codebase agreed before any code is written.
