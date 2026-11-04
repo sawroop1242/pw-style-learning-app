@@ -471,6 +471,8 @@
 .doubt-row small { font-size: var(--text-2xs); color: var(--text-subtle); }
 
 /* ============================== PDF ROWS ============================== */
+/* One column of note rows inside a section card. */
+.pdf-list { display: grid; gap: 8px; }
 .pdf-row {
   display: flex;
   align-items: center;

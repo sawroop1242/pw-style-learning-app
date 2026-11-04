@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0b16">
   <meta name="api-base" content="/api">
   <title>Batch details — StudySpace</title>
-  <meta name="description" content="Batch overview, full curriculum, schedule, faculty and included tests.">
+  <meta name="description" content="One batch in five tabs: overview, classes, notes, papers and teachers.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -60,19 +60,23 @@
       <div class="container">
         <div class="course-layout">
           <div>
-            <div class="tabs" role="tablist" aria-label="Batch sections">
-              <button class="tab" role="tab" aria-selected="true" aria-controls="panel-overview" id="tab-overview">Overview</button>
-              <button class="tab" role="tab" aria-selected="false" aria-controls="panel-curriculum" id="tab-curriculum">Lessons</button>
-              <button class="tab" role="tab" aria-selected="false" aria-controls="panel-tests" id="tab-tests">Tests</button>
-              <button class="tab" role="tab" aria-selected="false" aria-controls="panel-faculty" id="tab-faculty">Teachers</button>
-              <button class="tab" role="tab" aria-selected="false" aria-controls="panel-faq" id="tab-faq">FAQs</button>
+            <!-- Five tabs, the same five a student expects on a batch in PW or
+                 Unacademy: what this is, the classes, the notes, the papers and
+                 who teaches it. Each is a real URL (?tab=notes) so it can be
+                 shared, bookmarked, and reached with the Back button. -->
+            <div class="tabs" role="tablist" aria-label="Batch sections" id="batch-tabs">
+              <button class="tab" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" tabindex="0">Overview</button>
+              <button class="tab" role="tab" id="tab-classes" aria-controls="panel-classes" aria-selected="false" tabindex="-1" data-tab="classes">Classes<span class="tab-count" data-count="classes" hidden></span></button>
+              <button class="tab" role="tab" id="tab-notes" aria-controls="panel-notes" aria-selected="false" tabindex="-1" data-tab="notes">Notes<span class="tab-count" data-count="notes" hidden></span></button>
+              <button class="tab" role="tab" id="tab-papers" aria-controls="panel-papers" aria-selected="false" tabindex="-1" data-tab="papers">Papers<span class="tab-count" data-count="papers" hidden></span></button>
+              <button class="tab" role="tab" id="tab-teachers" aria-controls="panel-teachers" aria-selected="false" tabindex="-1" data-tab="teachers">Teachers<span class="tab-count" data-count="teachers" hidden></span></button>
             </div>
 
-            <section class="tab-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview"></section>
-            <section class="tab-panel" id="panel-curriculum" role="tabpanel" aria-labelledby="tab-curriculum" hidden></section>
-            <section class="tab-panel" id="panel-tests" role="tabpanel" aria-labelledby="tab-tests" hidden></section>
-            <section class="tab-panel" id="panel-faculty" role="tabpanel" aria-labelledby="tab-faculty" hidden></section>
-            <section class="tab-panel" id="panel-faq" role="tabpanel" aria-labelledby="tab-faq" hidden></section>
+            <section class="tab-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" data-panel="overview"></section>
+            <section class="tab-panel" id="panel-classes" role="tabpanel" aria-labelledby="tab-classes" data-panel="classes" hidden></section>
+            <section class="tab-panel" id="panel-notes" role="tabpanel" aria-labelledby="tab-notes" data-panel="notes" hidden></section>
+            <section class="tab-panel" id="panel-papers" role="tabpanel" aria-labelledby="tab-papers" data-panel="papers" hidden></section>
+            <section class="tab-panel" id="panel-teachers" role="tabpanel" aria-labelledby="tab-teachers" data-panel="teachers" hidden></section>
           </div>
 
           <aside aria-label="Batch summary" id="course-aside"></aside>

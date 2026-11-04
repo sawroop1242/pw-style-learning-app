@@ -57,7 +57,7 @@ function renderMissing(title, body) {
     actionHref: 'courses.html',
     iconName: 'book'
   });
-  ['#panel-overview', '#panel-curriculum', '#panel-tests', '#panel-faculty', '#panel-faq', '#course-aside', '#similar-grid'].forEach(
+  ['#panel-overview', '#panel-classes', '#panel-notes', '#panel-papers', '#panel-teachers', '#course-aside', '#similar-grid'].forEach(
     (selector) => {
       const node = $(selector);
       if (node) node.innerHTML = '';
@@ -80,12 +80,13 @@ function render(detail, testRows) {
   renderHeadline();
   renderPurchase();
   renderOverview();
-  renderCurriculum();
-  renderTests(testRows);
-  renderFaculty();
-  renderFaq();
+  renderClasses();
+  renderNotes();
+  renderPapers(testRows);
+  renderTeachers();
   renderAside();
-  wireTabs();
+  renderCounts(testRows);
+  initTabs();
   wireRedeem();
   wireEnroll();
   loadSimilar();
@@ -135,7 +136,7 @@ function renderPurchase() {
     <div class="batch-actions">
       ${
         open
-          ? `<a class="btn btn-primary btn-lg" href="#panel-curriculum" data-open-curriculum>Start learning</a>`
+          ? `<a class="btn btn-primary btn-lg" href="#panel-classes" data-open-tab="classes">Start learning</a>`
           : isFree
             ? `<button class="btn btn-primary btn-lg" type="button" data-enroll>Enrol — free</button>`
             : `<button class="btn btn-accent btn-lg" type="button" data-redeem>Redeem access code</button>`
@@ -170,7 +171,7 @@ function renderPurchase() {
       </span>
       ${
         open
-          ? `<a class="btn btn-primary btn-sm" href="#panel-curriculum">Start learning</a>`
+          ? `<a class="btn btn-primary btn-sm" href="#panel-classes" data-open-tab="classes">Start learning</a>`
           : isFree
             ? `<button class="btn btn-primary btn-sm" type="button" data-enroll>Enrol free</button>`
             : `${
@@ -215,6 +216,29 @@ function pdfRow(pdf) {
     </div>`;
 }
 
+/**
+ * The batch's own numbers, written on the tab that leads to them.
+ *
+ * A count is only shown when there is something to count: an empty tab reads
+ * "Notes", not "Notes 0", because a zero badge is noise, not information.
+ */
+function renderCounts(testRows) {
+  const lessons = current.folders.reduce((n, folder) => n + (folder.lessons || []).length, 0);
+  const notes = current.folders.reduce((n, folder) => n + (folder.pdf_resources || []).length, 0);
+  const counts = {
+    classes: lessons,
+    notes,
+    papers: (testRows || []).length,
+    teachers: (current.faculty || []).length
+  };
+  Object.entries(counts).forEach(([name, value]) => {
+    const node = document.querySelector(`.tab-count[data-count="${name}"]`);
+    if (!node) return;
+    node.textContent = value > 0 ? String(value) : '';
+    node.hidden = !(value > 0);
+  });
+}
+
 function renderOverview() {
   const host = $('#panel-overview');
   const lessonCount = current.folders.reduce((n, f) => n + (f.lessons || []).length, 0);
@@ -225,8 +249,8 @@ function renderOverview() {
         <strong style="display:block;margin-bottom:6px">What is inside</strong>
         <ul class="feature-list" style="margin:0">
           <li>${icon('play')}<span>${lessonCount} ${lessonCount === 1 ? 'lesson' : 'lessons'} across ${current.folders.length} ${current.folders.length === 1 ? 'section' : 'sections'}</span></li>
-          <li>${icon('file-text')}<span>${current.tests} ${current.tests === 1 ? 'test' : 'tests'} attached to this batch</span></li>
-          <li>${icon('note')}<span>PDF notes where the faculty uploaded them</span></li>
+          <li>${icon('file-text')}<span>${current.tests} ${current.tests === 1 ? 'paper' : 'papers'} in this batch</span></li>
+          <li>${icon('note')}<span>Notes and PDFs, grouped by section under Notes</span></li>
         </ul>
       </div>
       <div class="card card-pad">
@@ -243,14 +267,26 @@ function renderOverview() {
           }
         </p>
       </div>
+    </div>
+    <div class="card card-pad" style="margin-top:var(--sp-4)">
+      <strong style="display:block;margin-bottom:10px">Questions people ask</strong>
+      ${faqItems()
+        .map(
+          ([q, a]) => `
+        <div class="acc-item">
+          <div class="acc-head-static"><span class="acc-title">${esc(q)}</span></div>
+          <p class="acc-text">${esc(a)}</p>
+        </div>`
+        )
+        .join('')}
     </div>`;
 }
 
-function renderCurriculum() {
-  const host = $('#panel-curriculum');
+function renderClasses() {
+  const host = $('#panel-classes');
   if (!current.folders.length) {
     host.innerHTML = emptyState({
-      title: 'No lessons published yet',
+      title: 'No classes published yet',
       body: 'Sections and lessons appear here as soon as the faculty publishes them.',
       iconName: 'play'
     });
@@ -268,25 +304,54 @@ function renderCurriculum() {
         <div class="lesson-list">
           ${(folder.lessons || []).map(lessonRow).join('') || '<p class="tiny subtle" style="margin:0">No lessons in this section yet.</p>'}
         </div>
-        ${
-          (folder.pdf_resources || []).length
-            ? `<div style="margin-top:12px"><p class="tiny strong" style="margin:0 0 6px">Notes</p>${folder.pdf_resources
-                .map(pdfRow)
-                .join('')}</div>`
-            : ''
-        }
       </div>`
     )
     .join('');
 }
 
-function renderTests(testRows) {
-  const host = $('#panel-tests');
+/**
+ * Every PDF on the batch, grouped by the section it belongs to.
+ *
+ * These used to be nested inside the lesson list, which meant a student who
+ * wanted "the notes" scrolled a curriculum to find them, and the same row
+ * appeared twice once Classes and Notes became separate tabs.
+ */
+function renderNotes() {
+  const host = $('#panel-notes');
+  const groups = current.folders
+    .map((folder) => ({ folder, pdfs: folder.pdf_resources || [] }))
+    .filter((group) => group.pdfs.length);
+
+  if (!groups.length) {
+    host.innerHTML = emptyState({
+      title: 'No notes in this batch yet',
+      body: 'PDFs appear here as soon as the faculty uploads them. Protected notes open once the batch is unlocked.',
+      iconName: 'note'
+    });
+    return;
+  }
+
+  host.innerHTML = groups
+    .map(
+      ({ folder, pdfs }) => `
+      <div class="card card-pad" style="margin-bottom:var(--sp-4)">
+        <div class="row-between" style="margin-bottom:10px">
+          <strong>${esc(folder.title)}</strong>
+          <span class="tiny subtle">${pdfs.length} ${pdfs.length === 1 ? 'file' : 'files'}</span>
+        </div>
+        <div class="pdf-list">${pdfs.map(pdfRow).join('')}</div>
+      </div>`
+    )
+    .join('');
+}
+
+function renderPapers(testRows) {
+  const host = $('#panel-papers');
   if (!testRows.length) {
     host.innerHTML = emptyState({
-      title: 'No tests in this batch yet',
+      title: 'No papers in this batch yet',
       body: 'A published paper appears here with its duration and marking scheme.',
-      actionLabel: 'All tests',
+      actionLabel: 'All papers',
       actionHref: 'tests.html',
       iconName: 'file-text'
     });
@@ -325,14 +390,14 @@ function testCardFor(test) {
  * table answered it. It now renders what the provider typed in, and says so
  * plainly when a batch genuinely lists nobody.
  */
-function renderFaculty() {
-  const host = $('#panel-faculty');
+function renderTeachers() {
+  const host = $('#panel-teachers');
   const people = current.faculty || [];
 
   if (!people.length) {
     host.innerHTML = emptyState({
       title: 'No faculty listed',
-      body: 'This batch does not name its teachers yet. Lessons and notes are already available in the Class Schedule tab.',
+      body: 'This batch does not name its teachers yet. Its classes and notes are already in the Classes and Notes tabs.',
       iconName: 'users'
     });
     return;
@@ -360,22 +425,14 @@ function renderFaculty() {
     </div>`;
 }
 
-function renderFaq() {
-  const items = [
+/** The four questions the access model raises, answered from this batch. */
+function faqItems() {
+  return [
     ['Is this batch free?', current.free ? 'Yes. Press Enrol and the batch is added to your account — recordings and notes open straight away.' : 'No — it unlocks with an access code from your institute. There is no card payment on this platform.'],
     ['Do I need an account?', 'Browsing does not need one, but joining a batch and keeping your progress and notes does.'],
     ['How do I get the code?', current.telegramDm ? `Press Get code to message ${current.telegramHandle || 'the teacher'} on Telegram; the batch name and number are already in the message. Then paste the code they send you under “Redeem access code”.` : 'Ask your institute for a code, then paste it under “Redeem access code”.'],
-    ['Can I attempt the tests?', 'Any published test that is open can be started from the Tests tab. Paid tests need the batch unlocked first.']
+    ['Can I attempt the papers?', 'Any published paper that is open can be started from the Papers tab. Paid papers need the batch unlocked first.']
   ];
-  $('#panel-faq').innerHTML = items
-    .map(
-      ([q, a]) => `
-      <div class="acc-item">
-        <div class="acc-head-static"><span class="acc-title">${esc(q)}</span></div>
-        <p class="acc-text">${esc(a)}</p>
-      </div>`
-    )
-    .join('');
 }
 
 function renderAside() {
@@ -402,7 +459,7 @@ function renderAside() {
       </dl>
       ${
         current.free || current.hasAccess
-          ? `<a class="btn btn-primary btn-block" style="margin-top:var(--sp-4)" href="#panel-curriculum">Class schedule</a>`
+          ? `<a class="btn btn-primary btn-block" style="margin-top:var(--sp-4)" href="#panel-classes" data-open-tab="classes">Class schedule</a>`
           : `${
               current.telegramDm
                 ? `<a class="btn btn-primary btn-block" style="margin-top:var(--sp-4)" href="${esc(current.telegramDm)}" target="_blank" rel="noopener" data-get-code>${icon('message')} Get code</a>`
@@ -433,27 +490,67 @@ async function loadSimilar() {
 /* Behaviour                                                          */
 /* ------------------------------------------------------------------ */
 
-function wireTabs() {
-  const tabs = $$('.tabs .tab');
-  tabs.forEach((tab, index) => {
-    tab.addEventListener('click', () => selectTab(index));
-    tab.addEventListener('keydown', (event) => {
-      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
-      event.preventDefault();
-      const next = (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-      tabs[next].focus();
-      selectTab(next);
-    });
-  });
+/**
+ * The tab strip: five panels, one visible, and the choice written into the URL.
+ *
+ * `?tab=notes` is a link a teacher can send and a student can bookmark. The
+ * strip follows the ARIA tabs pattern — one tab in the tab order (roving
+ * tabindex), arrow keys move between tabs, Home and End jump to the ends.
+ */
+const TABS = ['overview', 'classes', 'notes', 'papers', 'teachers'];
+
+function tabFromUrl() {
+  const wanted = (qsParam('tab') || '').toLowerCase();
+  return TABS.includes(wanted) ? wanted : 'overview';
 }
 
-function selectTab(index) {
-  $$('.tabs .tab').forEach((tab, i) => {
-    const selected = i === index;
+function writeTabToUrl(name, { push }) {
+  const url = new URL(location.href);
+  if (name === 'overview') url.searchParams.delete('tab');
+  else url.searchParams.set('tab', name);
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  if (next === `${location.pathname}${location.search}${location.hash}`) return;
+  if (push) history.pushState({ tab: name }, '', next);
+  else history.replaceState({ tab: name }, '', next);
+}
+
+function selectTab(name, { push = true, focus = false } = {}) {
+  const chosen = TABS.includes(name) ? name : 'overview';
+  $$('.tabs .tab').forEach((tab) => {
+    const selected = tab.dataset.tab ? tab.dataset.tab === chosen : chosen === 'overview';
     tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    if (selected && focus) tab.focus();
     const panel = document.getElementById(tab.getAttribute('aria-controls'));
     if (panel) panel.hidden = !selected;
   });
+  writeTabToUrl(chosen, { push });
+}
+
+function initTabs() {
+  const tabs = $$('.tabs .tab');
+  const nameOf = (tab) => tab.dataset.tab || 'overview';
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => selectTab(nameOf(tab), { push: true }));
+    tab.addEventListener('keydown', (event) => {
+      const index = tabs.indexOf(tab);
+      let next = null;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = tabs.length - 1;
+      if (next === null) return;
+      event.preventDefault();
+      selectTab(nameOf(tabs[next]), { push: true, focus: true });
+    });
+  });
+
+  // Back and forward move between the tabs the visitor actually opened.
+  window.addEventListener('popstate', () => selectTab(tabFromUrl(), { push: false }));
+
+  // A deep link opens on its own tab; an unknown one falls back to Overview.
+  selectTab(tabFromUrl(), { push: false });
 }
 
 function wireEnroll() {
@@ -537,10 +634,13 @@ function wireRedeem() {
         toast('Copy the address bar to share this batch.', 'info');
       }
     }
-    if (event.target.closest('[data-open-curriculum]')) {
-      const tabs = $$('.tabs .tab');
-      selectTab(tabs.findIndex((tab) => tab.getAttribute('aria-controls') === 'panel-curriculum'));
-      document.getElementById('panel-curriculum')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const opener = event.target.closest('[data-open-tab]');
+    if (opener) {
+      // An in-page button that means "show me that tab" — it must move the tab
+      // strip too, or the button and the highlighted tab disagree.
+      event.preventDefault();
+      selectTab(opener.dataset.openTab, { push: true });
+      document.getElementById('batch-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   });
 

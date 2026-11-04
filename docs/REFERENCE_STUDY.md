@@ -104,7 +104,7 @@ worst possible way to express an order.
 | P1 | Real progress, never a placeholder | Frappe `lms_course_progress` | `ProgressSerializer` + `dashboard.js` | S |
 | P2 | Streak and study time from completed work | PW / Unacademy dashboards | dashboard figures | S |
 | P3 | Weak-topic analysis from marked answers | PW (G2 reviews), edX analytics | new `/api/insights/topics/` | M |
-| P4 | Batch page as tabs: overview / classes / notes / tests | PW batch-overview URL | `course.html` | M |
+| P4 | Batch page as tabs: overview / classes / notes / papers / teachers | PW batch-overview URL | `course.html` (shipped) | M |
 | P5 | Schedule ("today's classes") | PW, Frappe `lms_batch_timetable` | needs a schedule field on lessons | L |
 | P6 | Drag-and-drop outline in the console | Frappe `CourseOutline.vue` | new admin view for a course | M |
 | P7 | Faceted catalogue filters | Unacademy, richie | `courses.html` + API facet list | M |
@@ -141,9 +141,28 @@ worst possible way to express an order.
   lesson, yesterday accepted so the number does not read zero every morning) and
   **This week** (minutes from finished lessons, summed from their durations).
 
-P3 — weak-topic analysis from `Question.topic` and the marked `AttemptAnswer`
-rows — is the next milestone and is the one that makes the product feel *smart*
-rather than merely tidy.
+**P4 shipped** — the batch page is a five-tab page with an address for each tab.
+
+- `course.html` carries `#batch-tabs` with Overview, Classes, Notes, Papers and
+  Teachers, following the ARIA tabs pattern: one tab in the tab order, arrow
+  keys (plus Home and End) move between them, and each tab points at a panel
+  through `aria-controls`.
+- The choice is in the URL — `course.html?slug=…&tab=notes` opens Notes, the
+  Back button walks the tabs a visitor visited, and an unknown `?tab=` falls
+  back to Overview instead of rendering nothing.
+- Notes left the lesson list: they are their own tab, grouped by section, and a
+  locked PDF is badged instead of offering a reader it has no file for. Classes
+  keeps lessons only, so no row appears twice.
+- Papers and Teachers are the old Tests and Faculty panels under the names the
+  rest of the product uses; the batch FAQ folded into Overview, where the
+  access question it answers is already explained.
+- Each tab counts what is behind it (`3` classes, `2` notes, …) and hides the
+  badge at zero — "Notes 0" is noise, not information.
+
+P6 — the drag-and-drop outline in the console, so a course's sections and
+lessons are ordered by moving them rather than by typing integers — is the next
+milestone, followed by P3 (weak-topic analysis from `Question.topic` and the
+marked `AttemptAnswer` rows).
 
 Each later item gets the same treatment: a pattern named, its source cited, its
 landing place in this codebase agreed before any code is written.

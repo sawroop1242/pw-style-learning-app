@@ -214,6 +214,114 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('no console errors', errors.length === 0, errors[0]);
   }
 
+  /* ------------------- batch page: five tabs, one URL ------------------- */
+  {
+    console.log('\ncourse.html (tabs)');
+    const { window, doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
+      query: '?slug=jee-main-2027',
+      signedIn: true
+    });
+    await wait(250);
+
+    const tabs = [...doc.querySelectorAll('#batch-tabs .tab')];
+    check('five tabs on a batch page', tabs.length === 5, tabs.map((t) => t.id).join('|'));
+    check(
+      'the tabs read Overview, Classes, Notes, Papers, Teachers',
+      tabs.map((t) => t.textContent.replace(/\d+/g, '').trim()).join('|') === 'Overview|Classes|Notes|Papers|Teachers',
+      tabs.map((t) => t.textContent.trim()).join('|')
+    );
+    check('Overview is open first', doc.querySelector('#tab-overview').getAttribute('aria-selected') === 'true');
+    check('the other four panels start hidden', [...doc.querySelectorAll('.tab-panel[hidden]')].length === 4);
+    check('one tab in the tab order, not five', tabs.filter((t) => t.getAttribute('tabindex') === '0').length === 1);
+
+    // Nobody wants "Notes 0": a badge only appears when it counts something.
+    const counts = Object.fromEntries(
+      [...doc.querySelectorAll('.tab-count')].map((n) => [n.dataset.count, n.hidden ? null : n.textContent.trim()])
+    );
+    check('classes tab counts the lessons', counts.classes === '3', String(counts.classes));
+    check('notes tab counts the PDFs', counts.notes === '2', String(counts.notes));
+    check('papers tab counts the papers', counts.papers === '1', String(counts.papers));
+    check('teachers tab counts the faculty', counts.teachers === '2', String(counts.teachers));
+
+    click(window, doc.querySelector('#tab-notes'));
+    await wait(150);
+    check('clicking Notes opens the notes panel', !doc.querySelector('#panel-notes').hidden);
+    check('and closes the classes panel', doc.querySelector('#panel-classes').hidden);
+    check('the URL remembers the tab', /[?&]tab=notes\b/.test(window.location.search), window.location.search);
+    check('the notes panel groups by section', doc.querySelectorAll('#panel-notes .card').length === 2, String(doc.querySelectorAll('#panel-notes .card').length));
+    check('every PDF is listed once', doc.querySelectorAll('#panel-notes .pdf-list .pdf-row').length === 2, String(doc.querySelectorAll('#panel-notes .pdf-row').length));
+    // A locked note is badged, not linked: the row must not offer a reader the
+    // server never gave a file for.
+    check(
+      'the locked note is badged, not linked',
+      doc.querySelectorAll('#panel-notes .pdf-row .badge-outline').length === 1 &&
+        doc.querySelectorAll('#panel-notes .pdf-row a.pdf-action').length === 1,
+      `${doc.querySelectorAll('#panel-notes .pdf-row .badge-outline').length} badges / ${doc.querySelectorAll('#panel-notes .pdf-row a.pdf-action').length} links`
+    );
+    check('Classes does not repeat the notes', doc.querySelectorAll('#panel-classes .pdf-row').length === 0);
+
+    // Arrow keys walk the strip; a tab that is not selected is not focusable.
+    const overview = doc.querySelector('#tab-overview');
+    overview.focus();
+    key(window, overview, 'ArrowRight');
+    await wait(80);
+    check('ArrowRight moves to Classes', doc.activeElement === doc.querySelector('#tab-classes') && doc.querySelector('#tab-classes').getAttribute('aria-selected') === 'true', doc.activeElement?.id);
+    key(window, doc.activeElement, 'End');
+    await wait(80);
+    check('End jumps to Teachers', doc.querySelector('#tab-teachers').getAttribute('aria-selected') === 'true' && !doc.querySelector('#panel-teachers').hidden);
+    key(window, doc.activeElement, 'ArrowRight');
+    await wait(80);
+    check('ArrowRight wraps round to Overview', doc.querySelector('#tab-overview').getAttribute('aria-selected') === 'true');
+    key(window, doc.activeElement, 'Home');
+    key(window, doc.activeElement, 'ArrowLeft');
+    await wait(80);
+    check('ArrowLeft wraps back to Teachers', doc.querySelector('#tab-teachers').getAttribute('aria-selected') === 'true');
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  /* ------------------- batch page: a deep link to one tab ---------------- */
+  {
+    console.log('\ncourse.html (?tab=notes deep link)');
+    const { doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
+      query: '?slug=jee-main-2027&tab=notes',
+      signedIn: true
+    });
+    await wait(250);
+    check('the deep link opens Notes', !doc.querySelector('#panel-notes').hidden && doc.querySelector('#panel-overview').hidden);
+    check('the tab strip agrees', doc.querySelector('#tab-notes').getAttribute('aria-selected') === 'true');
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    console.log('\ncourse.html (?tab=nonsense)');
+    const { window, doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
+      query: '?slug=jee-main-2027&tab=nonsense',
+      signedIn: true
+    });
+    await wait(250);
+    check('an unknown tab falls back to Overview', !doc.querySelector('#panel-overview').hidden && doc.querySelector('#tab-overview').getAttribute('aria-selected') === 'true');
+    check('and the bad value is dropped from the URL', !/tab=nonsense/.test(window.location.search), window.location.search);
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  /* --------------- batch page: “Start learning” lands on Classes --------- */
+  {
+    console.log('\ncourse.html (“Start learning” opens Classes)');
+    const { window, doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
+      query: '?slug=neet-biology-foundation',
+      signedIn: true
+    });
+    await wait(250);
+    const start = doc.querySelector('#purchase-slot [data-open-tab]');
+    check('an open batch offers “Start learning”', Boolean(start), start?.textContent?.trim());
+    check('it points at the classes panel', start?.dataset.openTab === 'classes' && start?.getAttribute('href') === '#panel-classes');
+    click(window, start);
+    await wait(150);
+    check('the click opens Classes', !doc.querySelector('#panel-classes').hidden && doc.querySelector('#tab-classes').getAttribute('aria-selected') === 'true');
+    check('and the URL follows', /[?&]tab=classes\b/.test(window.location.search), window.location.search);
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
   /* -------------------------------- tests ------------------------------- */
   {
     console.log('\ntests.html');
