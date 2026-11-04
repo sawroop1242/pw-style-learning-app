@@ -48,6 +48,7 @@ def csv_text(*rows, header=None):
 def good_row(**overrides):
     row = {
         "section": "Reasoning",
+        "topic": "",
         "question_type": "single_choice",
         "question_text": "Which number completes 3, 6, 12, 24?",
         "option_a": "36",
@@ -347,14 +348,19 @@ class ImportTests(TestCase):
     def test_import_writes_questions_choices_and_sections(self):
         imported = self.import_rows(
             good_row(question_text="Q1"),
-            good_row(question_text="Q2", section="Quant"),
+            good_row(question_text="Q2", section="Quant", topic="Percentages"),
         )
 
         self.assertEqual(imported, 2)
         questions = list(self.quiz.questions.order_by("position"))
         self.assertEqual([q.position for q in questions], [1, 2])
         self.assertEqual([q.prompt for q in questions], ["Q1", "Q2"])
-        self.assertEqual(questions[1].topic, "Quant")
+        # The two labels stay apart: the section draws the exam tabs, the topic
+        # is what the result analysis ranks.
+        self.assertEqual(questions[1].section, "Quant")
+        self.assertEqual(questions[1].topic, "Percentages")
+        self.assertEqual(questions[0].section, "Reasoning")
+        self.assertEqual(questions[0].topic, "")
         self.assertEqual(questions[0].marks, Decimal("2.00"))
         self.assertEqual(questions[0].negative_marks, Decimal("0.50"))
 

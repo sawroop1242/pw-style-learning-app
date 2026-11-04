@@ -87,7 +87,10 @@ const QUESTIONS = [1, 2, 3].map((n) => ({
   marks: null,
   negative_marks: null,
   difficulty: 'medium',
-  topic: 'Physics'
+  // A paper question carries two labels: the section it sits in (the exam
+  // window's tabs) and the chapter it tests (the result analysis).
+  section: 'Physics',
+  topic: 'Kinematics'
 }));
 
 const QUIZZES = [
@@ -209,12 +212,31 @@ const RESULT = {
     answered: index !== 2,
     marked_for_review: false,
     is_correct: index !== 2,
-    explanation: 'Worked explanation from the paper.'
+    explanation: 'Worked explanation from the paper.',
+    section: 'Physics',
+    topic: index === 1 ? 'Thermodynamics' : 'Kinematics'
   })),
-  section_breakdown: [
-    { section: 'Physics', correct: 2, incorrect: 0, unanswered: 1, score: '8.00', max_score: '12.00' }
+  topic_breakdown: [
+    { topic: 'Kinematics', correct: 2, incorrect: 0, unanswered: 0, answered: 2, accuracy: 100, score: '8.00', max_score: '8.00' },
+    { topic: 'Thermodynamics', correct: 0, incorrect: 0, unanswered: 1, answered: 0, accuracy: null, score: '0.00', max_score: '4.00' }
   ],
   result_released_at: '2026-10-27T09:10:00Z'
+};
+
+/* Weak-topic analysis. The rules travel with the payload so the screen prints
+ * the threshold it actually used. */
+const INSIGHTS = {
+  released_attempts: 2,
+  questions: 9,
+  topics: [
+    { topic: 'Kinematics', questions: 5, correct: 1, incorrect: 4, unanswered: 0, answered: 5, accuracy: 20, score: '4.00', max_score: '20.00', attempts: 2 },
+    { topic: 'Thermodynamics', questions: 3, correct: 2, incorrect: 1, unanswered: 0, answered: 3, accuracy: 66.7, score: '8.00', max_score: '12.00', attempts: 1 },
+    { topic: 'Thermodynamics (blank chapter)', questions: 1, correct: 0, incorrect: 0, unanswered: 1, answered: 0, accuracy: null, score: '0.00', max_score: '4.00', attempts: 1 }
+  ],
+  focus: [
+    { topic: 'Kinematics', questions: 5, correct: 1, incorrect: 4, unanswered: 0, answered: 5, accuracy: 20, score: '4.00', max_score: '20.00', attempts: 2 }
+  ],
+  rules: { min_answered: 3, weak_below: 60 }
 };
 
 const json = (body, status = 200) =>
@@ -231,6 +253,7 @@ const json = (body, status = 200) =>
  *   empty     — serve an empty catalogue (the "nothing published" path)
  *   noTelegram — every batch is served without a Telegram handle, so the
  *               "Get code" button has nothing to point at
+ *   emptyInsights — a learner with no released papers (the empty focus panel)
  */
 /* A paper frozen at attempt start. The prompts deliberately differ from the
  * live `QUESTIONS`, so a test can prove the player renders the attempt's copy
@@ -243,7 +266,8 @@ const FROZEN_PAPER = {
       position: 0,
       prompt: 'FROZEN: the paper that was served',
       question_type: 'single_choice',
-      topic: 'Frozen section',
+      section: 'Frozen section',
+      topic: 'Frozen chapter',
       marks: '2.00',
       negative_marks: '0.50',
       choices: [
@@ -259,7 +283,8 @@ function makeStub({
   empty = false,
   noTelegram = false,
   frozenPaper = false,
-  mcq = false
+  mcq = false,
+  emptyInsights = false
 } = {}) {
   const pick = (rows) =>
     (empty ? [] : noTelegram ? rows.map((row) => ({ ...row, telegram_dm: '', telegram_handle: '' })) : rows);
@@ -488,6 +513,11 @@ function makeStub({
       return json({ id: 1, title: 'Revise mole concept', due_at: '2026-10-28T10:00:00Z', is_completed: done });
     }
 
+    if (path === '/insights/topics/') {
+      return signedIn || authed
+        ? json(emptyInsights ? { ...INSIGHTS, topics: [], focus: [], released_attempts: 0, questions: 0 } : INSIGHTS)
+        : json({ detail: 'Authentication credentials were not provided.' }, 401);
+    }
     if (path === '/notifications/') {
       const items = [
         { id: 'announcement:1', kind: 'announcement', title: 'Mock test schedule', body: 'Two papers are open this week.', href: 'community.html', at: iso() },

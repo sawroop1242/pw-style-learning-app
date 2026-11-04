@@ -162,6 +162,13 @@ class Question(TimeStampedModel):
     difficulty = models.CharField(
         max_length=10, choices=Difficulty.choices, blank=True
     )
+    #: The part of the paper this question sits in ("Physics", "English"). The
+    #: exam window groups its section tabs by this, so a full mock can have a
+    #: section per subject instead of one tab per chapter.
+    section = models.CharField(max_length=120, blank=True, db_index=True)
+    #: The chapter the question tests ("Kinematics", "Mole concept"). This is
+    #: what the result's topic breakdown ranks, so a learner can see *which*
+    #: chapter cost them marks, not just which subject.
     topic = models.CharField(max_length=120, blank=True, db_index=True)
     position = models.PositiveIntegerField(default=1)
 

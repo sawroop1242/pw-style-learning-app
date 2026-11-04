@@ -15,7 +15,9 @@ from decimal import Decimal
 from . import snapshot
 
 ZERO = Decimal("0.00")
-UNSECTIONED = "Unsectioned"
+#: Label for questions whose chapter was never recorded. Grouped, never hidden:
+#: a paper that is entirely untagged should say so rather than show nothing.
+UNLABELLED = "Unlabelled"
 
 
 def chosen_ids(answer):
@@ -49,7 +51,12 @@ def grade_attempt(attempt):
 
     Returns a dict with the score, the maximum achievable score (computed over
     every question in the snapshot, so an unanswered question still counts
-    towards the denominator), answer counts, and a per-topic breakdown.
+    towards the denominator), answer counts, and a **per-topic** breakdown.
+
+    The breakdown is keyed on the chapter (``Question.topic``), not the section
+    the paper prints: "Physics: 12/20" says the paper was hard, "Kinematics:
+    2/8" says which chapter to revise. Questions with no chapter are grouped
+    under ``UNLABELLED`` and are shown, not guessed at.
     """
     paper = snapshot.paper_for(attempt)
     policy = snapshot.quiz_policy(paper)
@@ -63,7 +70,7 @@ def grade_attempt(attempt):
     score = ZERO
     max_score = ZERO
     correct = incorrect = unanswered = marked = 0
-    sections = OrderedDict()
+    topics = OrderedDict()
 
     # The denominator follows the attempt snapshot, not the submitted payload
     # and not whatever the question bank looks like today.
@@ -75,10 +82,10 @@ def grade_attempt(attempt):
         question_marks = snapshot.marks_for(question_entry, policy)
         max_score += question_marks
 
-        section = question_entry.get("topic") or UNSECTIONED
-        bucket = sections.setdefault(
-            section,
-            {"section": section, "correct": 0, "incorrect": 0, "unanswered": 0,
+        topic = question_entry.get("topic") or UNLABELLED
+        bucket = topics.setdefault(
+            topic,
+            {"topic": topic, "correct": 0, "incorrect": 0, "unanswered": 0,
              "score": ZERO, "max_score": ZERO},
         )
         bucket["max_score"] += question_marks
@@ -116,7 +123,7 @@ def grade_attempt(attempt):
         "incorrect": incorrect,
         "unanswered": unanswered,
         "marked_for_review": marked,
-        "sections": list(sections.values()),
+        "topics": list(topics.values()),
     }
 
 

@@ -274,6 +274,93 @@ function renderTrend(attemptRows, quizMap) {
   if (note) note.textContent = `Across ${points.length} submitted ${points.length === 1 ? 'paper' : 'papers'}, newest last.`;
 }
 
+/**
+ * "Where to focus": the chapters the learner's released papers say are costing
+ * them marks.
+ *
+ * Every figure comes from `/insights/topics/`, which computes it from the
+ * frozen papers — nothing here estimates. The rule (how many marked answers a
+ * chapter needs, and what counts as weak) is printed from the payload, not
+ * hard-coded in the copy, so the sentence cannot drift from the maths.
+ */
+function renderFocus(result) {
+  const host = $('#focus-list');
+  if (!host) return;
+  const sub = $('#focus-sub');
+
+  if (!signedIn) {
+    host.innerHTML = signInPrompt(
+      'Sign in to see where you lose marks',
+      'Your chapter breakdown is computed from your own released papers.',
+      'lightbulb'
+    );
+    if (sub) sub.textContent = 'Chapters ranked from your released papers';
+    return;
+  }
+
+  if (!result || !result.ok) {
+    host.innerHTML = '<p class="small muted" style="margin:0">Focus areas could not load. Your papers are still scored.</p>';
+    return;
+  }
+
+  const data = result.payload || {};
+  const topics = Array.isArray(data.topics) ? data.topics : [];
+  const focus = Array.isArray(data.focus) ? data.focus : [];
+  const released = Number(data.released_attempts || 0);
+  const rules = data.rules || {};
+  const min = Number(rules.min_answered || 0);
+  const below = Number(rules.weak_below || 0);
+  const measured = topics.filter((row) => row.accuracy !== null);
+
+  if (!released) {
+    host.innerHTML = emptyState({
+      title: 'No released papers yet',
+      body: 'Sit a paper and submit it. Once the result is released, the chapters you lost marks in appear here.',
+      actionLabel: 'Browse papers',
+      actionHref: 'tests.html',
+      iconName: 'lightbulb'
+    });
+    return;
+  }
+
+  if (sub) {
+    sub.textContent = `${released} released paper${released === 1 ? '' : 's'} · ${measured.length} chapter${measured.length === 1 ? '' : 's'} measured`;
+  }
+
+  if (!measured.length) {
+    host.innerHTML = `<p class="small muted" style="margin:0">
+      Your papers do not name a chapter for any question yet, so there is nothing to rank.
+      A test owner tags the chapter when the paper is written.</p>`;
+    return;
+  }
+
+  if (!focus.length) {
+    host.innerHTML = `<p class="small muted" style="margin:0" id="focus-clear">
+      No chapter is below ${esc(String(below))}% with at least ${esc(String(min))} marked answers.
+      That is a good place to be — keep taking papers.</p>`;
+    return;
+  }
+
+  host.innerHTML =
+    focus
+      .map((row) => {
+        const pct = Math.max(0, Math.min(100, Number(row.accuracy) || 0));
+        return `
+          <div class="section-row">
+            <div class="section-row-head">
+              <strong>${esc(row.topic)}</strong>
+              <span>${row.correct} right · ${row.incorrect} wrong · ${row.unanswered} left</span>
+              <b>${esc(String(row.accuracy))}%</b>
+            </div>
+            <div class="section-track"><i style="width:${pct}%"></i></div>
+          </div>`;
+      })
+      .join('') +
+    `<p class="tiny muted" style="margin:0">
+      A chapter is listed once it has ${esc(String(min))} marked answers and accuracy under ${esc(String(below))}%.
+      Accuracy counts answered questions only.</p>`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Upcoming tests                                                     */
 /* ------------------------------------------------------------------ */
@@ -555,7 +642,7 @@ async function boot() {
   // Personal endpoints are only asked when there is an account to ask about:
   // an anonymous request for them is not an empty answer, it is a 401.
   const personal = (path) => (signedIn ? settle(path) : Promise.resolve({ ok: false }));
-  const [courses, progress, finished, attempts, quizzes, notes, tasks] = await Promise.all([
+  const [courses, progress, finished, attempts, quizzes, notes, tasks, insight] = await Promise.all([
     personal(`/courses/${apiQuery({ mine: 1, page_size: 20 })}`),
     // Newest first: "continue" means the lesson you left, not the one that
     // happens to sit first in the syllabus.
@@ -566,7 +653,8 @@ async function boot() {
     personal(`/quiz-attempts/${apiQuery({ page_size: 20 })}`),
     settle(`/quizzes/${apiQuery({ page_size: 60 })}`),
     personal(`/notes/${apiQuery({ page_size: 10 })}`),
-    personal(`/study-tasks/${apiQuery({ page_size: 20 })}`)
+    personal(`/study-tasks/${apiQuery({ page_size: 20 })}`),
+    personal('/insights/topics/')
   ]);
 
   const pick = (result, fallback = []) => (result.ok ? rows(result.payload) : fallback);
@@ -601,6 +689,7 @@ async function boot() {
 
   const quizMap = new Map(quizRows.map((quiz) => [quiz.id, quiz]));
   renderTrend(attemptRows, quizMap);
+  renderFocus(insight);
   renderUpcoming(quizRows);
   renderNotes(noteRows);
   renderBatches(courseRows);

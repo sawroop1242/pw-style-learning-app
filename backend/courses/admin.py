@@ -1119,9 +1119,9 @@ class ChoiceInline(admin.TabularInline):
 
 @admin.register(Question)
 class QuestionAdmin(OwnershipScopedAdmin):
-    list_display = ("prompt_short", "quiz", "question_type", "difficulty", "position", "topic")
+    list_display = ("prompt_short", "quiz", "section", "topic", "question_type", "position")
     list_filter = ("question_type", "difficulty", "quiz")
-    search_fields = ("prompt", "topic", "quiz__title")
+    search_fields = ("prompt", "section", "topic", "quiz__title")
     inlines = [ChoiceInline]
     list_select_related = ("quiz",)
     autocomplete_fields = ("quiz",)
@@ -1138,8 +1138,11 @@ class QuestionAdmin(OwnershipScopedAdmin):
             "description": "Blank marks fall back to the test's own values.",
         }),
         ("Classification", {
-            "fields": ("difficulty", "topic"),
-            "description": "The topic is what the result's strengths panel groups by.",
+            "fields": ("difficulty", "section", "topic"),
+            "description": "The section is the tab the exam window draws for this "
+                           "question (\"Physics\"); the topic is the chapter the "
+                           "result analysis ranks (\"Kinematics\"). A question "
+                           "with no topic is counted, but never called a weakness.",
         }),
         ("Placement", {"fields": ("position",)}),
     )

@@ -62,9 +62,9 @@ paths. Findings below are as of commit `ab0493c` + this change.
 | 2.4 | Question paper + choices | `test-player.html` | `GET /api/quizzes/<id>/` | connected |
 | 2.5 | Autosave, resume, timer from server deadline | `test-player.html` | `POST …/autosave/` | connected |
 | 2.6 | Submit and score | `test-player.html` | `POST …/submit/` | connected |
-| 2.7 | Result, section breakdown, solutions | `test-player.html` | `GET …/result/` | connected |
+| 2.7 | Result, topic breakdown, solutions | `test-player.html` | `GET …/result/` (`topic_breakdown`) | connected |
 | 2.8 | Report a question | `test-player.html` | `POST /api/question-reports/` (guest token or JWT) | connected |
-| 2.9 | Topic-wise strengths | `test-player.html` result | `section_breakdown` is keyed on `Question.topic` | connected |
+| 2.9 | Weak-topic analysis across papers | `dashboard.html` "Where to focus" + result "Where the marks went" | `GET /api/insights/topics/` (`courses/insights.py`); rows are keyed on `Question.topic`, and an untagged question is counted as `Unlabelled` rather than guessed | connected |
 
 ## 3. Learning loop
 

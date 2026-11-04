@@ -1,10 +1,12 @@
-# Question CSV — schema v1
+# Question CSV — schema v2
 
 The standard for bulk-authoring a test. One file, one fixed set of columns, one
 meaning per column. Written for whoever is preparing the paper, not just for
 whoever maintains the importer.
 
-- **Schema version:** `1` (`courses.csv_import.SCHEMA_VERSION`)
+- **Schema version:** `2` (`courses.csv_import.SCHEMA_VERSION`)
+- **v2 added `topic`** — the chapter the result's weak-topic analysis ranks.
+  A v1 file (no `topic` column) still imports; every row is simply untagged.
 - **Machine-readable contract:** `GET /api/staff/import-jobs/schema/`
 - **Downloadable template:** `GET /api/staff/import-jobs/template/`
 - **Importer:** `courses/csv_import.py`
@@ -44,7 +46,8 @@ be present.
 
 | Column | Required | Stored as | Rules |
 |---|---|---|---|
-| `section` | no | `Question.topic` (max 120) | Blank ⇒ `General`. This is the section the exam window groups by. |
+| `section` | no | `Question.section` (max 120) | Blank ⇒ `General`. The part of the paper — the tab the exam window draws, e.g. `Physics`. |
+| `topic` | no | `Question.topic` (max 120) | Blank ⇒ untagged. The chapter the question tests, e.g. `Kinematics` — what the result's weak-topic analysis ranks. Never inferred from `section`. |
 | `question_type` | no | `Question.question_type` | `single_choice` (default), `multiple_choice`, `true_false`. Anything else is rejected, never downgraded. |
 | `question_text` | **yes** | `Question.prompt` | ≤ 5,000 characters. Must be unique within the file (ignoring case and repeated spaces). |
 | `option_a` | **yes** | `Choice.text` of position 0 | ≤ 400 characters |
@@ -74,9 +77,9 @@ be present.
 ### A worked example
 
 ```csv
-section,question_type,question_text,option_a,option_b,option_c,option_d,option_e,correct_option,explanation,marks,negative_marks,difficulty
-Reasoning,single_choice,"Which number completes 3, 6, 12, 24?",36,48,30,42,,B,Each term doubles.,2,0.5,easy
-Reasoning,multiple_choice,Which of these are prime numbers?,2,3,4,6,,A|B,2 and 3 are prime.,2,0.5,medium
+section,topic,question_type,question_text,option_a,option_b,option_c,option_d,option_e,correct_option,explanation,marks,negative_marks,difficulty
+Reasoning,Series,single_choice,"Which number completes 3, 6, 12, 24?",36,48,30,42,,B,Each term doubles.,2,0.5,easy
+Reasoning,Number theory,multiple_choice,Which of these are prime numbers?,2,3,4,6,,A|B,2 and 3 are prime.,2,0.5,medium
 ```
 
 Quote any cell that contains a comma, a quote or a line break — ordinary CSV
@@ -94,6 +97,7 @@ the offending column and a stable code:
 | `missing_prompt` | `question_text` is empty |
 | `prompt_too_long` | over 5,000 characters |
 | `section_too_long` | over 120 characters |
+| `topic_too_long` | over 120 characters |
 | `bad_question_type` | not one of the three supported types |
 | `bad_difficulty` | not `easy` / `medium` / `hard` |
 | `option_too_long` | an option over 400 characters |
@@ -167,7 +171,7 @@ on the test, and the command exits non-zero rather than half-filling a paper.
 ## 5. Export
 
 `GET /api/staff/import-jobs/export/?quiz=<id>` returns the test's questions in
-the same v1 schema, so an export can be edited and re-imported. Export covers
+the same v2 schema, so an export can be edited and re-imported. Export covers
 questions only — never student attempts or answers — and a cell beginning with
 `=`, `+`, `-` or `@` is prefixed with `'` so a spreadsheet cannot execute it.
 Negative numbers are left alone because they are numbers, not formulas.

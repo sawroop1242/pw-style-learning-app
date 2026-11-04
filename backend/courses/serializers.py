@@ -363,7 +363,7 @@ class QuestionSerializer(serializers.ModelSerializer):
         # Explanation should NOT be returned before submission
         fields = [
             "id", "prompt", "position", "choices", "question_type", "marks",
-            "negative_marks", "difficulty", "topic"
+            "negative_marks", "difficulty", "section", "topic"
         ]
 
 
@@ -564,7 +564,7 @@ class QuizResultSerializer(serializers.Serializer):
     unanswered_count = serializers.SerializerMethodField()
     marked_for_review_count = serializers.SerializerMethodField()
     answers_detail = serializers.SerializerMethodField()
-    section_breakdown = serializers.SerializerMethodField()
+    topic_breakdown = serializers.SerializerMethodField()
     paper = serializers.SerializerMethodField()
     result_released_at = serializers.DateTimeField(allow_null=True)
     
@@ -633,20 +633,35 @@ class QuizResultSerializer(serializers.Serializer):
             return None
         return snapshot.review_rows(obj)
 
-    def get_section_breakdown(self, obj):
+    def get_topic_breakdown(self, obj):
+        """Where the marks went, chapter by chapter.
+
+        A released result only: an unreleased paper must not leak which
+        chapters it contained. ``accuracy`` is answered questions only, so an
+        unanswered chapter is not mistaken for a wrong one.
+        """
         if not obj.is_released:
             return None
-        return [
-            {
-                "section": bucket["section"],
-                "correct": bucket["correct"],
-                "incorrect": bucket["incorrect"],
-                "unanswered": bucket["unanswered"],
-                "score": str(bucket["score"]),
-                "max_score": str(bucket["max_score"]),
-            }
-            for bucket in self._graded(obj)["sections"]
-        ]
+        rows = []
+        for bucket in self._graded(obj)["topics"]:
+            answered = bucket["correct"] + bucket["incorrect"]
+            rows.append(
+                {
+                    "topic": bucket["topic"],
+                    "correct": bucket["correct"],
+                    "incorrect": bucket["incorrect"],
+                    "unanswered": bucket["unanswered"],
+                    "answered": answered,
+                    "accuracy": (
+                        round(bucket["correct"] * 100 / answered, 1)
+                        if answered
+                        else None
+                    ),
+                    "score": str(bucket["score"]),
+                    "max_score": str(bucket["max_score"]),
+                }
+            )
+        return rows
 
 
 class AttemptAnswerDetailSerializer(serializers.Serializer):
@@ -668,6 +683,8 @@ class AttemptAnswerDetailSerializer(serializers.Serializer):
     answered = serializers.BooleanField()
     marked_for_review = serializers.BooleanField()
     is_correct = serializers.BooleanField()
+    section = serializers.CharField()
+    topic = serializers.CharField()
 
 
 class CommunityPostSerializer(serializers.ModelSerializer):
