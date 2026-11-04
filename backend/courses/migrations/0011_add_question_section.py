@@ -23,7 +23,11 @@ from django.db import migrations, models
 
 def split_label(apps, schema_editor):
     Question = apps.get_model("courses", "Question")
-    Question.objects.exclude(section="").update(section=models.F("topic"))
+    # Every row that exists at this point predates the split, so its ``topic``
+    # *is* its section — copy unconditionally. (Filtering on ``section`` here
+    # would silently drop the data on a reverse-then-forward cycle, because the
+    # freshly added column is empty for every row.)
+    Question.objects.update(section=models.F("topic"))
     # ``topic`` becomes the chapter: unknown for every existing row.
     Question.objects.update(topic="")
 
