@@ -1,10 +1,14 @@
+import json
+
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Max, Q
 from django import forms
 from django.forms.models import BaseInlineFormSet
-from django.urls import reverse
+from django.http import Http404, JsonResponse
+from django.template.response import TemplateResponse
+from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
@@ -37,6 +41,13 @@ from courses.models import (
     TestSeries,
 )
 from courses.models.access import generate_access_code
+from courses.outline import (
+    OutlineError,
+    apply_order,
+    build_outline,
+    describe_outline,
+    revision_of,
+)
 
 User = get_user_model()
 
@@ -409,8 +420,106 @@ class LessonAdminForm(forms.ModelForm):
         return cleaned
 
 
+def _outline_summary(sections) -> str:
+    """Say "3 sections and 7 classes", with the singular where it belongs."""
+    lessons = sum(len(section.lessons) for section in sections)
+    return (
+        f"{len(sections)} section{'s' if len(sections) != 1 else ''} and "
+        f"{lessons} class{'es' if lessons != 1 else ''}"
+    )
+
+
+class CourseOutlineMixin:
+    """The batch's outline: sections and classes, arranged by moving them.
+
+    A tabular inline of `position` integers is how the console used to express
+    order — every move meant retyping the neighbours. This screen is the order
+    itself: drag a section, drag a class inside or across sections, then save
+    once. Everything it posts goes through `courses.outline`, which validates
+    the whole order or refuses it.
+    """
+
+    outline_template = "admin/courses/course_outline.html"
+
+    def get_urls(self):
+        # Registered before Django's own patterns so `<pk>/outline/` is not
+        # mistaken for a change-form sub-path.
+        return [
+            path(
+                "<path:object_id>/outline/",
+                self.admin_site.admin_view(self.outline_view),
+                name="courses_course_outline",
+            ),
+        ] + super().get_urls()
+
+    def _outline_course(self, request, object_id):
+        """The batch this account may rearrange, or the reason it cannot.
+
+        The lookup goes through the admin's own queryset, so a sub-admin asking
+        for a colleague's batch gets the same 404 they get from the change form
+        rather than a screen that reveals it exists.
+        """
+        if not str(object_id).isdigit():
+            raise Http404("That batch does not exist.")
+        course = self.get_queryset(request).filter(pk=int(object_id)).first()
+        if course is None:
+            raise Http404("That batch does not exist.")
+        if not self.has_change_permission(request, course):
+            raise PermissionDenied("You may not change this batch.")
+        return course
+
+    def outline_view(self, request, object_id):
+        course = self._outline_course(request, object_id)
+        if request.method == "POST":
+            return self._save_outline(request, course)
+        return self._render_outline(request, course)
+
+    def _render_outline(self, request, course):
+        sections = build_outline(course)
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Outline",
+            "opts": self.model._meta,
+            "app_label": self.model._meta.app_label,
+            "course": course,
+            "sections": sections,
+            "revision": revision_of(sections),
+            "summary": _outline_summary(sections),
+            "change_url": reverse("admin:courses_course_change", args=[course.pk]),
+        }
+        return TemplateResponse(request, self.outline_template, context)
+
+    def _save_outline(self, request, course):
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, ValueError):
+            return JsonResponse(
+                {
+                    "error": "invalid",
+                    "message": "That request was not readable. Reload the page and try again.",
+                },
+                status=400,
+            )
+
+        before = revision_of(build_outline(course))
+        try:
+            sections = apply_order(course, payload)
+        except OutlineError as exc:
+            return JsonResponse({"error": exc.code, "message": exc.message}, status=exc.status)
+
+        after = revision_of(sections)
+        if after != before:
+            # The batch's History should say the outline moved, without a row
+            # per class — this is one action by one person.
+            self.log_change(request, course, f"Reordered the outline ({_outline_summary(sections)})")
+            message = f"Saved — {_outline_summary(sections)}, in this order."
+        else:
+            message = "Nothing moved — the outline is already in this order."
+        return JsonResponse({"ok": True, "message": message, **describe_outline(sections)})
+
+
 @admin.register(Course)
-class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
+class CourseAdmin(CourseOutlineMixin, PublishableAdmin, OwnerAssignAdmin):
     publish_label = "batches"
     # Autocomplete views paginate the model admin's queryset, which needs a
     # stable order (Django warns "Pagination may yield inconsistent results"
@@ -467,7 +576,16 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
         )
         if obj is not None:
             # Appended as a one-element tuple of (name, options).
-            fieldsets += (("Add to this batch", {"fields": ("shortcuts",)}),)
+            fieldsets += ((
+                "What is in this batch",
+                {
+                    "fields": ("shortcuts",),
+                    "description": (
+                        "Add a section, a class, a test or a teacher, or arrange "
+                        "the order the sections and classes appear in."
+                    ),
+                },
+            ),)
         return fieldsets
 
     @admin.display(description="What the learner will send")
@@ -523,11 +641,13 @@ class CourseAdmin(PublishableAdmin, OwnerAssignAdmin):
             return ""
         return format_html(
             '<span class="ss-shortcuts">'
+            '<a class="ss-shortcut ss-shortcut--primary" href="{}">Arrange classes and sections</a>'
             '<a class="ss-shortcut" href="{}">+ Add a class</a>'
             '<a class="ss-shortcut" href="{}">+ Add a section</a>'
             '<a class="ss-shortcut" href="{}">+ Add a test</a>'
             '<a class="ss-shortcut" href="{}">+ Add faculty</a>'
             "</span>",
+            reverse("admin:courses_course_outline", args=[obj.pk]),
             reverse("admin:courses_lesson_add") + f"?course={obj.pk}",
             reverse("admin:courses_coursefolder_add") + f"?course={obj.pk}",
             reverse("admin:courses_quiz_add") + f"?course={obj.pk}",

@@ -58,10 +58,15 @@ jobs:
       - name: Interactions behave
         run: node interact.js
 
+      # The console's outline script: buttons, menus, saving and the 409 path.
+      - name: The console outline moves and saves what is on screen
+        run: node outline.js
+
       - name: Every class used by the scripts exists in the stylesheet
         run: node css.js
 
       - name: Syntax-check the service worker and scripts
         run: |
           node --check ../../frontend/sw.js
+          node --check ../../backend/static/staff/outline.js
           for file in ../../frontend/assets/js/*.js; do node --check "$file"; done
