@@ -220,6 +220,14 @@
   }
 
 
+  /* -------------------------------------------------- a failed save is announced */
+
+  /* role="alert" only speaks for changes that happen after the page settles, so
+     the summary is also focused on load: a screen reader reads it, and the
+     keyboard user lands where the problem is described. */
+  var summary = document.querySelector('.ss-form-errors');
+  if (summary) summary.focus({ preventScroll: false });
+
   /* ------------------------------------------------ widgets without a name */
 
   var inlineCount = 0;

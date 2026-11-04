@@ -92,6 +92,9 @@ class AdminThemeTests(TestCase):
         self.assertIn('class="ss-empty"', body)
         self.assertIn("Nothing matches this view", body)
         self.assertIn("Clear this view", body)
+        # One action in the empty state, not two: the way back, not the add form.
+        actions = body.split('class="ss-empty-actions"')[1].split("</p>")[0]
+        self.assertEqual(actions.count("<a "), 1)
         # The head still offers the one action the screen has.
         self.assertIn("Add course", body)
 
@@ -131,6 +134,19 @@ class AdminThemeTests(TestCase):
 
         self.assertIn("New course", body)
         self.assertIn("Nothing is saved until you press Save", body)
+
+    def test_a_failed_save_lists_the_problems_and_links_to_them(self):
+        response = self.client.post("/admin/courses/course/add/", {})
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="ss-form-errors" role="alert"', body)
+        self.assertIn("This form has", body)
+        # Each line names the field and links to the control that is wrong.
+        self.assertIn('href="#id_title"', body)
+        self.assertIn("Title:", body)
+        # Django's own note is still rendered; the stylesheet hides it.
+        self.assertIn("Please correct the errors below", body)
 
     def test_the_rail_groups_the_same_jobs_as_the_home_page(self):
         body = self.client.get("/admin/courses/course/").content.decode()

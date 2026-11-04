@@ -1656,8 +1656,70 @@ body.ss-admin {
   margin: 0 0 10px;
 }
 
+/* Django marks the control with aria-invalid; the border should agree with it. */
+.ss-admin .form-row.errors input,
+.ss-admin .form-row.errors select,
+.ss-admin .form-row.errors textarea,
+.ss-admin input[aria-invalid="true"],
+.ss-admin select[aria-invalid="true"],
+.ss-admin textarea[aria-invalid="true"] {
+  border-color: #e5a7a1;
+  background: #fffafa;
+}
+
+.ss-admin .form-row.errors input:focus,
+.ss-admin .form-row.errors select:focus,
+.ss-admin .form-row.errors textarea:focus,
+.ss-admin input[aria-invalid="true"]:focus,
+.ss-admin select[aria-invalid="true"]:focus,
+.ss-admin textarea[aria-invalid="true"]:focus {
+  border-color: var(--ss-red);
+  box-shadow: 0 0 0 3px rgba(192, 57, 47, .14);
+}
+
 .ss-admin .aligned .form-row .checkbox-row + .help {
   padding-left: 0;
+}
+
+/* The error summary at the top of a failed form. Django's own one-line note is
+ * hidden while this is present: same message, plus the list. */
+.ss-admin .ss-form-errors {
+  margin: 0 0 16px;
+  padding: 14px 18px;
+  border: 1px solid #f3c6c1;
+  border-radius: 12px;
+  background: var(--ss-red-wash);
+  color: #8a2019;
+  font-size: 13px;
+}
+
+.ss-admin .ss-form-errors:focus {
+  outline: 2px solid var(--ss-red);
+  outline-offset: 2px;
+}
+
+.ss-admin .ss-form-errors-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+
+.ss-admin .ss-form-errors ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ss-admin .ss-form-errors li {
+  margin: 2px 0;
+}
+
+.ss-admin .ss-form-errors a {
+  color: #8a2019;
+  font-weight: 650;
+  text-decoration: underline;
+}
+
+.ss-admin .ss-form-errors ~ div > .errornote {
+  display: none;
 }
 
 .ss-admin .errornote {

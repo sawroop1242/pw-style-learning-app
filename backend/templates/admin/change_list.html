@@ -129,11 +129,15 @@
           {% translate "Nothing has been added yet, and this account cannot add it." %}
         {% endif %}
       </p>
+      {% comment %}
+        One action, not two. A filtered view offers the way back; a list that is
+        genuinely empty offers the add form, because the page head's Add button
+        is written in the language of the toolbar, not of the blank page.
+      {% endcomment %}
       <p class="ss-empty-actions">
         {% if cl.query or cl.has_active_filters %}
-          <a class="ss-btn" href="?">{% translate "Clear this view" %}</a>
-        {% endif %}
-        {% if has_add_permission %}
+          <a class="ss-btn ss-btn-primary" href="?">{% translate "Clear this view" %}</a>
+        {% elif has_add_permission %}
           <a class="ss-btn ss-btn-primary" href="{% url cl.opts|admin_urlname:'add' %}">
             {% blocktranslate with name=cl.opts.verbose_name %}Add {{ name }}{% endblocktranslate %}
           </a>
