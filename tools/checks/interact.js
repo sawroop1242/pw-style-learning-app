@@ -109,16 +109,53 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('every server row is carded', doc.querySelectorAll('#course-grid .batch-card').length === 3, String(doc.querySelectorAll('#course-grid .batch-card').length));
     check('result count is announced', /3 batches/.test(doc.querySelector('#result-count').textContent), doc.querySelector('#result-count').textContent);
     check('one page needs no pager', doc.querySelectorAll('#course-pager a, #course-pager button').length === 0);
-    check('subject facet built from the rows', doc.querySelectorAll('#filter-subject input').length === 3, String(doc.querySelectorAll('#filter-subject input').length));
 
-    const price = doc.querySelector('#filter-price input[value="free"]');
-    price.checked = true;
-    price.dispatchEvent(new window.Event('change', { bubbles: true }));
-    await wait(200);
+    // The panel is drawn from the server's counts, not scraped from the cards
+    // on screen: three exams, three subjects, two levels.
+    const groups = [...doc.querySelectorAll('#facet-groups .filter-group h2')].map((h) => h.textContent);
+    check('the panel offers exam, subject and level', groups.join('|') === 'Exam|Subject|Level', groups.join('|'));
+    check('counts are drawn per value', /JEE Main/.test(doc.querySelector('#facet-groups').textContent));
+    check(
+      'a value carries its count',
+      [...doc.querySelectorAll('#facet-groups .filter-count')].some((n) => n.textContent === '1')
+    );
+    check('the price group is filled from the counts', doc.querySelectorAll('#facet-price input').length === 3, String(doc.querySelectorAll('#facet-price input').length));
+
+    // Ticking one value must not erase its siblings from the panel.
+    const physics = [...doc.querySelectorAll('#facet-groups input')].find((input) => input.value === 'Physics');
+    physics.checked = true;
+    physics.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await wait(250);
+    check('a ticked facet narrows the grid', doc.querySelectorAll('#course-grid .batch-card').length === 1, String(doc.querySelectorAll('#course-grid .batch-card').length));
+    check(
+      'its siblings are still offered',
+      [...doc.querySelectorAll('#facet-groups input')].some((input) => input.value === 'Biology'),
+      [...doc.querySelectorAll('#facet-groups input')].map((input) => input.value).join(',')
+    );
+    check('the filter becomes a removable chip', /Subject: Physics/.test(doc.querySelector('#active-filters').textContent), doc.querySelector('#active-filters').textContent.trim());
+    check('the filters button counts what is on', doc.querySelector('#filter-badge').textContent === '1', doc.querySelector('#filter-badge').textContent);
+    check('the address bar carries the filter', /subject=Physics/.test(window.location.search), window.location.search);
+
+    click(window, doc.querySelector('#active-filters [data-remove]'));
+    await wait(250);
+    check('removing the chip clears the filter', doc.querySelectorAll('#course-grid .batch-card').length === 3);
+    check('and the chips row goes away', doc.querySelector('#active-filters').hidden);
+
+    const free = doc.querySelector('#facet-price input[value="free"]');
+    free.checked = true;
+    free.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await wait(250);
     check('free filter narrows the grid', doc.querySelectorAll('#course-grid .batch-card').length === 2, String(doc.querySelectorAll('#course-grid .batch-card').length));
+
+    click(window, doc.querySelector('#filter-toggle'));
+    check('the filters sheet opens on a small screen', doc.querySelector('#filter-panel').classList.contains('is-open') && doc.querySelector('#filter-toggle').getAttribute('aria-expanded') === 'true');
+    key(window, doc.body, 'Escape');
+    check('Escape closes it', !doc.querySelector('#filter-panel').classList.contains('is-open'));
+
     click(window, doc.querySelector('#clear-filters'));
-    await wait(200);
+    await wait(250);
     check('clear filters restores the grid', doc.querySelectorAll('#course-grid .batch-card').length === 3);
+    check('and empties the address bar', window.location.search === '', window.location.search);
 
     click(window, doc.querySelector('#tab-mine'));
     await wait(150);

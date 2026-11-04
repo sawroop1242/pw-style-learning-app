@@ -214,7 +214,7 @@ class StaffCourseViewSet(viewsets.ModelViewSet):
     serializer_class = CourseDetailSerializer
     permission_classes = [IsSubAdminOrMainAdmin, IsOwnerOrMainAdmin]
     filter_backends = [filters.OrderingFilter, filters.SearchFilter]
-    search_fields = ["title", "description", "subject"]
+    search_fields = ["title", "description", "subject", "exam", "level"]
     ordering_fields = ["title", "subject", "position", "created_at", "is_published"]
     ordering = ["position", "-created_at"]
     
@@ -642,7 +642,9 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CourseListSerializer
     permission_classes = [permissions.AllowAny]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["title", "description", "subject"]
+    # Exam and level are searchable too: a learner who types "JEE" or "dropper"
+    # should not have to discover the filter panel to find the batch.
+    search_fields = ["title", "description", "subject", "exam", "level"]
     ordering_fields = ["title", "subject", "position", "created_at", "price"]
     ordering = ["position", "-created_at"]
     
@@ -651,36 +653,108 @@ class CourseViewSet(viewsets.ReadOnlyModelViewSet):
             return CourseDetailSerializer
         return CourseListSerializer
     
+    #: One entry per checkbox group, in the order the panel prints them.
+    FACETS = ("exam", "subject", "level")
+
     def get_queryset(self):
-        qs = super().get_queryset()
+        # `owner` is serialized with every row (the staff card shows it), so it
+        # is joined here rather than fetched per row.
+        return self._filtered_queryset().select_related("owner").annotate(
+            lesson_count=Count("lessons", filter=Q(lessons__is_published=True), distinct=True),
+            folder_count=Count("folders", distinct=True),
+            quiz_total=Count("quizzes", filter=Q(quizzes__is_published=True), distinct=True),
+        )
+
+    def _selected(self, name):
+        """Every value chosen for one facet: ``?exam=JEE&exam=NEET``.
+
+        Repeated parameters are how a checkbox group with more than one tick
+        travels; ``?exam=JEE,NEET`` would make a comma part of a value.
+        """
+        return [
+            value.strip()
+            for value in self.request.query_params.getlist(name)
+            if value.strip()
+        ]
+
+    @staticmethod
+    def _any_of(qs, field, values):
+        """Keep rows matching any of ``values`` — a facet group is an OR."""
+        if not values:
+            return qs
+        query = Q()
+        for value in values:
+            query |= Q(**{f"{field}__iexact": value})
+        return qs.filter(query)
+
+    def _filtered_queryset(self, skip=None):
+        """The catalogue with the caller's filters applied.
+
+        ``skip`` leaves one facet's own selection out, which is what a facet
+        count needs: "Physics (4)" must count the batches that would appear if
+        Physics were the only subject ticked, not just the ones already shown.
+        Search, the other facets and ``mine`` still apply.
+        """
+        request = self.request
+        qs = Course.objects.filter(is_published=True)
+
         # A batch page addresses its course by slug, so the list endpoint has to
         # be able to resolve one.
-        slug = self.request.query_params.get("slug")
+        slug = request.query_params.get("slug")
         if slug:
             qs = qs.filter(slug=slug)
-        # Filter by subject
-        subject = self.request.query_params.get("subject")
-        if subject:
-            qs = qs.filter(subject__iexact=subject)
-        # Filter by pricing mode
-        pricing_mode = self.request.query_params.get("pricing_mode")
-        if pricing_mode:
-            qs = qs.filter(pricing_mode=pricing_mode)
-        # Filter by free/paid
-        is_free = self.request.query_params.get("is_free")
-        if is_free is not None:
-            is_free = is_free.lower() == "true"
-            if is_free:
-                qs = qs.filter(pricing_mode=Course.PricingMode.FREE)
-            else:
-                qs = qs.filter(pricing_mode=Course.PricingMode.PAID)
+
+        for field in self.FACETS:
+            if field != skip:
+                qs = self._any_of(qs, field, self._selected(field))
+
+        if skip != "pricing_mode":
+            pricing_mode = request.query_params.get("pricing_mode")
+            if pricing_mode:
+                qs = qs.filter(pricing_mode=pricing_mode)
+            # ``is_free`` predates the facet panel; it stays for older clients.
+            is_free = request.query_params.get("is_free")
+            if is_free is not None:
+                wanted = Course.PricingMode.FREE if is_free.lower() == "true" else Course.PricingMode.PAID
+                qs = qs.filter(pricing_mode=wanted)
+
         # "mine" = the batches this caller has joined. A free batch is no
         # longer auto-included: enrolment is explicit, so "my batches" means
         # the ones they actually enrolled in (or were granted).
-        mine = self.request.query_params.get("mine")
+        mine = request.query_params.get("mine")
         if mine is not None and mine.lower() in {"1", "true", "yes"}:
-            qs = qs.filter(id__in=policy.granted_course_ids(self.request.user))
+            qs = qs.filter(id__in=policy.granted_course_ids(request.user))
         return qs
+
+    def _searched(self, qs):
+        """Apply the same search the list view uses, for the facet counts."""
+        return filters.SearchFilter().filter_queryset(self.request, qs, self)
+
+    @decorators.action(detail=False, methods=["get"], permission_classes=[permissions.AllowAny])
+    def facets(self, request):
+        """Counts for every filter value, and the size of the current result.
+
+        Each group is counted with the other groups applied but its own left
+        out, so a ticked value never hides its siblings and an unticked value
+        still shows how many batches it would add. Values no batch carries are
+        omitted rather than shown as zero, and blank values are not a facet:
+        "not stated" is not an exam.
+        """
+        groups = {}
+        for field in self.FACETS + ("pricing_mode",):
+            base = self._searched(self._filtered_queryset(skip=field))
+            rows_by_value = (
+                base.exclude(**{field: ""})
+                .values(field)
+                .annotate(count=Count("id"))
+                .order_by("-count", field)
+            )
+            groups[field] = [
+                {"value": row[field], "count": row["count"]} for row in rows_by_value
+            ]
+
+        total = self._searched(self._filtered_queryset())
+        return Response({"count": total.count(), "facets": groups})
 
     @decorators.action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def enroll(self, request, pk=None):

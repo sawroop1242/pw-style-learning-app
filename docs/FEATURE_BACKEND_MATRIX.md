@@ -37,7 +37,7 @@ paths. Findings below are as of commit `ab0493c` + this change.
 |---|---|---|---|---|
 | 1.1 | Batch grid | `courses.html` | `GET /api/courses/` | connected |
 | 1.2 | Free / paid filter | `courses.html` | `?pricing_mode=` | connected |
-| 1.3 | Subject facet (from returned rows) | `courses.html` | `?subject=` | connected |
+| 1.3 | Faceted filters with live counts (exam / subject / level) | `courses.html` filter panel | `GET /api/courses/facets/` + repeated `?exam=&subject=&level=` | connected — every group is counted with the other groups applied and its own left out, so a ticked value never hides its siblings |
 | 1.4 | Text search (top bar + in-page) | shell, `courses.html` | `?search=` | connected |
 | 1.5 | Sort (newest, price, title) | `courses.html` | `?ordering=` | connected |
 | 1.6 | "My batches" tab | `courses.html?mine=1` | `?mine=1` | connected — the batches the learner joined, and nothing else |

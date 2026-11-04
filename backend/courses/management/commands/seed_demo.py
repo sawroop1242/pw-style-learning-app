@@ -126,6 +126,8 @@ COURSES = [
         "slug": "demo-jee-main-2027",
         "title": "JEE Main 2027 Complete Batch",
         "subject": "Physics",
+        "exam": "JEE",
+        "level": "Class 12",
         "description": (
             "A full-year physics-first batch for JEE Main: mechanics through modern "
             "physics, weekly problem sets and a mock every fortnight."
@@ -157,6 +159,8 @@ COURSES = [
         "slug": "demo-neet-2027-biology",
         "title": "NEET 2027 Biology Booster",
         "subject": "Biology",
+        "exam": "NEET",
+        "level": "Class 12",
         "description": (
             "NCERT-anchored biology with diagram drills, assertion-reason practice "
             "and a chapter test after every unit."
@@ -184,6 +188,8 @@ COURSES = [
         "slug": "demo-ssc-cgl-2026",
         "title": "SSC CGL 2026 Foundation",
         "subject": "Reasoning",
+        "exam": "SSC CGL",
+        "level": "Graduate",
         "description": (
             "Tier 1 and Tier 2 preparation with daily reasoning sets, English "
             "vocabulary drills and section-wise mocks."
@@ -210,6 +216,8 @@ COURSES = [
         "slug": "demo-bank-po-2026",
         "title": "Bank PO 2026 Prelims",
         "subject": "English",
+        "exam": "Bank PO",
+        "level": "Graduate",
         "description": (
             "Prelims-focused bank batch: quant shortcuts, reasoning puzzles and "
             "reading comprehension under time pressure."
@@ -233,6 +241,8 @@ COURSES = [
         "slug": "demo-class-10-science",
         "title": "Class 10 Science Crash Course",
         "subject": "Chemistry",
+        "exam": "CBSE Class 10",
+        "level": "Class 10",
         "description": (
             "Board exam revision in six weeks: every chapter summarised, plus "
             "previous-year questions worked out step by step."
@@ -258,6 +268,8 @@ COURSES = [
         "slug": "demo-gate-cs-2027",
         "title": "GATE CS 2027",
         "subject": "Computer",
+        "exam": "GATE",
+        "level": "Graduate",
         "description": (
             "Computer science for GATE: algorithms, operating systems, databases "
             "and theory, with a subject test every week."
@@ -618,6 +630,8 @@ class Command(BaseCommand):
                     "title": spec["title"],
                     "description": spec["description"],
                     "subject": spec["subject"],
+                    "exam": spec.get("exam", ""),
+                    "level": spec.get("level", ""),
                     "pricing_mode": spec["pricing_mode"],
                     "price": spec["price"],
                     "currency": "INR",

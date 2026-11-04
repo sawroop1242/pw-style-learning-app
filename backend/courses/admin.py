@@ -526,11 +526,11 @@ class CourseAdmin(CourseOutlineMixin, PublishableAdmin, OwnerAssignAdmin):
     # otherwise).
     ordering = ("title",)
     list_display = (
-        "title", "subject", "pricing_mode", "price", "lesson_total", "folder_total",
-        "publish_status", "owner", "updated_at",
+        "title", "exam", "subject", "level", "pricing_mode", "price", "lesson_total",
+        "folder_total", "publish_status", "owner", "updated_at",
     )
-    list_filter = ("subject", "pricing_mode", "is_published")
-    search_fields = ("title", "description", "slug")
+    list_filter = ("exam", "subject", "level", "pricing_mode", "is_published")
+    search_fields = ("title", "description", "slug", "exam", "subject", "level")
     prepopulated_fields = {"slug": ("title",)}
     inlines = [CourseFolderInline]
     save_on_top = True
@@ -540,13 +540,18 @@ class CourseAdmin(CourseOutlineMixin, PublishableAdmin, OwnerAssignAdmin):
     def get_fieldsets(self, request, obj=None):
         """`owner` is hidden from sub-admins by OwnerAssignAdmin, so it is only
         named in the fieldset for someone who may actually change it."""
-        batch_fields = ("title", "slug", "subject")
+        batch_fields = ("title", "slug", "exam", "subject", "level")
         if is_main_admin(request.user):
             batch_fields = batch_fields + ("owner",)
         fieldsets = (
             ("The batch", {
                 "fields": batch_fields,
-                "description": "What the card in the catalogue says.",
+                "description": (
+                    "What the card in the catalogue says. Exam and level are the "
+                    "catalogue's two widest filters — leave them blank rather "
+                    "than guessing: the batch stays listed, it just never "
+                    "claims to belong to an exam nobody chose."
+                ),
             }),
             ("Artwork", {
                 "fields": ("image_url", "image_preview"),

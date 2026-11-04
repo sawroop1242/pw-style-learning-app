@@ -5,7 +5,16 @@ Make the existing published course catalogue easy to search and browse on low-co
 
 ## Learner experience
 - Search published course title, description, subject/category, and provider/teacher display name only where those fields are intended to be public.
-- Filters: subject/category, free versus paid, and supported course level/exam tags if the current model has them.
+- Filters: exam, subject/category, level, and free versus paid. `Course.exam`
+  and `Course.level` exist for this (`0012`); both are blank-able, and a blank
+  is *not* a filter value — the batch stays listed but never claims an exam or
+  a stage nobody chose. A group is multi-select (repeated query parameters,
+  e.g. `?exam=JEE&exam=NEET`), and `GET /api/courses/facets/` returns the count
+  behind every value with the rules that make counts trustworthy:
+  each group is counted with the **other** groups applied and **its own left
+  out**, so ticking one value never hides its siblings and every number answers
+  "what would this add?"; values no batch carries are omitted rather than shown
+  as `0`; unpublished batches appear in no count.
 - Sorting: relevance for search, recently published, and a popularity metric only if it is based on a defined, privacy-safe server metric. Do not fabricate popularity.
 - Course cards show only available fields: title, thumbnail/image URL, subject, price/free label, and access/lock status. Use a safe placeholder for missing or invalid images.
 - Course detail shows description, authorized provider contact information, folders/chapters, and access requirements.
