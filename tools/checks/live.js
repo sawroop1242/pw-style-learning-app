@@ -275,36 +275,52 @@ const FIXTURES = [
     const { doc, errors } = await liveBoot('course.html', ['core', 'content', 'ui', 'course'], `?slug=${slug}`);
     check('headline is the API title', text(doc.querySelector('#course-headline')).includes(detail.title), text(doc.querySelector('#course-headline')).slice(0, 60));
 
-    // The tree: every chapter the API returned, under a subject heading, with
-    // its own classes and notes inside it.
+    // The subjects: one card per subject the API's chapters file under, and
+    // the fallback is the batch's own subject — the page never invents one.
     const folders = detail.folders || [];
-    const chapters = [...doc.querySelectorAll('#content-tree .tree-chapter')];
-    check('every server chapter is in the tree', chapters.length === folders.length, `${chapters.length}/${folders.length}`);
+    const groups = new Map();
+    folders.forEach((folder) => {
+      const name = (folder.subject || '').trim() || detail.subject || 'General';
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(folder);
+    });
+
+    const cards = [...doc.querySelectorAll('#subject-grid .subject-card')];
+    check('one card per server subject', cards.length === groups.size, `${cards.length}/${groups.size}`);
     check(
-      'chapters carry the titles the API sent',
-      chapters.every((chapter) => folders.some((f) => text(chapter.querySelector('.tree-chapter-name')) === f.title)),
-      chapters.map((c) => text(c.querySelector('.tree-chapter-name'))).slice(0, 3).join(' | ')
+      'the cards are the subjects the chapters filed under',
+      cards.every((card) => groups.has(card.dataset.subject)) &&
+        [...groups.keys()].every((name) => cards.some((card) => card.dataset.subject === name)),
+      cards.map((card) => card.dataset.subject).join('|')
     );
-
-    // The subject headings are the API's `subject`, falling back to the
-    // batch's own subject only when the chapter was left unfiled.
-    const expectedSubjects = new Set(
-      folders.map((folder) => (folder.subject || '').trim() || detail.subject || 'General')
-    );
-    const subjectNames = [...doc.querySelectorAll('#content-tree .tree-subject-name')].map(text);
+    const subjectUrl = (name) =>
+      `subject.html?${new URLSearchParams({ course: slug, subject: name }).toString()}`;
     check(
-      'the subjects are the ones the chapters filed under',
-      subjectNames.length === expectedSubjects.size && subjectNames.every((name) => expectedSubjects.has(name)),
-      `${subjectNames.join('|')} vs ${[...expectedSubjects].join('|')}`
+      'a card links to its own subject page',
+      cards.every((card) => card.getAttribute('href') === subjectUrl(card.dataset.subject)),
+      cards[0]?.getAttribute('href')
     );
 
-    const lessonsExpected = folders.reduce((n, f) => n + (f.lessons || []).length, 0);
-    const notesExpected = folders.reduce((n, f) => n + (f.pdf_resources || []).length, 0);
-    check('every server class is in a chapter', doc.querySelectorAll('#content-tree .tree-file[data-kind="class"]').length === lessonsExpected, `${doc.querySelectorAll('#content-tree .tree-file[data-kind="class"]').length}/${lessonsExpected}`);
-    check('every server note is in a chapter', doc.querySelectorAll('#content-tree .tree-file[data-kind="note"]').length === notesExpected, `${doc.querySelectorAll('#content-tree .tree-file[data-kind="note"]').length}/${notesExpected}`);
-    check('no class row is repeated in another chapter', new Set([...doc.querySelectorAll('#content-tree .tree-file[data-kind="class"]')].map((row) => row.dataset.file)).size === lessonsExpected);
+    const expectedCounts = [...groups.entries()].map(([name, chapters]) => {
+      const classes = chapters.reduce((n, f) => n + (f.lessons || []).length, 0);
+      const notes = chapters.reduce((n, f) => n + (f.pdf_resources || []).length, 0);
+      const parts = [
+        `${chapters.length} ${chapters.length === 1 ? 'chapter' : 'chapters'}`,
+        `${classes} ${classes === 1 ? 'class' : 'classes'}`
+      ];
+      if (notes) parts.push(`${notes} ${notes === 1 ? 'note' : 'notes'}`);
+      return [name, parts.join(' · ')];
+    });
+    check(
+      'every card counts what the API says is inside',
+      expectedCounts.every(([name, meta]) => {
+        const card = cards.find((row) => row.dataset.subject === name);
+        return card && text(card.querySelector('.subject-meta')) === meta;
+      }),
+      expectedCounts.map(([name, meta]) => `${name}: ${meta}`).join(' / ')
+    );
 
-    // The strip above the tree shows at most six classes; when the window
+    // The strip above the tabs shows at most six classes; when the window
     // holds more, it says how many it is holding back rather than letting six
     // rows look like the whole timetable.
     const batchSchedule = await api(`/api/schedule/?course=${slug}&days=14`);
@@ -323,8 +339,80 @@ const FIXTURES = [
 
     // No live anywhere: these are recordings.
     check('the batch page claims nothing is live', doc.querySelectorAll('.badge-live').length === 0, String(doc.querySelectorAll('.badge-live').length));
-    check('nothing on the page offers to join a class', !/join (the )?class/i.test(text(doc.querySelector('#panel-classes'))));
+    check('nothing on the page offers to join a class', !/join (the )?class/i.test(text(doc.querySelector('#panel-subjects'))));
     check('aside shows the real price', /Free|₹/.test(text(doc.querySelector('#course-aside'))), text(doc.querySelector('#course-aside')).slice(0, 50));
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  console.log('\nsubject.html');
+  {
+    const row = rowsOf(courses)[0];
+    const detail = await api(`/api/courses/${row.id}/`);
+    const folders = detail.folders || [];
+    const name = (folders[0]?.subject || '').trim() || detail.subject || 'General';
+    const mine = folders.filter((folder) => ((folder.subject || '').trim() || detail.subject || 'General') === name);
+
+    const { doc, errors } = await liveBoot('subject.html', ['core', 'content', 'ui', 'subject'], `?course=${row.slug}&subject=${encodeURIComponent(name)}`);
+    check('the headline is the subject the batch files under', text(doc.querySelector('#subject-headline')) === name, text(doc.querySelector('#subject-headline')));
+    check(
+      'the breadcrumb links back to the batch',
+      doc.querySelector('#crumb-batch').getAttribute('href') === `course.html?slug=${row.slug}`
+    );
+
+    // Only this subject's chapters: the same payload, cut by subject.
+    const chapters = [...doc.querySelectorAll('#panel-lectures .tree-chapter')];
+    const hasClasses = mine.some((folder) => (folder.lessons || []).length > 0);
+    check(
+      'every chapter of this subject is here, and no other',
+      chapters.length === (hasClasses ? mine.length : 0) &&
+        chapters.every((chapter) => mine.some((folder) => text(chapter.querySelector('.tree-chapter-name')) === folder.title)),
+      `${chapters.length}/${mine.length}: ${chapters.map((chapter) => text(chapter.querySelector('.tree-chapter-name'))).join(' | ')}`
+    );
+
+    const lessons = mine.flatMap((folder) => folder.lessons || []);
+    const cards = [...doc.querySelectorAll('#panel-lectures .lecture-card')];
+    check('every class in the subject is a card', cards.length === lessons.length, `${cards.length}/${lessons.length}`);
+    check(
+      'no class is repeated',
+      new Set(cards.map((card) => card.dataset.lesson)).size === lessons.length
+    );
+    check(
+      'a card opens the player for that class',
+      cards.every((card) =>
+        card.getAttribute('href')
+          ? card.getAttribute('href') === `player.html?lesson=${card.dataset.lesson}`
+          : true
+      )
+    );
+    check(
+      'a locked class is badged rather than linked',
+      cards.filter((card) => card.tagName !== 'A').every((card) => /Locked/.test(text(card))) &&
+        cards.filter((card) => card.classList.contains('is-locked')).length ===
+          cards.filter((card) => card.tagName !== 'A').length
+    );
+
+    // Notes, from the same chapters.
+    const notes = mine.flatMap((folder) => folder.pdf_resources || []);
+    doc.querySelector('#tab-notes').click();
+    await wait(30);
+    const rows = [...doc.querySelectorAll('#panel-notes .tree-file')];
+    check('every note in the subject is listed', rows.length === notes.length, `${rows.length}/${notes.length}`);
+    check(
+      'a note without a file is badged, not linked',
+      rows.every((note) => (note.getAttribute('href') ? /pdf\.html\?pdf=\d+/.test(note.getAttribute('href')) : /Locked/.test(text(note))))
+    );
+
+    // The counts on the tabs are the payload's, not a guess.
+    const lessonsExpected = lessons.length;
+    const notesExpected = notes.length;
+    const tabCount = (key) => {
+      const node = doc.querySelector(`.tab-count[data-count="${key}"]`);
+      return node && !node.hidden ? Number(text(node)) : 0;
+    };
+    check('the Lectures badge matches the payload', tabCount('lectures') === lessonsExpected, `${tabCount('lectures')}/${lessonsExpected}`);
+    check('the Notes badge matches the payload', tabCount('notes') === notesExpected, `${tabCount('notes')}/${notesExpected}`);
+
+    check('nothing on the subject page claims to be live', doc.querySelectorAll('.badge-live').length === 0);
     check('no console errors', errors.length === 0, errors[0]);
   }
 

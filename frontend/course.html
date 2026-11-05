@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0b16">
   <meta name="api-base" content="/api">
   <title>Batch details — StudySpace</title>
-  <meta name="description" content="One batch in five tabs: overview, classes, notes, papers and teachers.">
+  <meta name="description" content="One batch: its subjects, the classes and notes in each, its papers and teachers.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -60,19 +60,24 @@
       <div class="container">
         <div class="course-layout">
           <div>
-            <!-- Five tabs, the same five a student expects on a batch in PW or
-                 Unacademy: what this is, the classes, the notes, the papers and
-                 who teaches it. Each is a real URL (?tab=notes) so it can be
-                 shared, bookmarked, and reached with the Back button. -->
+            <!-- Today's classes sit above the tabs, the way a batch page opens:
+                 what is on today is the first question, the syllabus second. -->
+            <div class="card card-pad batch-schedule" id="class-timetable" aria-live="polite"></div>
+
+            <!-- The batch opens on its subjects — Physics, Chemistry, Maths —
+                 and each one is a page of its own (?subject=) holding that
+                 subject's chapters, classes and notes. Each tab is a real URL
+                 (?tab=papers) so it can be shared, bookmarked and reached with
+                 the Back button. -->
             <div class="tabs" role="tablist" aria-label="Batch sections" id="batch-tabs">
-              <button class="tab" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" tabindex="0">Overview</button>
-              <button class="tab" role="tab" id="tab-classes" aria-controls="panel-classes" aria-selected="false" tabindex="-1" data-tab="classes">Classes<span class="tab-count" data-count="classes" hidden></span></button>
+              <button class="tab" role="tab" id="tab-subjects" aria-controls="panel-subjects" aria-selected="true" tabindex="0" data-tab="subjects">Subjects<span class="tab-count" data-count="subjects" hidden></span></button>
+              <button class="tab" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="false" tabindex="-1" data-tab="overview">Overview</button>
               <button class="tab" role="tab" id="tab-papers" aria-controls="panel-papers" aria-selected="false" tabindex="-1" data-tab="papers">Papers<span class="tab-count" data-count="papers" hidden></span></button>
               <button class="tab" role="tab" id="tab-teachers" aria-controls="panel-teachers" aria-selected="false" tabindex="-1" data-tab="teachers">Teachers<span class="tab-count" data-count="teachers" hidden></span></button>
             </div>
 
-            <section class="tab-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" data-panel="overview"></section>
-            <section class="tab-panel" id="panel-classes" role="tabpanel" aria-labelledby="tab-classes" data-panel="classes" hidden></section>
+            <section class="tab-panel" id="panel-subjects" role="tabpanel" aria-labelledby="tab-subjects" data-panel="subjects"></section>
+            <section class="tab-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" data-panel="overview" hidden></section>
             <section class="tab-panel" id="panel-papers" role="tabpanel" aria-labelledby="tab-papers" data-panel="papers" hidden></section>
             <section class="tab-panel" id="panel-teachers" role="tabpanel" aria-labelledby="tab-teachers" data-panel="teachers" hidden></section>
           </div>

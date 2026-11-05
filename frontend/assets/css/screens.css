@@ -158,11 +158,71 @@
   margin-bottom: var(--sp-3);
 }
 
-/* The batch content tree: subject → chapter → classes and notes.
-   Native <details> elements rather than a scripted tree, so a chapter opens
-   with the keyboard, survives find-in-page, and still works if the module
-   fails to load. */
-.content-tree { display: grid; gap: var(--sp-3); margin-top: var(--sp-4); }
+/* The subject grid a batch opens on. One card per subject, carrying the two
+   counts a learner decides with — how many chapters, and how much is inside
+   them — so the click is informed before it is made. */
+.subject-total {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.subject-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: var(--sp-3);
+}
+.subject-card {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color var(--dur) var(--ease);
+}
+.subject-card:hover { border-color: var(--violet-500); }
+.subject-card:focus-visible { outline: 2px solid var(--violet-600); outline-offset: 2px; }
+.subject-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-sm);
+  color: var(--band-ink);
+}
+.subject-icon svg { width: 22px; height: 22px; }
+.subject-body { display: grid; gap: 3px; min-width: 0; }
+.subject-name {
+  font-weight: 800;
+  font-size: var(--text-base);
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subject-meta {
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.subject-card > svg { width: 16px; height: 16px; color: var(--text-subtle); }
+.subject-card:hover > svg { color: var(--violet-500); }
+
+/* One subject, opened: the heading carries the batch's context back. */
+.subject-hero { display: flex; align-items: center; gap: var(--sp-4); }
+.subject-hero .subject-icon { width: 62px; height: 62px; border-radius: var(--r-md); }
+.subject-hero .subject-icon svg { width: 28px; height: 28px; }
+.subject-title { font-size: var(--text-2xl); letter-spacing: var(--tracking-tight); }
+.subject-lead { margin: 6px 0 0; color: var(--text-muted); font-size: var(--text-sm); }
+
+/* A subject's chapters: native <details>, so a chapter opens with the
+   keyboard, survives find-in-page, and still works if the module never runs. */
+.content-tree { display: grid; gap: 10px; margin-top: var(--sp-4); }
 .tree-toolbar {
   display: flex;
   align-items: center;
@@ -190,7 +250,7 @@
 .tree-actions { display: flex; gap: var(--sp-2); }
 .tree-actions .chip { min-height: 34px; }
 .tree-no-match {
-  margin: 0;
+  margin: var(--sp-3) 0 0;
   padding: 10px 14px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--r-md);
@@ -198,17 +258,12 @@
   color: var(--text-muted);
 }
 
-.tree-subject,
 .tree-chapter {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--paper);
+  overflow: hidden;
 }
-/* The tree is a grid, so its own `gap` spaces the subjects; a margin here
-   would double it. */
-.tree-subject { overflow: hidden; }
-
-.tree-subject-head,
 .tree-chapter-head {
   display: grid;
   grid-template-columns: 12px minmax(0, 1fr) auto;
@@ -217,18 +272,13 @@
   padding: 12px 14px;
   cursor: pointer;
   list-style: none;
-  border-radius: var(--r-md);
 }
-.tree-subject-head::-webkit-details-marker,
 .tree-chapter-head::-webkit-details-marker { display: none; }
-.tree-subject-head:hover,
 .tree-chapter-head:hover { background: var(--surface-soft); }
-.tree-subject-head:focus-visible,
 .tree-chapter-head:focus-visible {
   outline: 2px solid var(--violet-600);
   outline-offset: -2px;
 }
-.tree-subject-name { font-weight: 800; font-size: var(--text-md); color: var(--text-strong); }
 .tree-chapter-name { font-weight: 700; font-size: var(--text-sm); color: var(--text-strong); }
 .tree-meta {
   font-size: var(--text-2xs);
@@ -247,14 +297,11 @@
   transform: rotate(-45deg);
   transition: transform var(--dur) var(--ease);
 }
-details[open] > .tree-subject-head > .tree-caret,
 details[open] > .tree-chapter-head > .tree-caret { transform: rotate(45deg); }
 
-.tree-chapters { display: grid; gap: 8px; padding: 0 10px 10px 24px; }
-.tree-chapter-head { padding: 10px 12px; }
 .tree-chapter-note {
   margin: 0;
-  padding: 0 12px 8px 41px;
+  padding: 0 14px 10px 36px;
   font-size: var(--text-2xs);
   color: var(--text-muted);
 }
@@ -315,13 +362,79 @@ a.tree-file:focus-visible { outline: 2px solid var(--violet-600); outline-offset
 .tree-file.is-locked { opacity: 0.65; }
 .tree-empty {
   margin: 0;
-  padding: 6px 10px;
+  padding: 6px 14px 14px;
   font-size: var(--text-2xs);
   color: var(--text-subtle);
 }
 
+/* A chapter's classes, laid out as cards: a cover band in the subject's hue,
+   the length of the recording, the title and the hour it airs. */
+.lecture-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  gap: var(--sp-3);
+  padding: 0 12px 12px;
+}
+.lecture-card {
+  display: grid;
+  grid-template-rows: 92px auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-soft);
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  transition: border-color var(--dur) var(--ease);
+}
+a.lecture-card:hover { border-color: var(--violet-500); }
+a.lecture-card:focus-visible { outline: 2px solid var(--violet-600); outline-offset: 2px; }
+.lecture-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  color: var(--band-ink);
+}
+.lecture-cover-initials { font-size: var(--text-lg); font-weight: 800; letter-spacing: 0.02em; }
+.lecture-duration {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: rgba(12, 12, 24, 0.82);
+  color: var(--text-invert);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.lecture-duration svg { width: 11px; height: 11px; }
+.lecture-flag { position: absolute; left: 8px; top: 8px; }
+.lecture-body { display: grid; gap: 4px; padding: 10px 12px 12px; align-content: start; }
+.lecture-title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text-strong);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.lecture-meta { font-size: var(--text-2xs); color: var(--text-subtle); }
+.lecture-card.is-locked { opacity: 0.72; }
+.lecture-card.is-locked .lecture-body { opacity: 1; }
+
+/* The timetable strip on a batch page: title on the left, the way to the full
+   week on the right. */
+.batch-schedule-title { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
+.batch-schedule-head .btn { flex: none; }
+
 @media (max-width: 640px) {
-  .tree-chapters { padding-left: 8px; }
+  .lecture-grid { grid-template-columns: minmax(0, 1fr); padding: 0 10px 10px; }
+  .subject-grid { grid-template-columns: minmax(0, 1fr); }
   .tree-file { grid-template-columns: 22px minmax(0, 1fr) auto; }
   .tree-file-meta { display: none; }
   .tree-file-action { font-size: 0; }

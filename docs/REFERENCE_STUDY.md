@@ -107,7 +107,7 @@ worst possible way to express an order.
 | P1 | Real progress, never a placeholder | Frappe `lms_course_progress` | `ProgressSerializer` + `dashboard.js` | S |
 | P2 | Streak and study time from completed work | PW / Unacademy dashboards | dashboard figures | S |
 | P3 | Weak-topic analysis from marked answers | PW (G2 reviews), edX analytics | `/api/insights/topics/` + `dashboard.html` (shipped) | M |
-| P4 | Batch page as tabs: overview / classes / papers / teachers | PW batch-overview URL | `course.html` (shipped) | M |
+| P4 | Batch page as tabs: subjects / overview / papers / teachers | PW batch-overview URL | `course.html` (shipped) | M |
 | P5 | Schedule ("today's classes"), with no live claim | PW, Frappe `lms_batch_timetable` | `GET /api/schedule/` + `#schedule-list` / `#class-timetable` (shipped) | L |
 | P6 | Drag-and-drop outline in the console | Frappe `CourseOutline.vue` | `/admin/courses/course/<id>/outline/` (shipped) | M |
 | P7 | Faceted catalogue filters | Unacademy, richie | `courses.html` + `/api/courses/facets/` (shipped) | M |
@@ -147,12 +147,14 @@ worst possible way to express an order.
   lesson, yesterday accepted so the number does not read zero every morning) and
   **This week** (minutes from finished lessons, summed from their durations).
 
-**P4 shipped** — the batch page is a five-tab page with an address for each tab.
+**P4 shipped** — the batch page became a tabbed page with an address for each
+tab. *(The strip has since moved on: it now reads Subjects, Overview, Papers
+and Teachers, because the batch opens on its subject cards. The pattern below
+is unchanged, and the subject page uses the same one.)*
 
-- `course.html` carries `#batch-tabs` with Overview, Classes, Notes, Papers and
-  Teachers, following the ARIA tabs pattern: one tab in the tab order, arrow
-  keys (plus Home and End) move between them, and each tab points at a panel
-  through `aria-controls`.
+- `course.html` carries `#batch-tabs` following the ARIA tabs pattern: one tab
+  in the tab order, arrow keys (plus Home and End) move between them, and each
+  tab points at a panel through `aria-controls`.
 - The choice is in the URL — `course.html?slug=…&tab=notes` opens Notes, the
   Back button walks the tabs a visitor visited, and an unknown `?tab=` falls
   back to Overview instead of rendering nothing.
@@ -288,34 +290,48 @@ that makes it look easy; §1, above).
   an error.
 - **Where it lands.** `index.html` draws `#schedule-list` grouped by day, today
   first and marked, with a summary line ("N classes today · N still to come
-  this week"). `course.html` gains a `#class-timetable` card above the content
-  tree — the "Schedule" anchor PW puts on every batch page — and each class row
-  in the tree shows its air time when it has one.
+  this week"). `course.html` carries a `#class-timetable` card above its tabs —
+  the "Schedule" anchor PW puts on every batch page, with a link to the whole
+  week on the home screen — and every class card on a subject page shows its
+  air time when it has one.
 - **The old "today's classes" is retired.** `GET /api/lessons/?added=today` was
   "what was uploaded today", which is not a timetable. It is gone from the home
   screen; the endpoint still exists for the player.
 
-**The batch tree shipped** — the structure every batch page in the reference
-had and ours did not: **subject → section → its classes and its notes**, read
-the way a syllabus is read.
+**The batch now opens on its subjects** — the structure the reference product
+uses, and the one a learner already knows: the batch page lists its subjects as
+cards, and each subject is a page of its own holding that subject's chapters,
+the classes in them and the notes beside them.
 
-- **`CourseFolder.subject`** (`0014`) is the third level. A plain name rather
-  than a table: a provider types "Physics" once per section, and there is
-  nothing else to store about it, so a foreign key would add a join to every
+- **`CourseFolder.subject`** (`0014`) is the level in between. A plain name
+  rather than a table: a provider types "Physics" once per section, and there
+  is nothing else to store about it, so a foreign key would add a join to every
   batch page to hold one string. Blank means *not filed*, and the page then
   lists the section under the batch's own subject — it never invents a subject
-  the faculty did not choose, and the API returns the blank verbatim.
-- **Notes stopped being a place and became files.** They were a fifth tab
-  listing every PDF; now each one sits in the section it belongs to, next to
-  the classes, which is where a learner looks for "the DPP for this chapter".
-  The tab is gone rather than duplicated — two answers to one question is how a
-  product starts disagreeing with itself.
-- **A file manager's habits, without a file manager's weight.** Native
-  `<details>`/`<summary>` disclosure (keyboard, find-in-page, works if the
-  module never loads), a search box that filters rows while keeping the open
-  chapters open, counts on every folder line, and a row that says what it is —
-  a class with its length, a note labelled PDF. A locked note is listed and
-  badged, never linked.
+  the faculty did not choose, and the API always returns the blank verbatim.
+- **Two levels, two screens.** `course.html` is the batch: a card per subject
+  carrying the two counts a learner decides with — how many chapters, and how
+  much is inside them — so the click into a subject is never a click into an
+  empty folder. `subject.html?course=&subject=` is that subject: its chapters
+  as native `<details>`, a class as a card (cover in the subject's hue, the
+  length of the recording, the hour it airs, a player link), a note as a row
+  (labelled PDF, badged and unlinked when locked).
+- **A single tree stopped scaling.** The previous run put the whole syllabus on
+  the batch page as one expandable tree. The reference's own subject pages run
+  to dozens of lectures in one subject (`96 lectures` on the Sociology batch),
+  and at that size one tree is a scroll, not a map: you cannot see what is in a
+  subject without opening it, and you cannot search a batch without pulling
+  every file. Splitting the page in two keeps each screen a single level deep.
+- **Nothing is fetched twice.** Both screens read the same detail payload —
+  one query set, five queries however many chapters — so the card's "3
+  classes" and the page's three cards cannot disagree. There is no
+  `/subjects/` endpoint to drift from it, and no subject id to invent: the URL
+  carries the name the provider typed.
+- **The file manager's habits survive the move.** Search filters the visible
+  panel without closing the chapters you had open, Expand all / Collapse all
+  work on the panel in view, counts sit on every chapter line, and the Notes
+  panel is a tab of the subject rather than of the batch — a note belongs to a
+  chapter, and a chapter belongs to a subject.
 - **The page costs five queries, not five per chapter.** The detail endpoint's
   counts read the viewset's annotation instead of re-counting, and classes and
   notes are prefetched with the batch they will ask about. Twelve sections cost

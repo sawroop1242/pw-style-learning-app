@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <meta name="api-base" content="/api">
+  <title>Subject — StudySpace</title>
+  <meta name="description" content="One subject of a batch: its chapters, the classes in them and the notes filed beside them.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/screens.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript-bar" role="note">
+      StudySpace needs JavaScript for the catalogue, tests and dashboard.
+      Please enable it, or write to
+      <a href="mailto:support@studyspace.example">support@studyspace.example</a> for help.
+    </div>
+  </noscript>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <section class="batch-hero">
+      <div class="container">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="index.html">Home</a>
+          <svg><use href="#i-chevron-right"/></svg>
+          <a href="courses.html">Batches</a>
+          <svg><use href="#i-chevron-right"/></svg>
+          <a id="crumb-batch" href="courses.html">Batch</a>
+          <svg><use href="#i-chevron-right"/></svg>
+          <span class="current" id="crumb-subject">Subject</span>
+        </nav>
+
+        <div class="subject-hero">
+          <span class="subject-icon thumb-default" id="subject-icon" aria-hidden="true"></span>
+          <div>
+            <h1 class="subject-title" id="subject-headline">
+              <span class="skeleton skeleton-text" style="display:block;width:200px;height:22px"></span>
+            </h1>
+            <p class="subject-lead" id="subject-lead">Loading this subject…</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="container">
+        <div class="course-layout">
+          <div>
+            <!-- Two panels, because a chapter holds two kinds of file: the
+                 class you watch and the note you read. Each is a real URL
+                 (?tab=notes) so a teacher can link straight to the notes. -->
+            <div class="tabs" role="tablist" aria-label="Subject sections" id="subject-tabs">
+              <button class="tab" role="tab" id="tab-lectures" aria-controls="panel-lectures" aria-selected="true" tabindex="0" data-tab="lectures">Lectures<span class="tab-count" data-count="lectures" hidden></span></button>
+              <button class="tab" role="tab" id="tab-notes" aria-controls="panel-notes" aria-selected="false" tabindex="-1" data-tab="notes">Notes<span class="tab-count" data-count="notes" hidden></span></button>
+            </div>
+
+            <div class="tree-toolbar" style="margin-top:var(--sp-4)">
+              <label class="visually-hidden" for="subject-search">Search this subject</label>
+              <input id="subject-search" type="search" autocomplete="off" placeholder="Search chapters, classes and notes">
+              <div class="tree-actions">
+                <button type="button" class="chip" data-tree="expand">Expand all</button>
+                <button type="button" class="chip" data-tree="collapse">Collapse all</button>
+              </div>
+              <p class="tree-total" id="subject-total"></p>
+            </div>
+            <p class="tree-no-match" id="subject-no-match" role="status" hidden>Nothing in this subject matches that search.</p>
+
+            <section class="tab-panel" id="panel-lectures" role="tabpanel" aria-labelledby="tab-lectures" data-panel="lectures"></section>
+            <section class="tab-panel" id="panel-notes" role="tabpanel" aria-labelledby="tab-notes" data-panel="notes" hidden></section>
+          </div>
+
+          <aside aria-label="Subject summary" id="subject-aside"></aside>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-tabbar"></div>
+
+  <script type="module" src="assets/js/subject.js"></script>
+</body>
+</html>
