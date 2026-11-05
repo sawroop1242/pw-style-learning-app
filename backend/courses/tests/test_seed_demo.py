@@ -116,6 +116,50 @@ class SeedDemoTests(TestCase):
         modes = set(courses.values_list("pricing_mode", flat=True))
         self.assertEqual(modes, {Course.PricingMode.FREE, Course.PricingMode.PAID})
 
+    def test_a_note_that_moved_chapter_is_not_left_behind(self):
+        """Re-running the seed must not leave a second copy of a note.
+
+        The seed once filed its batch-level PDFs under the first chapter; when
+        that note acquired a chapter of its own the old row stayed put, and the
+        tree showed "Modern physics revision notes" under Mechanics *and*
+        under Modern Physics. The command now prunes the rows it made itself,
+        and only those.
+        """
+        run()
+        course = Course.objects.get(slug="demo-jee-main-2027")
+        mechanics = course.folders.get(title="Mechanics")
+        PdfResource.objects.create(
+            folder=mechanics,
+            title="Modern physics revision notes",
+            file_url="https://files.studyspace.example/demo-jee-main-2027/2.pdf",
+            is_published=True,
+            is_protected=True,
+        )
+        # Something a provider added by hand, in the same folder.
+        keeper = PdfResource.objects.create(
+            folder=mechanics,
+            title="Hand-written DPP",
+            file_url="https://cdn.example/hand-written.pdf",
+            is_published=True,
+            is_protected=True,
+        )
+
+        run()
+
+        titles = list(
+            PdfResource.objects.filter(folder=mechanics).values_list("title", flat=True)
+        )
+        self.assertEqual(titles.count("Modern physics revision notes"), 0)
+        self.assertIn("Hand-written DPP", titles)
+        self.assertTrue(PdfResource.objects.filter(pk=keeper.pk).exists())
+        # And the note is still exactly where the seed says it belongs.
+        self.assertTrue(
+            PdfResource.objects.filter(
+                folder__course=course, folder__title="Modern Physics",
+                title="Modern physics revision notes",
+            ).exists()
+        )
+
     def test_clear_removes_only_demo_rows(self):
         run()
         keep = Course.objects.create(
