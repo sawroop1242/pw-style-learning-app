@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://studyspace-eta-tan.vercel.app/api/:path*" },
+    { "source": "/token/:path*", "destination": "https://studyspace-eta-tan.vercel.app/token/:path*" },
+    { "source": "/auth/:path*", "destination": "https://studyspace-eta-tan.vercel.app/auth/:path*" },
+    { "source": "/admin/:path*", "destination": "https://studyspace-eta-tan.vercel.app/admin/:path*" },
+    { "source": "/healthz/:path*", "destination": "https://studyspace-eta-tan.vercel.app/healthz/:path*" }
+  ]
+}
