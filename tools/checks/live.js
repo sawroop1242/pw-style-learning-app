@@ -242,10 +242,11 @@ const FIXTURES = [
       `${text(rail[0]?.querySelector('.class-time'))} vs ${firstScheduled ? clockOf(firstScheduled.starts_at) : '?'} (${zone})`
     );
     check(
-      'live is only claimed inside the window',
-      schedule?.counts?.live === doc.querySelectorAll('#schedule-list .badge-live').length,
-      `${schedule?.counts?.live} live in the API, ${doc.querySelectorAll('#schedule-list .badge-live').length} badged`
+      'no timetable row claims to be live',
+      doc.querySelectorAll('#schedule-list .badge-live').length === 0,
+      `${doc.querySelectorAll('#schedule-list .badge-live').length} badged`
     );
+    check('the API reports no live count', !schedule || !('live' in (schedule.counts || {})), JSON.stringify(schedule?.counts || {}));
     const testCards = [...doc.querySelectorAll('#home-tests .test-card')];
     check('test rail renders API papers', testCards.length > 0, String(testCards.length));
     const main = text(doc.querySelector('main'));
@@ -273,25 +274,39 @@ const FIXTURES = [
     const detail = await api(`/api/courses/${rowsOf(courses)[0].id}/`);
     const { doc, errors } = await liveBoot('course.html', ['core', 'content', 'ui', 'course'], `?slug=${slug}`);
     check('headline is the API title', text(doc.querySelector('#course-headline')).includes(detail.title), text(doc.querySelector('#course-headline')).slice(0, 60));
-    // `#class-timetable` is the batch timetable card, not a curriculum folder.
-    const folders = [...doc.querySelectorAll('#panel-classes .card:not(#class-timetable)')];
-    check('the classes panel renders server folders', folders.length === (detail.folders || []).length, `${folders.length}/${(detail.folders || []).length}`);
-    const lessonsRendered = doc.querySelectorAll('#panel-classes .lesson-item').length;
-    const lessonsExpected = (detail.folders || []).reduce((n, f) => n + (f.lessons || []).length, 0);
-    check('every server lesson is listed', lessonsRendered === lessonsExpected, `${lessonsRendered}/${lessonsExpected}`);
 
-    // The PDFs moved out of the lesson list into their own tab; the count on
-    // that tab has to match the number of PDFs the API actually holds.
-    const pdfsExpected = (detail.folders || []).reduce((n, f) => n + (f.pdf_resources || []).length, 0);
-    const pdfsRendered = doc.querySelectorAll('#panel-notes .pdf-row').length;
-    check('the notes panel lists every server PDF', pdfsRendered === pdfsExpected, `${pdfsRendered}/${pdfsExpected}`);
-    const notesBadge = doc.querySelector('.tab-count[data-count="notes"]');
+    // The tree: every chapter the API returned, under a subject heading, with
+    // its own classes and notes inside it.
+    const folders = detail.folders || [];
+    const chapters = [...doc.querySelectorAll('#content-tree .tree-chapter')];
+    check('every server chapter is in the tree', chapters.length === folders.length, `${chapters.length}/${folders.length}`);
     check(
-      'the Notes tab counts them, or hides at zero',
-      pdfsExpected > 0 ? notesBadge.textContent.trim() === String(pdfsExpected) && !notesBadge.hidden : notesBadge.hidden,
-      `${notesBadge?.textContent?.trim()}/${pdfsExpected}`
+      'chapters carry the titles the API sent',
+      chapters.every((chapter) => folders.some((f) => text(chapter.querySelector('.tree-chapter-name')) === f.title)),
+      chapters.map((c) => text(c.querySelector('.tree-chapter-name'))).slice(0, 3).join(' | ')
     );
-    check('the classes panel does not repeat them', doc.querySelectorAll('#panel-classes .pdf-row').length === 0);
+
+    // The subject headings are the API's `subject`, falling back to the
+    // batch's own subject only when the chapter was left unfiled.
+    const expectedSubjects = new Set(
+      folders.map((folder) => (folder.subject || '').trim() || detail.subject || 'General')
+    );
+    const subjectNames = [...doc.querySelectorAll('#content-tree .tree-subject-name')].map(text);
+    check(
+      'the subjects are the ones the chapters filed under',
+      subjectNames.length === expectedSubjects.size && subjectNames.every((name) => expectedSubjects.has(name)),
+      `${subjectNames.join('|')} vs ${[...expectedSubjects].join('|')}`
+    );
+
+    const lessonsExpected = folders.reduce((n, f) => n + (f.lessons || []).length, 0);
+    const notesExpected = folders.reduce((n, f) => n + (f.pdf_resources || []).length, 0);
+    check('every server class is in a chapter', doc.querySelectorAll('#content-tree .tree-file[data-kind="class"]').length === lessonsExpected, `${doc.querySelectorAll('#content-tree .tree-file[data-kind="class"]').length}/${lessonsExpected}`);
+    check('every server note is in a chapter', doc.querySelectorAll('#content-tree .tree-file[data-kind="note"]').length === notesExpected, `${doc.querySelectorAll('#content-tree .tree-file[data-kind="note"]').length}/${notesExpected}`);
+    check('no class row is repeated in another chapter', new Set([...doc.querySelectorAll('#content-tree .tree-file[data-kind="class"]')].map((row) => row.dataset.file)).size === lessonsExpected);
+
+    // No live anywhere: these are recordings.
+    check('the batch page claims nothing is live', doc.querySelectorAll('.badge-live').length === 0, String(doc.querySelectorAll('.badge-live').length));
+    check('nothing on the page offers to join a class', !/join (the )?class/i.test(text(doc.querySelector('#panel-classes'))));
     check('aside shows the real price', /Free|₹/.test(text(doc.querySelector('#course-aside'))), text(doc.querySelector('#course-aside')).slice(0, 50));
     check('no console errors', errors.length === 0, errors[0]);
   }

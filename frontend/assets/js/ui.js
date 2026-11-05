@@ -569,7 +569,6 @@ const THUMB_TONES = {
 export const thumbTone = (subject) => THUMB_TONES[subject] || 'thumb-default';
 
 const BADGE_LABEL = {
-  live: 'Live',
   new: 'New',
   bestseller: 'Bestseller',
   free: 'Free'
@@ -645,33 +644,64 @@ export function clockLabel(iso, timeZone = '') {
   }
 }
 
-const CLASS_STATUS = {
-  live: { badge: '<span class="badge badge-live">Live now</span>', action: 'Join class' },
-  ended: { badge: '<span class="badge badge-neutral">Ended</span>', action: 'Watch recording' },
-  upcoming: { badge: '', action: '' }
-};
+/**
+ * The date a class airs, on the same clock `clockLabel` prints — "12 Nov".
+ *
+ * A row that printed the batch's clock beside the device's calendar would
+ * disagree with itself twice a day, which is exactly the bug the timetable
+ * zone exists to prevent.
+ */
+export function dayLabel(iso, timeZone = '') {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const options = { day: 'numeric', month: 'short' };
+  if (timeZone) options.timeZone = timeZone;
+  try {
+    return date.toLocaleDateString([], options);
+  } catch {
+    return date.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  }
+}
+
+/**
+ * What a timetable row says about its class.
+ *
+ * There is no "live" here on purpose. Every class in this product is a
+ * recording published at an embed URL — nothing is streamed — so a Live badge
+ * would be a claim about a broadcast that never happens, and "Join class"
+ * would open a video. The row states the hour and whether it has passed.
+ */
+const UPCOMING_BADGE = '<span class="badge badge-outline">Upcoming</span>';
+const RECORDED_BADGE = '<span class="badge badge-neutral">Recorded</span>';
 
 /**
  * One line of the timetable.
  *
  * The time is the point of the row, so it leads: a learner scanning "what is
- * on tonight" reads down the left edge. The status badge is drawn only from
- * `entry.status`, which the server computed against a single `now` — this
- * function never guesses whether something is live.
+ * on tonight" reads down the left edge. The badge is drawn only from
+ * `entry.status`, which the server computed against a single `now`; this
+ * function never decides for itself that something is happening.
  */
 export function scheduleRow(entry, { showCourse = true, timeZone = '' } = {}) {
-  const status = CLASS_STATUS[entry.status] || CLASS_STATUS.upcoming;
   const details = [
     showCourse ? entry.course?.title : '',
     entry.section,
     `${entry.duration_minutes || 0} min`
   ].filter(Boolean);
 
-  const action = !status.action
+  const upcoming = entry.status === 'upcoming';
+  // A badge only when it tells the learner something the row does not: that
+  // the hour has not come yet, or that there is a recording to open. A class
+  // that has passed with no recording is simply a past hour, and says so by
+  // being in the past.
+  const badge = upcoming ? UPCOMING_BADGE : entry.recording ? RECORDED_BADGE : '';
+  const action = upcoming
     ? ''
     : entry.is_locked
       ? '<span class="badge badge-outline">Locked</span>'
-      : `<a class="btn btn-ghost btn-sm" href="player.html?lesson=${entry.id}">${status.action} ${icon('arrow-right')}</a>`;
+      : entry.recording
+        ? `<a class="btn btn-ghost btn-sm" href="player.html?lesson=${entry.id}">Watch ${icon('arrow-right')}</a>`
+        : '';
 
   return `
     <article class="class-row" data-class="${entry.id}" data-status="${esc(entry.status)}">
@@ -681,7 +711,7 @@ export function scheduleRow(entry, { showCourse = true, timeZone = '' } = {}) {
       <div class="class-main">
         <div class="class-title">
           <h3>${esc(entry.title)}</h3>
-          ${status.badge}
+          ${badge}
         </div>
         <p>${details.map((part) => esc(part)).join(' · ')}</p>
       </div>

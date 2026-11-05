@@ -126,7 +126,6 @@
   transition: border-color var(--dur) var(--ease);
 }
 .class-row:hover { border-color: var(--border-strong); }
-.class-row[data-status="live"] { border-color: var(--danger-600); }
 .class-time {
   font-variant-numeric: tabular-nums;
   font-weight: 800;
@@ -157,6 +156,175 @@
   justify-content: space-between;
   gap: var(--sp-3);
   margin-bottom: var(--sp-3);
+}
+
+/* The batch content tree: subject → chapter → classes and notes.
+   Native <details> elements rather than a scripted tree, so a chapter opens
+   with the keyboard, survives find-in-page, and still works if the module
+   fails to load. */
+.content-tree { display: grid; gap: var(--sp-3); margin-top: var(--sp-4); }
+.tree-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.tree-toolbar input {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+.tree-toolbar input:focus-visible { outline: 2px solid var(--violet-600); outline-offset: 1px; }
+.tree-total {
+  margin: 0;
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+.tree-no-match {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.tree-subject,
+.tree-chapter {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--paper);
+}
+/* The tree is a grid, so its own `gap` spaces the subjects; a margin here
+   would double it. */
+.tree-subject { overflow: hidden; }
+
+.tree-subject-head,
+.tree-chapter-head {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--r-md);
+}
+.tree-subject-head::-webkit-details-marker,
+.tree-chapter-head::-webkit-details-marker { display: none; }
+.tree-subject-head:hover,
+.tree-chapter-head:hover { background: var(--surface-soft); }
+.tree-subject-head:focus-visible,
+.tree-chapter-head:focus-visible {
+  outline: 2px solid var(--violet-600);
+  outline-offset: -2px;
+}
+.tree-subject-name { font-weight: 800; font-size: var(--text-md); color: var(--text-strong); }
+.tree-chapter-name { font-weight: 700; font-size: var(--text-sm); color: var(--text-strong); }
+.tree-meta {
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* The caret is decoration; the summary already reports open/closed to a
+   screen reader, so it carries no text. */
+.tree-caret {
+  width: 7px;
+  height: 7px;
+  justify-self: center;
+  border-right: 2px solid var(--text-subtle);
+  border-bottom: 2px solid var(--text-subtle);
+  transform: rotate(-45deg);
+  transition: transform var(--dur) var(--ease);
+}
+details[open] > .tree-subject-head > .tree-caret,
+details[open] > .tree-chapter-head > .tree-caret { transform: rotate(45deg); }
+
+.tree-chapters { display: grid; gap: 8px; padding: 0 10px 10px 24px; }
+.tree-chapter-head { padding: 10px 12px; }
+.tree-chapter-note {
+  margin: 0;
+  padding: 0 12px 8px 41px;
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+.tree-files { display: grid; padding: 0 8px 8px; }
+.tree-file {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  color: inherit;
+  text-decoration: none;
+}
+.tree-file + .tree-file { box-shadow: 0 -1px 0 var(--border); }
+a.tree-file:hover { background: var(--surface-soft); }
+a.tree-file:focus-visible { outline: 2px solid var(--violet-600); outline-offset: -2px; }
+.tree-file-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--violet-600);
+}
+.tree-file-icon svg { width: 16px; height: 16px; }
+.tree-file[data-kind="note"] .tree-file-icon { color: var(--text-muted); }
+.tree-file-name {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.tree-file-name small {
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-file-meta {
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tree-file-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  color: var(--violet-600);
+  white-space: nowrap;
+}
+.tree-file.is-locked { opacity: 0.65; }
+.tree-empty {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+}
+
+@media (max-width: 640px) {
+  .tree-chapters { padding-left: 8px; }
+  .tree-file { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .tree-file-meta { display: none; }
+  .tree-file-action { font-size: 0; }
+  .tree-file-action svg { width: 16px; height: 16px; }
+  .tree-total { display: none; }
 }
 
 @media (max-width: 640px) {

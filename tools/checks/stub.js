@@ -76,6 +76,7 @@ const LESSONS = [
   { id: 11, course: 1, folder: 101, title: 'Units and measurement', description: '', video_url: 'https://embed.vcdn.me/embed/28c4af9f-d817-460a-80ab-9a09f8c47c69', starts_at: iso(-4 * 3600000), duration_minutes: 42, position: 1, is_published: true, is_locked: false },
   { id: 12, course: 1, folder: 101, title: 'Kinematics in one dimension', description: 'Displacement, velocity and acceleration.', video_url: 'https://cdn.example/kinematics.mp4', duration_minutes: 51, position: 2, is_published: true, is_locked: false },
   { id: 13, course: 1, folder: 102, title: 'Mole concept', description: '', video_url: '', duration_minutes: 38, position: 1, is_published: true, is_locked: false },
+  { id: 14, course: 1, folder: 103, title: 'Vectors and scalars', description: '', video_url: 'https://embed.vcdn.me/embed/28c4af9f-d817-460a-80ab-9a09f8c47c69', duration_minutes: 47, position: 1, is_published: true, is_locked: false },
   { id: 21, course: 2, folder: 201, title: 'Cell — the unit of life', description: '', video_url: '', duration_minutes: 44, position: 1, is_published: true, is_locked: false }
 ];
 
@@ -158,7 +159,8 @@ const QUIZZES = [
 
 const PDFS = [
   { id: 1, folder: 101, title: 'Units and measurement — notes', description: 'PDF notes', file_url: 'https://files.example/units.pdf', position: 1, is_protected: false, is_locked: false },
-  { id: 2, folder: 102, title: 'Mole concept — notes', description: 'PDF notes', file_url: null, position: 1, is_protected: true, is_locked: true }
+  { id: 2, folder: 102, title: 'Mole concept — notes', description: 'PDF notes', file_url: null, position: 1, is_protected: true, is_locked: true },
+  { id: 3, folder: 103, title: 'Vectors — formula sheet', description: 'PDF notes', file_url: 'https://files.example/vectors.pdf', position: 1, is_protected: false, is_locked: false }
 ];
 
 const COMMUNITY = [
@@ -249,9 +251,9 @@ const classEntry = (id, title, section, offsets, status, over = {}) => ({
 });
 
 const SCHEDULE_CLASSES = [
-  classEntry(11, 'Kinematics in one dimension', 'Mechanics', [-12 * 60000, 40 * 60000], 'live'),
+  classEntry(11, 'Kinematics in one dimension', 'Mechanics', [-52 * 60000, -12 * 60000], 'ended'),
   classEntry(12, 'Units, dimensions and errors', 'Mechanics', [-4 * 3600000, -3 * 3600000], 'ended'),
-  classEntry(14, 'Mole concept', 'Chemistry', [2 * 3600000, 3 * 3600000], 'upcoming', { recording: false }),
+  classEntry(15, 'Mole concept', 'Chemistry', [2 * 3600000, 3 * 3600000], 'upcoming', { recording: false }),
   classEntry(21, 'Cell — the unit of life', 'Cell Biology', [20 * 3600000, 21 * 3600000], 'upcoming', {
     recording: false,
     course: { id: 2, title: 'NEET Biology Foundation', slug: 'neet-biology-foundation' }
@@ -291,12 +293,11 @@ function schedulePayload({ course = null, quiet = false, empty = false } = {}) {
     window_days: 7,
     counts: {
       today: today ? today.classes.length : 0,
-      live: all.filter((entry) => entry.status === 'live').length,
       upcoming: all.filter((entry) => entry.status === 'upcoming').length,
       total: all.length
     },
     groups,
-    next: all.find((entry) => entry.status === 'live') || all.find((entry) => entry.status === 'upcoming') || null,
+    next: all.find((entry) => entry.status === 'upcoming') || null,
     ...(course ? { course: pool[0]?.course || null } : {})
   };
 }
@@ -457,6 +458,7 @@ function makeStub({
         folders: [
           {
             id: 101,
+            subject: 'Physics',
             title: 'Mechanics',
             description: 'Motion, forces and energy.',
             position: 1,
@@ -465,11 +467,21 @@ function makeStub({
           },
           {
             id: 102,
+            subject: 'Chemistry',
             title: 'Physical chemistry',
             description: '',
             position: 2,
             lessons: LESSONS.filter((lesson) => lesson.folder === 102),
             pdf_resources: PDFS.filter((pdf) => pdf.folder === 102)
+          },
+          {
+            id: 103,
+            subject: 'Physics',
+            title: 'Mathematical physics',
+            description: 'Vectors and calculus drills.',
+            position: 3,
+            lessons: LESSONS.filter((lesson) => lesson.folder === 103),
+            pdf_resources: PDFS.filter((pdf) => pdf.folder === 103)
           }
         ]
       });

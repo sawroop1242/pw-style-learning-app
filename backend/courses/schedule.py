@@ -4,24 +4,25 @@ Why this module exists
 ----------------------
 The home page's "Today's classes" used to mean *classes uploaded today* — a
 recording pushed at 11pm for tomorrow's class counted as today's, and the class
-actually being taught this evening did not appear at all. A timetable has to be
-built from a time, not from a row's creation date.
+scheduled for this evening did not appear at all. A timetable has to be built
+from a time, not from a row's creation date.
 
 The rules it enforces
 ---------------------
 * **One clock.** Every status comes from the same ``now`` passed into the
   build, so two classes can never disagree about what "now" is.
-* **Live is computed, never stored.** A class is ``live`` between its start and
-  start + duration. There is no ``is_live`` column and no badge that outlives
-  the window: an honest "live" that stopped being true is worse than no badge.
-* **On-demand lessons are not scheduled.** A lesson without ``starts_at`` is a
-  recording, not a class; it never appears, rather than appearing at "00:00".
+* **Nothing claims to be live.** Every class here is a recording published at
+  an embed URL; none of them is a stream. So the timetable says when a class
+  airs and whether that hour has passed — ``upcoming`` or ``ended`` — and never
+  "live now". There is no ``is_live`` column to go stale either.
+* **On-demand lessons are not scheduled.** A lesson without ``starts_at`` is
+  not on the timetable; it never appears, rather than appearing at "00:00".
 * **The day is a record.** Today's group keeps the classes that already
-  finished this morning — a timetable you can only read forwards is not a
+  passed this morning — a timetable you can only read forwards is not a
   timetable.
-* **A blank duration is not invented.** Duration 0 means the live window has no
-  width: the class is upcoming until it starts and ended from that moment. The
-  admin says so; this module does not guess "maybe an hour".
+* **A blank duration is not invented.** Duration 0 means the class has no
+  stated length; the hour it airs still stands. The admin says so; this module
+  does not guess "maybe an hour".
 """
 
 from datetime import timedelta
@@ -37,7 +38,6 @@ MIN_DAYS = 1
 MAX_DAYS = 30
 
 STATUS_UPCOMING = "upcoming"
-STATUS_LIVE = "live"
 STATUS_ENDED = "ended"
 
 
@@ -60,12 +60,14 @@ def ends_at(lesson):
 
 
 def status_for(lesson, now):
-    """``upcoming`` | ``live`` | ``ended`` at ``now``. Half-open [start, end)."""
-    if now < lesson.starts_at:
-        return STATUS_UPCOMING
-    if now < ends_at(lesson):
-        return STATUS_LIVE
-    return STATUS_ENDED
+    """``upcoming`` before the class airs, ``ended`` once it has.
+
+    The boundary is the start, not the end: a recording is published at its
+    class time, so from that minute the class is there to watch. Nothing here
+    ever says "live" — these are embeds, and a badge that claims a stream is a
+    lie the product would have to keep telling.
+    """
+    return STATUS_UPCOMING if now < lesson.starts_at else STATUS_ENDED
 
 
 def _day_label(day):
@@ -171,17 +173,15 @@ def build(*, user, days=DEFAULT_DAYS, course=None, now=None):
 
     groups = []
     by_day = {}
-    live = upcoming = today_count = total = 0
+    upcoming = today_count = total = 0
     next_class = None
 
     for lesson in lessons:
         entry = _entry(lesson, now, can_open(lesson))
         total += 1
-        if entry["status"] == STATUS_LIVE:
-            live += 1
-        elif entry["status"] == STATUS_UPCOMING:
+        if entry["status"] == STATUS_UPCOMING:
             upcoming += 1
-        if next_class is None and entry["status"] in {STATUS_LIVE, STATUS_UPCOMING}:
+        if next_class is None and entry["status"] == STATUS_UPCOMING:
             next_class = entry
 
         day = timezone.localtime(lesson.starts_at).date()
@@ -205,7 +205,6 @@ def build(*, user, days=DEFAULT_DAYS, course=None, now=None):
         "window_days": days,
         "counts": {
             "today": today_count,
-            "live": live,
             "upcoming": upcoming,
             "total": total,
         },

@@ -139,21 +139,36 @@ COURSES = [
         "folders": [
             {
                 "title": "Mechanics",
+                "subject": "Physics",
                 "lessons": [
                     ("Units, dimensions and errors", 52),
                     ("Kinematics in one dimension", 64),
                     ("Newton's laws and friction", 71),
                 ],
+                "pdfs": ["Mechanics formula sheet"],
             },
             {
                 "title": "Modern Physics",
+                "subject": "Physics",
                 "lessons": [
                     ("Photoelectric effect", 48),
                     ("Bohr model and spectra", 55),
                 ],
+                "pdfs": ["Modern physics revision notes"],
+            },
+            {
+                # A second subject, so the batch page has a real tree rather
+                # than one branch: subject -> chapter -> classes and notes.
+                "title": "Atomic Structure",
+                "subject": "Chemistry",
+                "lessons": [
+                    ("Mole concept and stoichiometry", 46),
+                    ("Quantum numbers and orbitals", 54),
+                ],
+                "pdfs": ["Atomic structure question bank"],
             },
         ],
-        "pdfs": ["Mechanics formula sheet", "Modern physics revision notes"],
+        "pdfs": [],
     },
     {
         "slug": "demo-neet-2027-biology",
@@ -172,6 +187,7 @@ COURSES = [
         "folders": [
             {
                 "title": "Cell Biology",
+                "subject": "Biology",
                 "lessons": [
                     ("Cell structure and organelles", 58),
                     ("Cell cycle and division", 62),
@@ -179,6 +195,7 @@ COURSES = [
             },
             {
                 "title": "Human Physiology",
+                "subject": "Biology",
                 "lessons": [("Breathing and exchange of gases", 66)],
             },
         ],
@@ -199,14 +216,17 @@ COURSES = [
         "folders": [
             {
                 "title": "General Intelligence",
+                "subject": "Reasoning",
                 "lessons": [
                     ("Series and analogy", 41),
                     ("Coding-decoding", 38),
                     ("Syllogism", 44),
                 ],
+                "pdfs": [],
             },
             {
                 "title": "English",
+                "subject": "English",
                 "lessons": [("Error spotting", 36)],
             },
         ],
@@ -229,10 +249,12 @@ COURSES = [
         "folders": [
             {
                 "title": "Quantitative Aptitude",
+                "subject": "Maths",
                 "lessons": [
                     ("Percentage and ratio", 47),
                     ("Time, speed and distance", 53),
                 ],
+                "pdfs": [],
             }
         ],
         "pdfs": ["Quant shortcut sheet"],
@@ -252,13 +274,16 @@ COURSES = [
         "folders": [
             {
                 "title": "Chemical Reactions",
+                "subject": "Chemistry",
                 "lessons": [
                     ("Types of reactions", 34),
                     ("Balancing equations", 39),
                 ],
+                "pdfs": [],
             },
             {
                 "title": "Light",
+                "subject": "Physics",
                 "lessons": [("Reflection and refraction", 42)],
             },
         ],
@@ -281,6 +306,7 @@ COURSES = [
         "folders": [
             {
                 "title": "Algorithms",
+                "subject": "Computer Science",
                 "lessons": [
                     ("Asymptotic analysis", 61),
                     ("Greedy and dynamic programming", 74),
@@ -288,10 +314,11 @@ COURSES = [
             },
             {
                 "title": "Databases",
+                "subject": "Computer Science",
                 "lessons": [("Normalisation and indexing", 68)],
             },
         ],
-        "pdfs": ["Algorithms cheat sheet"],
+        "pdfs": [],
     },
 ]
 
@@ -647,7 +674,10 @@ class Command(BaseCommand):
                 folder, _ = CourseFolder.objects.update_or_create(
                     course=course,
                     title=folder_spec["title"],
-                    defaults={"position": folder_position},
+                    defaults={
+                        "subject": folder_spec.get("subject", ""),
+                        "position": folder_position,
+                    },
                 )
                 folder_titles.append(folder)
                 for lesson_position, (title, minutes) in enumerate(
@@ -666,9 +696,9 @@ class Command(BaseCommand):
                     )
 
             # A timetable for the demo: one class a day at 19:00, starting
-            # today. The first class of the first batch started a few minutes
-            # ago, so "live now" is visible without waiting for an hour. Times
-            # are relative to the run, so a preview is never stale.
+            # today. The first class of the first batch airs two hours from
+            # now, so the home screen has something still to come. Times are
+            # relative to the run, so a preview is never stale.
             scheduled = list(
                 course.lessons.order_by("folder__position", "position", "id")
             )
@@ -678,7 +708,7 @@ class Command(BaseCommand):
             )
             for index, lesson in enumerate(scheduled):
                 if spec["slug"] == "demo-jee-main-2027" and index == 0:
-                    starts = now - timedelta(minutes=12)
+                    starts = now + timedelta(hours=2)
                 else:
                     starts = seven_pm + timedelta(days=index)
                 # `update()` skips `auto_now`, so the timestamp is set here.
@@ -699,12 +729,18 @@ class Command(BaseCommand):
                     },
                 )
 
-            # Chapter PDFs live in the first folder; protected, so the public
+            # Chapter PDFs sit in the chapter they belong to — that is the
+            # whole point of the tree. A batch-level list is still honoured and
+            # lands in the first chapter. Every one is protected, so the public
             # payload carries the lock rather than a URL that would 404.
-            first_folder = folder_titles[0]
-            for pdf_position, title in enumerate(spec["pdfs"], start=1):
+            placements = [
+                (folder_titles[index], title)
+                for index, folder_spec in enumerate(spec["folders"])
+                for title in folder_spec.get("pdfs", [])
+            ] + [(folder_titles[0], title) for title in spec.get("pdfs", [])]
+            for pdf_position, (folder, title) in enumerate(placements, start=1):
                 PdfResource.objects.update_or_create(
-                    folder=first_folder,
+                    folder=folder,
                     title=title,
                     defaults={
                         "file_url": f"https://files.studyspace.example/{spec['slug']}/{pdf_position}.pdf",
