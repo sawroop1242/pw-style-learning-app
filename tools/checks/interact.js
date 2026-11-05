@@ -392,6 +392,23 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     );
     check('the no-match message stays out of the way', doc.querySelector('#tree-no-match').hidden);
 
+    // A file manager lets you open the whole thing at once.
+    const collapse = doc.querySelector('[data-tree="collapse"]');
+    collapse.click();
+    await wait(30);
+    check(
+      'collapse all shuts every folder',
+      doc.querySelectorAll('#content-tree details[open]').length === 0,
+      `${doc.querySelectorAll('#content-tree details[open]').length} open`
+    );
+    doc.querySelector('[data-tree="expand"]').click();
+    await wait(30);
+    check(
+      'expand all opens every folder',
+      doc.querySelectorAll('#content-tree details').length === doc.querySelectorAll('#content-tree details[open]').length,
+      `${doc.querySelectorAll('#content-tree details[open]').length}/${doc.querySelectorAll('#content-tree details').length} open`
+    );
+
     search.value = 'physics';
     search.dispatchEvent(new window.Event('input', { bubbles: true }));
     await wait(60);

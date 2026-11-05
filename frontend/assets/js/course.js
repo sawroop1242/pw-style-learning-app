@@ -376,6 +376,10 @@ function renderClasses() {
       <div class="tree-toolbar">
         <label class="visually-hidden" for="content-search">Search this batch</label>
         <input id="content-search" type="search" autocomplete="off" placeholder="Search chapters, classes and notes">
+        <div class="tree-actions">
+          <button type="button" class="chip" data-tree="expand">Expand all</button>
+          <button type="button" class="chip" data-tree="collapse">Collapse all</button>
+        </div>
         <p class="tree-total">${groups.length} ${groups.length === 1 ? 'subject' : 'subjects'} · ${totalClasses} ${totalClasses === 1 ? 'class' : 'classes'} · ${totalNotes} ${totalNotes === 1 ? 'note' : 'notes'}</p>
       </div>
       <p class="tree-no-match" id="tree-no-match" hidden>Nothing in this batch matches that search.</p>
@@ -446,6 +450,17 @@ function wireTreeSearch(host) {
 
   input.addEventListener('input', apply);
   input.addEventListener('search', apply);
+
+  // A batch can carry a dozen chapters. Opening them one at a time is the
+  // file-manager annoyance this whole screen exists to avoid.
+  host.querySelectorAll('[data-tree]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const open = button.dataset.tree === 'expand';
+      host.querySelectorAll('#content-tree details').forEach((details) => {
+        details.open = open;
+      });
+    });
+  });
 }
 
 /**
