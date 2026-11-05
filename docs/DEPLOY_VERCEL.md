@@ -122,7 +122,11 @@ A deploy therefore cannot come up with an unmigrated database, an empty
 catalogue or a missing administrator. Every step is idempotent:
 
 - `migrate` is a no-op once the schema is current.
-- `seed_demo` uses `update_or_create` throughout.
+- `seed_demo` uses `update_or_create` throughout, and prunes the placeholder
+  PDFs it created earlier that no longer belong to any chapter — so a note that
+  moved chapters does not survive in the old one. It only touches rows whose
+  `file_url` points at `files.studyspace.example`; anything a provider uploaded
+  in the admin is left alone.
 - `ensure_admin` creates the account once, and afterwards only promotes it —
   a password changed in the UI survives redeploys. `--set-password` forces it.
 

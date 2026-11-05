@@ -750,6 +750,23 @@ class Command(BaseCommand):
                     },
                 )
 
+            # A note that moved chapters must not be left behind in the chapter
+            # it used to sit in — the tree would show the same sheet twice, once
+            # under a heading it does not belong to. Only this command's own
+            # rows are pruned (their file_url points at the placeholder host),
+            # so a PDF a provider added in the admin is never touched.
+            wanted = {(folder.pk, title) for folder, title in placements}
+            stale = [
+                pdf.pk
+                for pdf in PdfResource.objects.filter(
+                    folder__course=course,
+                    file_url__startswith="https://files.studyspace.example/",
+                )
+                if (pdf.folder_id, pdf.title) not in wanted
+            ]
+            if stale:
+                PdfResource.objects.filter(pk__in=stale).delete()
+
         return len(COURSES)
 
     def _series(self, _courses):
