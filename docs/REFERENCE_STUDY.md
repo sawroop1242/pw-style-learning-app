@@ -339,6 +339,30 @@ the classes in them and the notes beside them.
   `_published()` exists because `.filter()` on a prefetched relation silently
   throws the prefetch away.
 
+**A batch on your account is a classroom, not a shop window.** The reference
+batch page (screenshot 1 in the run-47 set) is built for someone who already
+owns the batch: a cover, the name, a one-line description, then a tab strip —
+**Subjects · Tests · Announcements · Community** — and a grid of subject cards
+carrying `2 chapters · 16 lectures`, `5 · 3`, `1 · 5`. Nothing on it is for sale.
+Our `course.html` answers the other question (what is this, what does it cost,
+how do I get in), so the classroom is a second page rather than a second mode:
+`learn.html?course=` opens from **My batches**, and a batch you have not joined
+tells you so and sends you to the page that can fix it.
+
+The four tabs are the reference's, filled with what this backend can actually
+back: **Subjects** (the batch's folders), **Tests** (`/api/quizzes/?course=`),
+**Announcements** and **Community** (one feed, `/api/community/?course=`, split
+by the field the server publishes — `pinned` notices are the announcements, and
+the tab titled Community is the full feed with the door to the community page).
+An empty Announcements tab says "no pinned notice yet" rather than repeating
+the feed under a second heading. Faculty are on the card, not behind a tab, as
+in the reference: *"Taught by …"* under the batch's name, linking to the public
+page's Teachers panel for the bios.
+
+The subject cards are the same component the batch page uses — one renderer, so
+the classroom and the catalogue can never print different counts — and a card
+goes straight to `subject.html`, which is the level the reference opens next.
+
 The next milestone is a decision, not a queue: P9 (console command palette) is
 the cheapest thing left, P8 (goal-first home) is the most visible, and P10
 (certificates) still waits on batches having rules.

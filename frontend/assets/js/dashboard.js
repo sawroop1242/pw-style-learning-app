@@ -11,7 +11,7 @@ import {
   $, esc, storage, isSignedIn, request, getJson, rows, apiQuery, initials,
   shortDate, money
 } from './core.js';
-import { mountChrome, icon, emptyState, errorState, toast, wireRetry, thumbTone } from './ui.js';
+import { mountChrome, icon, emptyState, errorState, toast, wireRetry, thumbTone, learnHref } from './ui.js';
 
 mountChrome('dashboard');
 
@@ -455,7 +455,7 @@ function renderBatches(courseRows) {
     .slice(0, 4)
     .map(
       (course) => `
-      <a class="row-between tiny" href="course.html?slug=${encodeURIComponent(course.slug)}" style="gap:10px">
+      <a class="row-between tiny" href="${esc(learnHref(course.slug))}" style="gap:10px">
         <span class="truncate strong" style="max-width:70%;font-size:12px">${esc(course.title)}</span>
         <span class="subtle">${esc(course.pricing_mode === 'paid' ? money(course.price) : 'Free')}</span>
       </a>`

@@ -14,7 +14,7 @@ import {
 } from './core.js';
 import {
   mountChrome, batchCard, icon, thumbTone, emptyState, toast, wireRetry,
-  scheduleRow
+  groupBySubject, subjectHref, subjectGrid, learnHref, renderScheduleStrip
 } from './ui.js';
 
 mountChrome('courses');
@@ -198,7 +198,7 @@ function renderPurchase() {
 function renderCounts(testRows) {
   // The Subjects tab opens on exactly as many cards as its badge claims.
   const counts = {
-    subjects: groupBySubject(current.folders).length,
+    subjects: groupBySubject(current.folders, current.subject).length,
     papers: (testRows || []).length,
     teachers: (current.faculty || []).length
   };
@@ -212,7 +212,7 @@ function renderCounts(testRows) {
 
 function renderOverview() {
   const host = $('#panel-overview');
-  const groups = groupBySubject(current.folders);
+  const groups = groupBySubject(current.folders, current.subject);
   const lessonCount = current.folders.reduce((n, f) => n + (f.lessons || []).length, 0);
   const noteCount = current.folders.reduce((n, f) => n + (f.pdf_resources || []).length, 0);
   host.innerHTML = `
@@ -261,86 +261,25 @@ function renderOverview() {
 /* ------------------------------------------------------------------ */
 
 /**
- * Chapters grouped by the subject they are filed under.
+ * Where "Start learning" goes.
  *
- * `CourseFolder.subject` is what the provider typed; when it is blank the
- * chapter files under the batch's own subject rather than a heading the
- * faculty never chose. A chapter that arrives with a subject the batch does
- * not carry still gets a group of its own — the screen follows the data.
+ * A learner who owns this batch is sent into the classroom (`learn.html`),
+ * which opens on its subjects and carries today's timetable, its papers and
+ * its feed. Everyone else stays on the public subject page, which is a
+ * preview of the chapters, not the place to study them.
  */
-function groupBySubject(folders) {
-  const groups = new Map();
-  folders.forEach((folder) => {
-    const subject = (folder.subject || '').trim() || current.subject || 'General';
-    if (!groups.has(subject)) groups.set(subject, []);
-    groups.get(subject).push(folder);
-  });
-  return [...groups.entries()].map(([subject, chapters]) => ({
-    subject,
-    chapters,
-    classes: chapters.reduce((n, c) => n + (c.lessons || []).length, 0),
-    notes: chapters.reduce((n, c) => n + (c.pdf_resources || []).length, 0)
-  }));
-}
-
-/** The subject page's URL. The label is the key: no invented subject ids. */
-const subjectHref = (subject) =>
-  `subject.html${apiQuery({ course: current.slug, subject })}`;
-
-/** Where "Start learning" goes: the first subject, in reading order. */
 function startHref() {
-  const first = groupBySubject(current.folders)[0];
-  return first ? subjectHref(first.subject) : '#panel-subjects';
+  if (current.hasAccess) return learnHref(current.slug);
+  const first = groupBySubject(current.folders, current.subject)[0];
+  return first ? subjectHref(current.slug, first.subject) : '#panel-subjects';
 }
 
-/**
- * A guess at the icon that belongs to a subject name — decoration only.
- *
- * It is matched on words a provider is likely to type; a subject nobody has
- * seen before gets the generic one rather than the wrong one. Nothing here
- * says anything about the data, which is why the icon is `aria-hidden`.
- */
-const SUBJECT_ICONS = [
-  [/physic|mechanic|optic|electric|magnet|kinemat|atomic|astro/i, 'atom'],
-  [/chem|organic|inorganic|mole/i, 'flask'],
-  [/maths?|mathemat|quant|aptitude|algebra|calculus|geometry|trigo/i, 'chart'],
-  [/reason|logic|puzzle|mental ability/i, 'target'],
-  [/biol|botany|zoolog|science/i, 'heart'],
-  [/english|hindi|language|grammar|comprehension|literature/i, 'book'],
-  [/computer|program|coding|python|java/i, 'cpu'],
-  [/notice|announce|current affair|gk|general knowledge/i, 'megaphone']
-];
-
-const subjectIcon = (name) => {
-  for (const [pattern, iconName] of SUBJECT_ICONS) {
-    if (pattern.test(name)) return iconName;
-  }
-  return 'layers';
-};
-
-/** "2 chapters · 5 classes · 1 note" — what a subject card promises inside. */
-function subjectCounts(group) {
-  const parts = [
-    `${group.chapters.length} ${group.chapters.length === 1 ? 'chapter' : 'chapters'}`,
-    `${group.classes} ${group.classes === 1 ? 'class' : 'classes'}`
-  ];
-  if (group.notes) parts.push(`${group.notes} ${group.notes === 1 ? 'note' : 'notes'}`);
-  return parts.join(' · ');
-}
-
-/**
- * The batch's subjects, as cards.
- *
- * This is the level the reference product opens a batch on, and the reason is
- * plain: a batch is chosen for its subject, then read chapter by chapter. The
- * counts on each card are the chapters and classes behind the click, so the
- * page never asks a learner to open a folder to find out whether it is empty.
- */
+/** The batch's subjects, as cards — the same grid the classroom opens on. */
 function renderSubjects() {
   const host = $('#panel-subjects');
   if (!host) return;
 
-  const groups = groupBySubject(current.folders);
+  const groups = groupBySubject(current.folders, current.subject);
   if (!groups.length) {
     host.innerHTML = emptyState({
       title: 'No subjects published yet',
@@ -349,87 +288,20 @@ function renderSubjects() {
     });
     return;
   }
-
-  const classes = groups.reduce((n, group) => n + group.classes, 0);
-  const notes = groups.reduce((n, group) => n + group.notes, 0);
-
-  host.innerHTML = `
-    <p class="subject-total">${groups.length} ${groups.length === 1 ? 'subject' : 'subjects'} · ${classes} ${classes === 1 ? 'class' : 'classes'} · ${notes} ${notes === 1 ? 'note' : 'notes'}</p>
-    <div class="subject-grid" id="subject-grid">
-      ${groups
-        .map(
-          (group) => `
-        <a class="subject-card" href="${esc(subjectHref(group.subject))}" data-subject="${esc(group.subject)}">
-          <span class="subject-icon ${thumbTone(group.subject)}" aria-hidden="true">${icon(subjectIcon(group.subject))}</span>
-          <span class="subject-body">
-            <span class="subject-name">${esc(group.subject)}</span>
-            <span class="subject-meta">${esc(subjectCounts(group))}</span>
-          </span>
-          ${icon('chevron-right')}
-        </a>`
-        )
-        .join('')}
-    </div>`;
+  host.innerHTML = subjectGrid(groups, (group) => subjectHref(current.slug, group.subject));
 }
 
 /**
  * The batch's own timetable, above its curriculum.
  *
  * `/schedule/?course=` is public: a batch page may show when its classes air
- * before anyone enrols — exactly what a PW batch page does with its Schedule
+ * before anyone enrols — exactly what a PW batch page does with its schedule
  * strip. A recording the visitor cannot open still appears in the list as
- * locked, because "there is a class at 7" is true for everyone.
- *
- * A failure here does not take the page down: the curriculum is below it and
- * is the reason the page exists.
+ * locked, because "there is a class at 7" is true for everyone. The strip is
+ * shared with the classroom so the two pages can never print a different week.
  */
-async function loadBatchSchedule() {
-  const host = $('#class-timetable');
-  if (!host || !current) return;
-
-  let payload;
-  try {
-    payload = await getJson(`/schedule/${apiQuery({ course: current.slug, days: 14 })}`);
-  } catch {
-    host.innerHTML = '<p class="tiny muted" style="margin:0">The timetable could not be loaded. The curriculum below is unaffected.</p>';
-    return;
-  }
-
-  const entries = (payload.groups || []).flatMap((group) => group.classes);
-  // `ahead` stays unsliced so the head can count what the strip left out;
-  // slicing it first made every strip look complete.
-  const ahead = entries.filter((entry) => entry.status !== 'ended');
-  const shown = ahead.length ? ahead.slice(0, 6) : entries.slice(-3);
-
-  if (!shown.length) {
-    host.innerHTML = `
-      <div class="batch-schedule-head">
-        <div class="batch-schedule-title">
-          <strong>Today’s classes</strong>
-          <span class="tiny subtle">Next 14 days</span>
-        </div>
-        <a class="btn btn-ghost btn-sm" href="index.html#schedule">Weekly schedule</a>
-      </div>
-      <p class="tiny muted" style="margin:0">No class has an air time yet. The classes below can be watched on demand.</p>`;
-    return;
-  }
-
-  // A strip cannot be the whole timetable. When it stops short, say so
-  // instead of letting six rows look like all of them.
-  const rest = ahead.length - shown.length;
-  const scope = rest > 0 ? `${rest} more below` : ahead.length ? 'Next 14 days' : 'Last 14 days';
-
-  host.innerHTML = `
-    <div class="batch-schedule-head">
-      <div class="batch-schedule-title">
-        <strong>${ahead.length ? 'Today’s classes' : 'Recent classes'}</strong>
-        <span class="tiny subtle">${scope}</span>
-      </div>
-      <a class="btn btn-ghost btn-sm" href="index.html#schedule">Weekly schedule</a>
-    </div>
-    <div class="day-schedule">
-      ${shown.map((entry) => scheduleRow(entry, { showCourse: false, timeZone: payload.timezone || '' })).join('')}
-    </div>`;
+function loadBatchSchedule() {
+  renderScheduleStrip($('#class-timetable'), { slug: current.slug, weeklyLink: true });
 }
 
 /** The batch's papers, card for card, from `/quizzes/?course=`. */
@@ -525,7 +397,7 @@ function faqItems() {
 
 function renderAside() {
   const host = $('#course-aside');
-  const groups = groupBySubject(current.folders);
+  const groups = groupBySubject(current.folders, current.subject);
   const facts = [
     ['Subject', current.subject],
     ['Price', current.free ? 'Free' : money(current.price)],

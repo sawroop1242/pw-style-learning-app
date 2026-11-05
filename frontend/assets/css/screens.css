@@ -213,6 +213,52 @@
 .subject-card > svg { width: 16px; height: 16px; color: var(--text-subtle); }
 .subject-card:hover > svg { color: var(--violet-500); }
 
+/* ============================ MY BATCH ================================ */
+/* A batch on the learner's account, opened as a classroom rather than a shop
+   window: the cover, the name and the facts, then today, then the syllabus.
+   Deliberately shorter than the public hero — this page is used every day, so
+   the syllabus has to be on the first screen. */
+.learn-hero { padding-block: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--border); }
+.learn-head {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-top: var(--sp-3);
+}
+.learn-cover {
+  display: grid;
+  place-items: center;
+  min-height: 108px;
+  padding: var(--sp-3);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  color: var(--band-ink);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  position: relative;
+}
+.learn-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.learn-info { min-width: 0; }
+.learn-title {
+  margin: 0;
+  font-size: clamp(1.25rem, 1.05rem + 1vw, var(--text-xl));
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+.learn-sub { margin: 6px 0 0; color: var(--text-muted); font-size: var(--text-sm); }
+.learn-info .badges { margin-top: 10px; }
+.learn-faculty {
+  margin: 8px 0 0;
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+}
+.learn-faculty[hidden] { display: none; }
+.learn-overview { align-self: start; }
+.learn-hero .skeleton { border-radius: var(--r-xs); }
+
 /* One subject, opened: the heading carries the batch's context back. */
 .subject-hero { display: flex; align-items: center; gap: var(--sp-4); }
 .subject-hero .subject-icon { width: 62px; height: 62px; border-radius: var(--r-md); }
@@ -927,6 +973,9 @@ a.lecture-card:focus-visible { outline: 2px solid var(--violet-600); outline-off
 
 @media (max-width: 1023px) {
   .batch-hero-grid { grid-template-columns: minmax(0, 1fr); }
+  .learn-head { grid-template-columns: 64px minmax(0, 1fr); }
+  .learn-cover { min-height: 64px; font-size: var(--text-sm); }
+  .learn-overview { grid-column: 1 / -1; justify-self: start; }
   .facts-card { position: static; }
 }
 @media (max-width: 760px) {

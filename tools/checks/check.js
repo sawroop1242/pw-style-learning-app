@@ -16,6 +16,7 @@ const PAGES = [
   ['courses.html', ['core', 'content', 'ui', 'courses']],
   ['course.html', ['core', 'content', 'ui', 'course'], '?slug=jee-main-2027'],
   ['subject.html', ['core', 'content', 'ui', 'subject'], '?course=jee-main-2027&subject=Physics'],
+  ['learn.html', ['core', 'content', 'ui', 'learn'], '?course=neet-biology-foundation'],
   ['tests.html', ['core', 'content', 'ui', 'tests']],
   ['community.html', ['core', 'content', 'ui', 'community']],
   ['profile.html', ['core', 'content', 'ui', 'profile']],

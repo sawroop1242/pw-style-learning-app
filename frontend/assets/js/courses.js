@@ -16,7 +16,7 @@ import {
   isSignedIn, adaptCourse
 } from './core.js';
 import {
-  mountChrome, batchCard, emptyState, errorState, skeletonBatchGrid, icon, wireRetry
+  mountChrome, batchCard, emptyState, errorState, skeletonBatchGrid, icon, wireRetry, learnHref
 } from './ui.js';
 
 mountChrome('courses');
@@ -495,7 +495,10 @@ async function loadMine() {
       });
       return;
     }
-    grid.innerHTML = list.map(batchCard).join('');
+    // A card in "my batches" opens the classroom, not the sales page: the
+    // learner already owns this batch, so the useful question is what is inside
+    // it, not what it costs.
+    grid.innerHTML = list.map((course) => batchCard(course, { href: learnHref(course.slug) })).join('');
   } catch (err) {
     grid.innerHTML = '';
     empty.hidden = false;

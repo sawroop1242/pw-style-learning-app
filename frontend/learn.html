@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b16">
+  <meta name="api-base" content="/api">
+  <title>My batch — StudySpace</title>
+  <meta name="description" content="The batch you joined, opened: its subjects, the classes and notes in each, and what is on today.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/screens.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript-bar" role="note">
+      StudySpace needs JavaScript for the catalogue, tests and dashboard.
+      Please enable it, or write to
+      <a href="mailto:support@studyspace.example">support@studyspace.example</a> for help.
+    </div>
+  </noscript>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <section class="learn-hero">
+      <div class="container">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="index.html">Home</a>
+          <svg><use href="#i-chevron-right"/></svg>
+          <a href="courses.html?mine=1">My batches</a>
+          <svg><use href="#i-chevron-right"/></svg>
+          <span class="current" id="crumb-title">Batch</span>
+        </nav>
+
+        <!-- The batch as a learner sees it once it is on their account: a cover,
+             a name, the facts that identify it, and the way back to the public
+             page for anyone who wants the full description and access terms. -->
+        <div class="learn-head">
+          <span class="learn-cover thumb-default" id="learn-cover" aria-hidden="true"></span>
+          <div class="learn-info">
+            <h1 class="learn-title" id="learn-title">
+              <span class="skeleton skeleton-text" style="display:block;width:220px;height:22px"></span>
+            </h1>
+            <p class="learn-sub" id="learn-sub">Loading this batch…</p>
+            <div class="badges" id="learn-badges"></div>
+            <p class="learn-faculty" id="learn-faculty" hidden></p>
+          </div>
+          <a class="btn btn-ghost btn-sm learn-overview" id="overview-link" href="courses.html?mine=1">Batch page</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="container">
+        <div class="course-layout">
+          <div>
+            <!-- Today's classes first: a learner opening their batch wants to
+                 know what is on before they browse the syllabus. -->
+            <div class="card card-pad batch-schedule" id="class-timetable" aria-live="polite"></div>
+
+            <!-- Four panels: the syllabus, the papers, the batch feed and the
+                 people teaching it. Each is a real URL (?tab=tests), so a
+                 teacher can link straight to one. -->
+            <div class="tabs" role="tablist" aria-label="My batch" id="learn-tabs">
+              <button class="tab" role="tab" id="tab-subjects" aria-controls="panel-subjects" aria-selected="true" tabindex="0" data-tab="subjects">Subjects<span class="tab-count" data-count="subjects" hidden></span></button>
+              <button class="tab" role="tab" id="tab-tests" aria-controls="panel-tests" aria-selected="false" tabindex="-1" data-tab="tests">Tests<span class="tab-count" data-count="tests" hidden></span></button>
+              <button class="tab" role="tab" id="tab-announcements" aria-controls="panel-announcements" aria-selected="false" tabindex="-1" data-tab="announcements">Announcements<span class="tab-count" data-count="announcements" hidden></span></button>
+              <button class="tab" role="tab" id="tab-community" aria-controls="panel-community" aria-selected="false" tabindex="-1" data-tab="community">Community<span class="tab-count" data-count="community" hidden></span></button>
+            </div>
+
+            <section class="tab-panel" id="panel-subjects" role="tabpanel" aria-labelledby="tab-subjects" data-panel="subjects"></section>
+            <section class="tab-panel" id="panel-tests" role="tabpanel" aria-labelledby="tab-tests" data-panel="tests" hidden></section>
+            <section class="tab-panel" id="panel-announcements" role="tabpanel" aria-labelledby="tab-announcements" data-panel="announcements" hidden></section>
+            <section class="tab-panel" id="panel-community" role="tabpanel" aria-labelledby="tab-community" data-panel="community" hidden></section>
+          </div>
+
+          <aside aria-label="Batch summary" id="learn-aside"></aside>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-tabbar"></div>
+
+  <script type="module" src="assets/js/learn.js"></script>
+</body>
+</html>
