@@ -304,6 +304,23 @@ const FIXTURES = [
     check('every server note is in a chapter', doc.querySelectorAll('#content-tree .tree-file[data-kind="note"]').length === notesExpected, `${doc.querySelectorAll('#content-tree .tree-file[data-kind="note"]').length}/${notesExpected}`);
     check('no class row is repeated in another chapter', new Set([...doc.querySelectorAll('#content-tree .tree-file[data-kind="class"]')].map((row) => row.dataset.file)).size === lessonsExpected);
 
+    // The strip above the tree shows at most six classes; when the window
+    // holds more, it says how many it is holding back rather than letting six
+    // rows look like the whole timetable.
+    const batchSchedule = await api(`/api/schedule/?course=${slug}&days=14`);
+    const aheadCount = (batchSchedule?.groups || [])
+      .flatMap((group) => group.classes)
+      .filter((entry) => entry.status !== 'ended').length;
+    const stripRows = doc.querySelectorAll('#class-timetable .day-schedule .class-row').length;
+    const stripNote = text(doc.querySelector('#class-timetable .batch-schedule-head .subtle'));
+    const hiddenAhead = aheadCount - stripRows;
+    check(
+      'the strip says when it is holding classes back',
+      stripRows === Math.min(aheadCount, 6) &&
+        (hiddenAhead > 0 ? stripNote === `${hiddenAhead} more below` : stripNote === 'Next 14 days'),
+      `${stripRows}/${aheadCount} rows / "${stripNote}"`
+    );
+
     // No live anywhere: these are recordings.
     check('the batch page claims nothing is live', doc.querySelectorAll('.badge-live').length === 0, String(doc.querySelectorAll('.badge-live').length));
     check('nothing on the page offers to join a class', !/join (the )?class/i.test(text(doc.querySelector('#panel-classes'))));

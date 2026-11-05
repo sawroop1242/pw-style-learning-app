@@ -472,8 +472,10 @@ async function loadBatchSchedule() {
   }
 
   const entries = (payload.groups || []).flatMap((group) => group.classes);
-  const ahead = entries.filter((entry) => entry.status !== 'ended').slice(0, 6);
-  const shown = ahead.length ? ahead : entries.slice(-3);
+  // `ahead` stays unsliced so the head can count what the strip left out;
+  // slicing it first made every strip look complete.
+  const ahead = entries.filter((entry) => entry.status !== 'ended');
+  const shown = ahead.length ? ahead.slice(0, 6) : entries.slice(-3);
 
   if (!shown.length) {
     host.innerHTML = `
@@ -485,10 +487,15 @@ async function loadBatchSchedule() {
     return;
   }
 
+  // A strip cannot be the whole timetable. When it stops short, say so
+  // instead of letting six rows look like all of them.
+  const rest = ahead.length - shown.length;
+  const scope = rest > 0 ? `${rest} more below` : ahead.length ? 'Next 14 days' : 'Last 14 days';
+
   host.innerHTML = `
     <div class="batch-schedule-head">
       <strong>${ahead.length ? 'Next classes' : 'Recent classes'}</strong>
-      <span class="tiny subtle">${ahead.length ? 'Next 14 days' : 'Last 14 days'}</span>
+      <span class="tiny subtle">${scope}</span>
     </div>
     <div class="day-schedule">
       ${shown.map((entry) => scheduleRow(entry, { showCourse: false, timeZone: payload.timezone || '' })).join('')}
