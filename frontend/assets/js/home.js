@@ -1,15 +1,19 @@
 /**
  * Home page.
  *
- * Four API reads, four renders: latest lessons, the published catalogue, the
- * published tests and the announcement feed. Nothing is pre-filled — an empty
- * catalogue renders an empty state, and a failed request renders an error with
- * a retry, because both are more useful than invented rows.
+ * Four API reads, four renders: the learner's timetable, the published
+ * catalogue, the published tests and the announcement feed. Nothing is
+ * pre-filled — an empty catalogue renders an empty state, and a failed request
+ * renders an error with a retry, because both are more useful than invented
+ * rows.
  */
 
-import { $, $$, esc, getJson, rows, initials, storage, adaptCourse, adaptTest } from './core.js';
 import {
-  mountChrome, batchCard, testCard, lessonCard, icon, toast, errorState, emptyState, wireRetry
+  $, $$, esc, getJson, rows, initials, storage, isSignedIn, adaptCourse, adaptTest
+} from './core.js';
+import {
+  mountChrome, batchCard, testCard, scheduleRow, icon, toast, errorState, emptyState,
+  wireRetry
 } from './ui.js';
 import { FAQS } from './content.js';
 
@@ -44,24 +48,95 @@ function fill(host, html, { empty, emptyBody, actionLabel, actionHref, iconName 
   host.innerHTML = html || emptyState({ title: empty, body: emptyBody, actionLabel, actionHref, iconName });
 }
 
-async function loadLessons() {
-  const host = $('#today-grid');
+/**
+ * "Today's classes" is a timetable, not a feed of uploads.
+ *
+ * It used to list lessons *created* today, so a recording pushed at 11pm for
+ * next week's class counted as today's and the class being taught this evening
+ * did not appear at all. `/schedule/` answers the real question — what is on,
+ * when — and marks a class live only inside its own window.
+ *
+ * The seven-day payload is requested once and rendered in three parts: today,
+ * "later this week", and nothing at all. A quiet day is stated as a quiet day,
+ * with the next class named rather than a made-up row.
+ */
+async function loadSchedule() {
+  const host = $('#schedule-list');
   if (!host) return;
+  const summary = $('#schedule-summary');
+
+  if (!isSignedIn()) {
+    if (summary) summary.textContent = '';
+    host.innerHTML = emptyState({
+      title: 'Sign in to see your timetable',
+      body: 'Classes appear here for the batches you have joined. A guest has no batches yet.',
+      actionLabel: 'Sign in',
+      actionHref: 'login.html?next=index.html',
+      iconName: 'calendar'
+    });
+    return;
+  }
+
+  let payload;
   try {
-    // "Today's classes": published today, in a batch this learner joined.
-    // One read, and the empty state is honest — a quiet day is not an error.
-    const payload = await getJson('/lessons/?added=today&has_video=1&page_size=6');
-    const list = rows(payload);
-    fill(host, list.map((lesson) => lessonCard(lesson)).join(''), {
-      empty: 'Nothing new today',
-      emptyBody: 'Classes added today to a batch you joined show up here. Older ones are inside the batch.',
+    payload = await getJson('/schedule/?days=7');
+  } catch (err) {
+    if (summary) summary.textContent = '';
+    host.innerHTML = errorState({
+      title: 'Timetable unavailable',
+      body: err?.message || 'The schedule could not be loaded.'
+    });
+    return;
+  }
+
+  const groups = Array.isArray(payload.groups) ? payload.groups : [];
+  const today = groups.find((group) => group.is_today);
+  const todays = today ? today.classes : [];
+  const later = groups
+    .flatMap((group) => group.classes)
+    .filter((entry) => entry.status !== 'ended' && !todays.includes(entry))
+    .slice(0, 3);
+
+  if (summary) {
+    const counts = payload.counts || {};
+    summary.textContent = !counts.total
+      ? 'Nothing scheduled in the next seven days'
+      : [
+          `${counts.today} ${counts.today === 1 ? 'class' : 'classes'} today`,
+          counts.live ? `${counts.live} live now` : '',
+          counts.upcoming ? `${counts.upcoming} still to come this week` : ''
+        ].filter(Boolean).join(' · ');
+  }
+
+  if (!(payload.counts || {}).total) {
+    host.innerHTML = emptyState({
+      title: 'Nothing on the timetable',
+      body: 'No class in your batches has an air time in the next seven days. Joined a batch recently? Its schedule shows up here as soon as faculty sets one.',
       actionLabel: 'Open my batches',
       actionHref: 'courses.html',
-      iconName: 'play'
+      iconName: 'calendar'
     });
-  } catch {
-    host.innerHTML = errorState({ title: 'Lessons unavailable' });
+    return;
   }
+
+  const dayHead = (label, isToday) =>
+    `<p class="schedule-day ${isToday ? 'is-today' : ''}">${esc(label)}</p>`;
+
+  // Rows print on the batch clock, the same one the day headings were cut on.
+  const zone = payload.timezone || '';
+
+  const parts = [];
+  if (todays.length) {
+    parts.push(dayHead(today.is_today ? 'Today' : today.label, true));
+    parts.push(todays.map((entry) => scheduleRow(entry, { timeZone: zone })).join(''));
+  } else {
+    parts.push(`<p class="schedule-quiet">No classes today.</p>`);
+  }
+  if (later.length) {
+    parts.push(dayHead('Later this week', false));
+    parts.push(later.map((entry) => scheduleRow(entry, { timeZone: zone })).join(''));
+  }
+  host.innerHTML = parts.join('');
 }
 
 async function loadBatches() {
@@ -195,7 +270,7 @@ document.addEventListener('click', async (e) => {
 renderWelcome();
 renderFaq();
 wireRetry();
-loadLessons();
+loadSchedule();
 loadBatches();
 loadTests();
 loadNotices();

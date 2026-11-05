@@ -386,6 +386,9 @@ export const adaptCourse = (row = {}) => ({
   // A ready-to-send t.me link, built on the server so the batch name and
   // number in the draft are the same text the admin previewed.
   telegramDm: row.telegram_dm || '',
+  // The zone the batch's air times are printed in. Only the detail endpoint
+  // declares it; a grid row has nothing to print it for.
+  timezone: row.timezone || '',
   position: Number(row.position ?? 0),
   // Only the detail endpoint nests these; a grid row leaves them empty.
   faculty: Array.isArray(row.faculty) ? row.faculty : []

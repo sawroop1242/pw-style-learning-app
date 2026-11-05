@@ -622,26 +622,70 @@ export function batchCard(course) {
     </article>`;
 }
 
-/** A lesson row — the honest replacement for the old "today's class" fixture. */
-export function lessonCard(lesson, course = null) {
+/**
+ * A 12-hour clock, e.g. ``7:00 pm``.
+ *
+ * `timeZone` is the zone the server declared for the timetable. Printing in
+ * the viewer's own zone would be defensible on its own, but the day headings
+ * above the rows are cut on the academy's calendar — a learner three zones
+ * away would read "Friday" over a time that, in their Friday, is still
+ * Thursday. One clock, the one the batch runs on. Without a zone (or with one
+ * the browser cannot resolve) it falls back to the device clock rather than
+ * printing nothing.
+ */
+export function clockLabel(iso, timeZone = '') {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const options = { hour: 'numeric', minute: '2-digit' };
+  if (timeZone) options.timeZone = timeZone;
+  try {
+    return date.toLocaleTimeString([], options);
+  } catch {
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+}
+
+const CLASS_STATUS = {
+  live: { badge: '<span class="badge badge-live">Live now</span>', action: 'Join class' },
+  ended: { badge: '<span class="badge badge-neutral">Ended</span>', action: 'Watch recording' },
+  upcoming: { badge: '', action: '' }
+};
+
+/**
+ * One line of the timetable.
+ *
+ * The time is the point of the row, so it leads: a learner scanning "what is
+ * on tonight" reads down the left edge. The status badge is drawn only from
+ * `entry.status`, which the server computed against a single `now` — this
+ * function never guesses whether something is live.
+ */
+export function scheduleRow(entry, { showCourse = true, timeZone = '' } = {}) {
+  const status = CLASS_STATUS[entry.status] || CLASS_STATUS.upcoming;
+  const details = [
+    showCourse ? entry.course?.title : '',
+    entry.section,
+    `${entry.duration_minutes || 0} min`
+  ].filter(Boolean);
+
+  const action = !status.action
+    ? ''
+    : entry.is_locked
+      ? '<span class="badge badge-outline">Locked</span>'
+      : `<a class="btn btn-ghost btn-sm" href="player.html?lesson=${entry.id}">${status.action} ${icon('arrow-right')}</a>`;
+
   return `
-    <article class="today-card">
-      <div class="today-video">
-        <span class="today-face">${icon(lesson.is_locked ? 'lock' : 'play')}</span>
-        <span class="today-time">${lesson.duration_minutes || 0} min</span>
+    <article class="class-row" data-class="${entry.id}" data-status="${esc(entry.status)}">
+      <div class="class-time">
+        <time datetime="${esc(entry.starts_at)}">${esc(clockLabel(entry.starts_at, timeZone))}</time>
       </div>
-      <div class="today-body">
-        <h3>${esc(lesson.title)}</h3>
-        <p>${esc(course?.title || lesson.description || 'Recorded class')}</p>
-        <div class="today-foot">
-          <span class="today-clock">${icon('clock')} ${lesson.duration_minutes || 0} min</span>
-          ${
-            lesson.is_locked
-              ? '<span class="badge badge-outline">Locked</span>'
-              : `<a class="link" href="player.html?lesson=${lesson.id}">Open ${icon('arrow-right')}</a>`
-          }
+      <div class="class-main">
+        <div class="class-title">
+          <h3>${esc(entry.title)}</h3>
+          ${status.badge}
         </div>
+        <p>${details.map((part) => esc(part)).join(' · ')}</p>
       </div>
+      <div class="class-action">${action}</div>
     </article>`;
 }
 

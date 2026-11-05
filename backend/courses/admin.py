@@ -742,6 +742,27 @@ class CourseFolderAdmin(OwnershipScopedAdmin):
         return obj._lessons
 
 
+class ScheduledFilter(admin.SimpleListFilter):
+    """Split the class list by whether it has an air time.
+
+    "No air time" is the working list a provider needs: every recording without
+    a start never reaches the home page's timetable, and nothing else says so.
+    """
+
+    title = "timetable"
+    parameter_name = "scheduled"
+
+    def lookups(self, request, model_admin):
+        return (("yes", "Scheduled"), ("no", "No air time"))
+
+    def queryset(self, request, queryset):
+        if self.value() == "yes":
+            return queryset.filter(starts_at__isnull=False)
+        if self.value() == "no":
+            return queryset.filter(starts_at__isnull=True)
+        return queryset
+
+
 @admin.register(Lesson)
 class LessonAdmin(PublishableAdmin):
     """Classes.
@@ -753,10 +774,11 @@ class LessonAdmin(PublishableAdmin):
 
     publish_label = "lessons"
     list_display = (
-        "title", "course", "folder", "position", "duration_minutes",
+        "title", "course", "folder", "airs", "position", "duration_minutes",
         "recording", "publish_status",
     )
-    list_filter = ("is_published", "course")
+    list_filter = ("is_published", "course", ScheduledFilter)
+    ordering = ("-starts_at", "position", "id")
     search_fields = ("title", "description", "course__title")
     list_select_related = ("course", "folder")
     list_editable = ("position",)
@@ -797,8 +819,18 @@ class LessonAdmin(PublishableAdmin):
             ),
         }),
         ("The class", {"fields": ("title", "description")}),
+        ("When it airs", {
+            "fields": ("starts_at", "duration_minutes"),
+            "description": (
+                "The timetable is built from this start and the duration: a class "
+                "is “live” only inside that window, and a class with no start "
+                "time is on demand — never listed at a made-up hour. The duration "
+                "is also the live window, so a class with no duration has no "
+                "live period at all."
+            ),
+        }),
         ("Recording", {
-            "fields": ("video_url", "recording_preview", "duration_minutes"),
+            "fields": ("video_url", "recording_preview"),
             "description": "A direct .mp4 plays in the page's own player; a hosted "
                            "embed page (…/embed/…) is framed instead. Both work.",
         }),
@@ -841,6 +873,13 @@ class LessonAdmin(PublishableAdmin):
         if course_id and course_qs.filter(pk=course_id).exists():
             initial["course"] = int(course_id)
         return initial
+
+    @admin.display(description="Airs", ordering="starts_at")
+    def airs(self, obj):
+        """The air time in the site's own clock, not the server's."""
+        if not obj.starts_at:
+            return "—"
+        return timezone.localtime(obj.starts_at).strftime("%a %d %b · %H:%M")
 
     @admin.display(description="Recording")
     def recording(self, obj):

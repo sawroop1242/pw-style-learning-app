@@ -17,7 +17,7 @@ Make the existing published course catalogue easy to search and browse on low-co
   as `0`; unpublished batches appear in no count.
 - Sorting: relevance for search, recently published, and a popularity metric only if it is based on a defined, privacy-safe server metric. Do not fabricate popularity.
 - Course cards show only available fields: title, thumbnail/image URL, subject, price/free label, and access/lock status. Use a safe placeholder for missing or invalid images.
-- Course detail shows description, authorized provider contact information, folders/chapters, and access requirements.
+- Course detail shows description, authorized provider contact information, folders/chapters, and access requirements. It also shows the batch **timetable** — the air time of every class that has one — because "when does this batch run" is how a learner decides to join. Air times are public metadata; the recordings behind them are not, and each one is listed with its lock state rather than hidden.
 - Pagination or bounded cursor pagination; preserve filters when navigating back.
 - Provide loading, no-results, offline, and recoverable error states. Debounce search on the client without treating debounce as a security control.
 
@@ -25,6 +25,7 @@ Make the existing published course catalogue easy to search and browse on low-co
 - Public catalogue results include published courses only.
 - Draft, archived, paid-course protected content and private provider details must not leak through search, autocomplete, filters, counts, ordering, or detail endpoints.
 - Search results may indicate a paid course exists, but must not return protected PDFs, video secrets, access codes, or content URLs until server-side access checks pass.
+- A batch timetable may be read without enrolling (`GET /api/schedule/?course=`), but it carries no `video_url`: the payload says *when* a class airs, never *where* its media lives. A lesson with no air time is on demand and is deliberately absent from the timetable rather than assigned an invented hour. The live state is computed from `starts_at` + `duration_minutes` at request time, so it cannot go stale.
 - Validate and allowlist sort/filter fields; limit query length, page size and expensive filters.
 - Escape search text and render course content safely. Do not construct raw SQL from user input.
 - If search uses a database-specific full-text feature, provide a documented fallback appropriate to the existing database; avoid adding a paid search service without approval.

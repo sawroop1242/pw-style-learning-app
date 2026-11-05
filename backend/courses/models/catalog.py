@@ -193,12 +193,29 @@ class Lesson(TimeStampedModel):
     description = models.TextField(blank=True)
     video_url = models.URLField(blank=True)
     duration_minutes = models.PositiveIntegerField(default=0)
+    #: When the class airs, in the batch's timetable. Blank means "on demand":
+    #: the lesson exists to be watched, not to be attended at a time, so it is
+    #: never listed in the schedule. There is deliberately no ``is_live`` flag:
+    #: "live" is a window computed from this start and the duration, so a stale
+    #: flag can never make a finished class look live.
+    starts_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "When the class airs. Leave blank for an on-demand lesson with no "
+            "fixed time. The live window is this start plus the duration."
+        ),
+    )
     position = models.PositiveIntegerField(default=1)
     is_published = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["position", "id"]
-        indexes = [models.Index(fields=["course", "is_published"])]
+        indexes = [
+            models.Index(fields=["course", "is_published"]),
+            models.Index(fields=["is_published", "starts_at"]),
+        ]
 
     def clean(self):
         if self.folder and self.folder.course_id != self.course_id:

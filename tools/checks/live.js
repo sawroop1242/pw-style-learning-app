@@ -198,8 +198,8 @@ const FIXTURES = [
 
   console.log('\nindex.html');
   {
-    // "Today's classes" is today's uploads in the batches this learner joined,
-    // so the page is booted with the session — a guest genuinely has none.
+    // The timetable belongs to the batches this learner joined, so the page is
+    // booted with the session — a guest genuinely has none.
     const { doc, errors } = await liveBoot('index.html', ['core', 'content', 'ui', 'home'], '', session.storage);
     const batchCards = [...doc.querySelectorAll('#trending-grid .batch-card')];
     const apiTitles = rowsOf(courses).map((c) => c.title);
@@ -209,13 +209,42 @@ const FIXTURES = [
       batchCards.every((card) => apiTitles.some((title) => text(card).includes(title))),
       apiTitles[0]
     );
-    const lessonRail = [...doc.querySelectorAll('#today-grid .today-card')];
-    const lessonTitles = rowsOf(lessons).map((lesson) => lesson.title);
-    check('lesson rail renders API rows', lessonRail.length > 0, String(lessonRail.length));
+    // P5: the rail is the server's timetable, not a list of today's uploads.
+    const schedule = await api('/api/schedule/?days=7', auth);
+    const scheduled = (schedule?.groups || []).flatMap((group) => group.classes);
+    const rail = [...doc.querySelectorAll('#schedule-list .class-row')];
+    check('timetable renders server rows', rail.length > 0, `${rail.length} rows`);
     check(
-      'lesson titles match the API',
-      lessonRail.every((card) => lessonTitles.some((title) => text(card).includes(title))),
-      text(lessonRail[0]).slice(0, 60)
+      'timetable titles are the scheduled classes',
+      rail.every((row) => scheduled.some((entry) => text(row).includes(entry.title))),
+      text(rail[0]).slice(0, 70)
+    );
+    // The clock is printed on the batch's zone, the same calendar the day
+    // headings were cut on. This runner is UTC, so a page printing device time
+    // would show 13:30 for a 19:00 IST class — the mismatch this check exists
+    // to catch.
+    const zone = schedule?.timezone || 'Asia/Kolkata';
+    const clockOf = (iso) =>
+      new Date(iso)
+        .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: zone })
+        .replace(/\s/g, ' ')
+        .toLowerCase();
+    const firstScheduled = scheduled.find((entry) => text(rail[0])?.includes(entry.title));
+    check(
+      'a row shows the class time the server sent',
+      rail.every((row) => /\d{1,2}:\d{2}/.test(text(row.querySelector('.class-time')))),
+      text(rail[0]?.querySelector('.class-time'))
+    );
+    check(
+      'the row prints the batch clock, not the device clock',
+      Boolean(firstScheduled) &&
+        text(rail[0].querySelector('.class-time')).toLowerCase() === clockOf(firstScheduled.starts_at).replace(/\u202f/g, ' '),
+      `${text(rail[0]?.querySelector('.class-time'))} vs ${firstScheduled ? clockOf(firstScheduled.starts_at) : '?'} (${zone})`
+    );
+    check(
+      'live is only claimed inside the window',
+      schedule?.counts?.live === doc.querySelectorAll('#schedule-list .badge-live').length,
+      `${schedule?.counts?.live} live in the API, ${doc.querySelectorAll('#schedule-list .badge-live').length} badged`
     );
     const testCards = [...doc.querySelectorAll('#home-tests .test-card')];
     check('test rail renders API papers', testCards.length > 0, String(testCards.length));
@@ -244,7 +273,8 @@ const FIXTURES = [
     const detail = await api(`/api/courses/${rowsOf(courses)[0].id}/`);
     const { doc, errors } = await liveBoot('course.html', ['core', 'content', 'ui', 'course'], `?slug=${slug}`);
     check('headline is the API title', text(doc.querySelector('#course-headline')).includes(detail.title), text(doc.querySelector('#course-headline')).slice(0, 60));
-    const folders = [...doc.querySelectorAll('#panel-classes .card')];
+    // `#class-timetable` is the batch timetable card, not a curriculum folder.
+    const folders = [...doc.querySelectorAll('#panel-classes .card:not(#class-timetable)')];
     check('the classes panel renders server folders', folders.length === (detail.folders || []).length, `${folders.length}/${(detail.folders || []).length}`);
     const lessonsRendered = doc.querySelectorAll('#panel-classes .lesson-item').length;
     const lessonsExpected = (detail.folders || []).reduce((n, f) => n + (f.lessons || []).length, 0);

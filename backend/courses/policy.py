@@ -181,11 +181,17 @@ def is_enrolled(user, course):
     ).exists()
 
 
-def can_consume_course(user, course):
+def can_consume_course(user, course, granted=None):
     """May this caller open the recordings, notes and PDFs of ``course``?
 
     This is the enrolment gate, and it applies to free batches too. Staff keep
     their own content; a learner needs a grant.
+
+    ``granted`` is an optional pre-fetched set of course ids from
+    :func:`granted_course_ids`. A caller rendering many batches — a timetable,
+    a catalogue — passes it once so the grant table is read once rather than
+    once per row. The rule itself stays here: a missing set changes nothing but
+    the cost.
     """
     if course is None:
         return False
@@ -197,6 +203,8 @@ def can_consume_course(user, course):
         return True
     if user is None or not getattr(user, "is_authenticated", False):
         return False
+    if granted is not None:
+        return course.id in granted
     return CourseAccessGrant.objects.filter(
         user=user, course=course, revoked_at__isnull=True
     ).exists()
