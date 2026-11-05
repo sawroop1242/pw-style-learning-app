@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone as django_timezone
 from rest_framework import serializers
 
 from objectstore import uploads
@@ -162,7 +163,9 @@ class LessonSerializer(serializers.ModelSerializer):
         model = Lesson
         fields = [
             "id", "course", "folder", "title", "description", "video_url",
-            "duration_minutes", "position", "is_published", "is_locked"
+            # A class time is public metadata: the batch page has always shown
+            # every class title, and the timetable needs the time next to it.
+            "starts_at", "duration_minutes", "position", "is_published", "is_locked"
         ]
         read_only_fields = fields
 
@@ -186,7 +189,7 @@ class StaffLessonSerializer(serializers.ModelSerializer):
         model = Lesson
         fields = [
             "id", "course", "folder", "title", "description", "video_url",
-            "duration_minutes", "position", "is_published"
+            "starts_at", "duration_minutes", "position", "is_published"
         ]
         read_only_fields = ["id"]
 
@@ -315,11 +318,16 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     telegram_dm = serializers.SerializerMethodField()
     folders = serializers.SerializerMethodField()
     faculty = serializers.SerializerMethodField()
+    # The clock the batch runs on. Every air time in this payload is an instant;
+    # the page prints it in this zone so a lesson row and the timetable strip
+    # above it never disagree about what "7 pm" means.
+    timezone = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
         fields = [
             "id", "title", "slug", "description", "subject", "exam", "level",
+            "timezone",
             "image_url",
             "image_key",
             "pricing_mode", "price", "currency", "telegram_handle", "telegram_url",
@@ -333,6 +341,9 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         if annotated is not None:
             return annotated
         return course.quizzes.filter(is_published=True).count()
+
+    def get_timezone(self, course):
+        return django_timezone.get_current_timezone_name()
 
     def get_has_access(self, course):
         return policy.can_consume_course(_request_user(self), course)

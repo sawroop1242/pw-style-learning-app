@@ -13,7 +13,8 @@ import {
   request, shortDate, adaptCourse, adaptTest
 } from './core.js';
 import {
-  mountChrome, batchCard, icon, thumbTone, emptyState, toast, wireRetry
+  mountChrome, batchCard, icon, thumbTone, emptyState, toast, wireRetry,
+  scheduleRow, clockLabel
 } from './ui.js';
 
 mountChrome('courses');
@@ -189,7 +190,7 @@ function lessonRow(lesson) {
       <span class="lesson-num">${icon(lesson.is_locked ? 'lock' : 'play')}</span>
       <span class="lesson-main">
         <strong>${esc(lesson.title)}</strong>
-        <small>${lesson.duration_minutes || 0} min${lesson.is_locked ? ' · locked' : ''}</small>
+        <small>${lesson.starts_at ? `${esc(clockLabel(lesson.starts_at, current.timezone || ''))} · ` : ''}${lesson.duration_minutes || 0} min${lesson.is_locked ? ' · locked' : ''}</small>
       </span>
       ${
         lesson.is_locked
@@ -292,7 +293,7 @@ function renderClasses() {
     });
     return;
   }
-  host.innerHTML = current.folders
+  host.innerHTML = '<div class="card card-pad batch-schedule" id="class-timetable" aria-live="polite"></div>' + current.folders
     .map(
       (folder) => `
       <div class="card card-pad" style="margin-bottom:var(--sp-4)">
@@ -307,6 +308,55 @@ function renderClasses() {
       </div>`
     )
     .join('');
+
+  loadBatchSchedule();
+}
+
+/**
+ * The batch's own timetable, above its curriculum.
+ *
+ * `/schedule/?course=` is public: a batch page may show when its classes air
+ * before anyone enrols — exactly what a PW batch page does with its Schedule
+ * strip. A recording the visitor cannot open still appears in the list as
+ * locked, because "there is a class at 7" is true for everyone.
+ *
+ * A failure here does not take the page down: the curriculum is below it and
+ * is the reason the page exists.
+ */
+async function loadBatchSchedule() {
+  const host = $('#class-timetable');
+  if (!host || !current) return;
+
+  let payload;
+  try {
+    payload = await getJson(`/schedule/${apiQuery({ course: current.slug, days: 14 })}`);
+  } catch {
+    host.innerHTML = '<p class="tiny muted" style="margin:0">The timetable could not be loaded. The curriculum below is unaffected.</p>';
+    return;
+  }
+
+  const entries = (payload.groups || []).flatMap((group) => group.classes);
+  const ahead = entries.filter((entry) => entry.status !== 'ended').slice(0, 6);
+  const shown = ahead.length ? ahead : entries.slice(-3);
+
+  if (!shown.length) {
+    host.innerHTML = `
+      <div class="batch-schedule-head">
+        <strong>Class schedule</strong>
+        <span class="tiny subtle">Next 14 days</span>
+      </div>
+      <p class="tiny muted" style="margin:0">No class has an air time yet. The lessons below can be watched on demand.</p>`;
+    return;
+  }
+
+  host.innerHTML = `
+    <div class="batch-schedule-head">
+      <strong>${ahead.length ? 'Next classes' : 'Recent classes'}</strong>
+      <span class="tiny subtle">${ahead.length ? 'Next 14 days' : 'Last 14 days'}</span>
+    </div>
+    <div class="day-schedule">
+      ${shown.map((entry) => scheduleRow(entry, { showCourse: false, timeZone: payload.timezone || '' })).join('')}
+    </div>`;
 }
 
 /**

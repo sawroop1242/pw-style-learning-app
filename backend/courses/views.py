@@ -20,7 +20,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
-from . import csv_import, grading, insights, notifications, policy, snapshot
+from . import csv_import, grading, insights, notifications, policy, schedule, snapshot
 from .models import (
     AccessCode,
     AttemptAnswer,
@@ -1791,6 +1791,7 @@ def api_root(request):
         "progress": "/api/progress/", 
         "token": "/api/token/",
         "quiz_attempts": "/api/quiz-attempts/",
+        "schedule": "/api/schedule/",
         "topic_insights": "/api/insights/topics/",
         "start_quiz": "/api/quizzes/start/",
         "pdfs": "/api/pdfs/",
@@ -1864,6 +1865,34 @@ class QuestionReportViewSet(
 def notifications_view(request):
     """The bell's inbox: derived from announcements, due tasks and results."""
     return Response(notifications.build_inbox(request.user))
+
+
+@api_view(["GET"])
+@permission_classes([permissions.AllowAny])
+def schedule_view(request):
+    """The timetable: the caller's week, or one batch's.
+
+    ``?course=<id|slug>`` asks for a single batch's timetable, which is public
+    metadata — the batch page already lists every class title. Without it the
+    payload is the learner's own week and an account is required, because a
+    batch a learner never joined is not their timetable and a guest has none.
+    Recordings stay gated in both cases: entries carry ``can_open`` /
+    ``is_locked`` and never the video URL.
+    """
+    days = schedule.clamp_days(request.query_params.get("days"))
+    course_ref = (request.query_params.get("course") or "").strip()
+
+    if course_ref:
+        lookup = {"pk": int(course_ref)} if course_ref.isdigit() else {"slug": course_ref}
+        course = get_object_or_404(Course, is_published=True, **lookup)
+        return Response(schedule.build(user=request.user, days=days, course=course))
+
+    if not request.user.is_authenticated:
+        return Response(
+            {"detail": "Sign in to see your timetable."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+    return Response(schedule.build(user=request.user, days=days))
 
 
 @api_view(["GET"])

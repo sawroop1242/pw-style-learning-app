@@ -108,7 +108,7 @@ worst possible way to express an order.
 | P2 | Streak and study time from completed work | PW / Unacademy dashboards | dashboard figures | S |
 | P3 | Weak-topic analysis from marked answers | PW (G2 reviews), edX analytics | `/api/insights/topics/` + `dashboard.html` (shipped) | M |
 | P4 | Batch page as tabs: overview / classes / notes / papers / teachers | PW batch-overview URL | `course.html` (shipped) | M |
-| P5 | Schedule ("today's classes") | PW, Frappe `lms_batch_timetable` | needs a schedule field on lessons | L |
+| P5 | Schedule ("today's classes") | PW, Frappe `lms_batch_timetable` | `GET /api/schedule/` + `#schedule-list` / `#class-timetable` (shipped) | L |
 | P6 | Drag-and-drop outline in the console | Frappe `CourseOutline.vue` | `/admin/courses/course/<id>/outline/` (shipped) | M |
 | P7 | Faceted catalogue filters | Unacademy, richie | `courses.html` + `/api/courses/facets/` (shipped) | M |
 | P8 | Goal-first entry ("what are you preparing for?") | Unacademy landing | home hero | S |
@@ -120,8 +120,11 @@ worst possible way to express an order.
 - **No downloads, no "download video".** The user removed it; PW's offline mode
   is not a licence to bring it back.
 - **No live-class infrastructure.** PW's live classes need a conferencing
-  provider, a timetable and a teacher presence. We embed video and will say so
-  plainly rather than fake a "live" badge.
+  provider, a teacher presence and a studio. We embed video and do not pretend
+  otherwise — no "join the stream" button exists. What we do have is a
+  **timetable**: a class states the hour it airs, and the "Live now" badge is
+  computed from that hour (P5). The badge is a claim about the clock, never a
+  flag somebody set and forgot.
 - **No invented numbers anywhere.** If a panel cannot be computed from a row in
   the database, it renders an empty state — the rule that P1 exists to enforce.
 - **No brand, no logo, no teacher photo, no copied sentence.** Structure only.
@@ -237,8 +240,64 @@ one PW's own reviewers call the platform's weak spot ("finding the right batch")
 - **`mine` keeps its meaning.** The counts follow it, so "My batches" never
   advertises a filter that would empty it.
 
-The next milestone is a decision, not a queue: P5 (a real class schedule) is the
-largest remaining item, and P9 (console command palette) is the cheapest.
+**P5 shipped** — a real class schedule, the largest remaining item and the one
+the batch page had been missing (`lms_batch_timetable` is the Frappe doctype
+that makes it look easy; §1, above).
+
+- **A class got one field, not a status.** `Lesson.starts_at` (`0013`) is an
+  optional date-time; nothing else was added. `is_live` is deliberately absent:
+  a stored boolean is true until the next person remembers to clear it, so the
+  badge would outlive the class. The live window is computed —
+  `[starts_at, starts_at + duration_minutes)` — by `courses/schedule.py`, which
+  is the only place that decides. Half-open, so two back-to-back classes never
+  both claim to be live in the same second.
+- **No air time means on demand, and on demand is not midnight.** A lesson with
+  `starts_at IS NULL` is excluded from the timetable rather than parked at
+  00:00. Putting an undated recording on a timetable would invent an hour.
+  The admin says so in the field's help text and offers a "No air time" filter.
+- **`GET /api/schedule/`** returns one week — `?days` clamped 1–30, and a
+  nonsensical value falls back to 7 instead of answering `400`, because a bad
+  query parameter should not blank a page. The payload is
+  `{timezone, now, scope, window_days, counts, groups, next}` plus a `classes`
+  list on each day group: `{id, title, section, starts_at, ends_at,
+  duration_minutes, status, recording, is_locked, can_open, course}`.
+  **`video_url` is never in it** — the timetable says when a class airs, the
+  player says what it plays.
+- **Three states, and today's group keeps its finished classes.** `live`,
+  `upcoming`, `ended`. 19:00 Physics that ended at 19:52 stays on today's row
+  all evening: a timetable that erases itself at half past is not a record of
+  what happened. `next` is the first class that has **not ended**, so it points
+  at the live class rather than past it.
+- **Who sees what.** No `?course=`: the signed-in learner's own week, built from
+  the batches they hold a grant for (plus ones they own) — a guest is asked to
+  sign in rather than shown a stranger's timetable. `?course=<id|slug>` is the
+  batch's timetable and is public metadata, the same as the curriculum list: a
+  batch page may say "Physics, 19:00, Thursday" to everyone. **Recordings stay
+  gated** — `is_locked` / `can_open` are computed per class for the caller, so a
+  paid recording is listed and locked rather than hidden. Unpublished batches
+  and unpublished lessons never appear at all.
+- **One clock.** The payload declares its zone (`Asia/Kolkata`), and the page
+  prints every air time in it — the same calendar the day headings were cut on.
+  Printing the device's zone instead was the tempting shortcut and it is wrong:
+  a learner three time zones away would read "Friday" over a time that, in
+  their Friday, is still Thursday. `GET /api/courses/<id>/` carries the same
+  `timezone`, so a lesson row and the strip above it can never disagree.
+- **Two empty states, two sentences.** A quiet day inside a scheduled week
+  ("Nothing on today") and a week with nothing in it ("Nothing on the
+  timetable") are different facts and get different copy. Neither is styled as
+  an error.
+- **Where it lands.** `index.html` draws `#schedule-list` grouped by day, today
+  first and marked, with a summary line ("N classes today · N live now · N still
+  to come this week"). `course.html` gains a `#class-timetable` card above the
+  curriculum — the "Schedule" anchor PW puts on every batch page — and each
+  lesson row shows its air time when it has one.
+- **The old "today's classes" is retired.** `GET /api/lessons/?added=today` was
+  "what was uploaded today", which is not a timetable and cannot say "Live now".
+  It is gone from the home screen; the endpoint still exists for the player.
+
+The next milestone is a decision, not a queue: P9 (console command palette) is
+the cheapest thing left, P8 (goal-first home) is the most visible, and P10
+(certificates) still waits on batches having rules.
 
 Each later item gets the same treatment: a pattern named, its source cited, its
 landing place in this codebase agreed before any code is written.

@@ -82,10 +82,19 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
   /* ------------------------------- home --------------------------------- */
   {
     console.log('\nindex.html');
-    const { window, doc, errors } = await open('index.html', ['core', 'content', 'ui', 'home']);
+    // Signed in: the timetable belongs to the batches this learner joined.
+    const { window, doc, errors } = await open('index.html', ['core', 'content', 'ui', 'home'], { signedIn: true });
 
     check('welcome line names the visitor', /Hello|Welcome/i.test(doc.querySelector('#welcome-title').textContent), doc.querySelector('#welcome-title').textContent.trim());
-    check('lesson rail filled from the API', doc.querySelectorAll('#today-grid .today-card').length === 4, String(doc.querySelectorAll('#today-grid .today-card').length));
+    // P5: "Today's classes" is a timetable, not a feed of uploads. The rows
+    // carry a time, and only the class inside its own window says "Live now".
+    const todayRows = [...doc.querySelectorAll('#schedule-list .class-row')];
+    check('timetable rows come from the schedule', todayRows.length === 4, String(todayRows.length));
+    check('each row leads with its time', todayRows.every((row) => /\d/.test(row.querySelector('.class-time time')?.textContent || '')));
+    check('the live class is badged, and only it', doc.querySelectorAll('#schedule-list .badge-live').length === 1, String(doc.querySelectorAll('#schedule-list .badge-live').length));
+    check('an ended class offers its recording', [...doc.querySelectorAll('#schedule-list .class-row[data-status="ended"] a')].some((a) => /Watch recording/.test(a.textContent)));
+    check('a finished row is marked ended', doc.querySelectorAll('#schedule-list .class-row[data-status="ended"] .badge-neutral').length === 1);
+    check('the summary counts what is on', /3 classes today/.test(doc.querySelector('#schedule-summary').textContent) && /1 live now/.test(doc.querySelector('#schedule-summary').textContent), doc.querySelector('#schedule-summary').textContent);
     check('batch rail filled from the API', doc.querySelectorAll('#trending-grid .batch-card').length === 3, String(doc.querySelectorAll('#trending-grid .batch-card').length));
     check('test rail filled from the API', doc.querySelectorAll('#home-tests .test-card').length === 2, String(doc.querySelectorAll('#home-tests .test-card').length));
     check('notice rail filled from the API', doc.querySelectorAll('#home-notices .notice-item').length === 2, String(doc.querySelectorAll('#home-notices .notice-item').length));
@@ -99,6 +108,42 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('exactly one panel visible', [...doc.querySelectorAll('#faq-list .acc-panel')].filter((p) => !p.hidden).length === 1);
 
     check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  /* --------------------- home: a guest, and a quiet week ---------------- */
+  {
+    console.log('\nindex.html (guest)');
+    const { doc, errors } = await open('index.html', ['core', 'content', 'ui', 'home']);
+
+    // A guest has no batches, so the timetable asks for a sign-in instead of
+    // showing an empty week that looks like a bug.
+    check('a guest is asked to sign in', /Sign in to see your timetable/.test(doc.querySelector('#schedule-list').textContent), doc.querySelector('#schedule-list').textContent.trim().slice(0, 60));
+    check('and is told where to go', Boolean(doc.querySelector('#schedule-list a[href^="login.html"]')));
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    console.log('\nindex.html (nothing today)');
+    const { doc } = await boot('index.html', ['core', 'content', 'ui', 'home'], {
+      fetcher: makeStub({ signedIn: true, quietSchedule: true }),
+      seedStorage: SIGNED_IN
+    });
+
+    check('a quiet day is stated plainly', /No classes today/.test(doc.querySelector('#schedule-list').textContent), doc.querySelector('#schedule-list').textContent.replace(/\s+/g, ' ').trim().slice(0, 70));
+    check('and the next class is named', doc.querySelectorAll('#schedule-list .class-row').length === 1);
+    check('the summary says nothing is on today', /0 classes today/.test(doc.querySelector('#schedule-summary').textContent), doc.querySelector('#schedule-summary').textContent);
+  }
+
+  {
+    console.log('\nindex.html (nothing scheduled)');
+    const { doc } = await boot('index.html', ['core', 'content', 'ui', 'home'], {
+      fetcher: makeStub({ signedIn: true, emptySchedule: true }),
+      seedStorage: SIGNED_IN
+    });
+
+    check('an empty timetable explains itself', /Nothing on the timetable/.test(doc.querySelector('#schedule-list').textContent), doc.querySelector('#schedule-list').textContent.replace(/\s+/g, ' ').trim().slice(0, 70));
+    check('and points at the learner\'s batches', Boolean(doc.querySelector('#schedule-list a[href="courses.html"]')));
+    check('no row is invented', doc.querySelectorAll('#schedule-list .class-row').length === 0);
   }
 
   /* ------------------------------ courses ------------------------------- */
@@ -296,6 +341,16 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
       `${doc.querySelectorAll('#panel-notes .pdf-row .badge-outline').length} badges / ${doc.querySelectorAll('#panel-notes .pdf-row a.pdf-action').length} links`
     );
     check('Classes does not repeat the notes', doc.querySelectorAll('#panel-classes .pdf-row').length === 0);
+
+    // P5: the batch page shows when its classes air, before anyone enrols.
+    const strip = [...doc.querySelectorAll('#class-timetable .class-row')];
+    check('the batch timetable lists its classes', strip.length > 0, String(strip.length));
+    check('the strip does not repeat the batch name', !/JEE Main 2027 Complete Batch/.test(doc.querySelector('#class-timetable').textContent));
+    check(
+      'a lesson row carries its air time',
+      /\d{1,2}:\d{2}/.test(doc.querySelector('#panel-classes .lesson-item small')?.textContent || ''),
+      doc.querySelector('#panel-classes .lesson-item small')?.textContent
+    );
 
     // Arrow keys walk the strip; a tab that is not selected is not focusable.
     const overview = doc.querySelector('#tab-overview');

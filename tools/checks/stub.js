@@ -30,6 +30,7 @@ const COURSES = [
     lesson_count: 5,
     quiz_count: 2,
     folder_count: 2,
+    timezone: 'Asia/Kolkata',
     is_published: true,
     created_at: '2026-09-01T10:00:00Z'
   },
@@ -47,6 +48,7 @@ const COURSES = [
     lesson_count: 3,
     quiz_count: 1,
     folder_count: 1,
+    timezone: 'Asia/Kolkata',
     is_published: true,
     created_at: '2026-09-02T10:00:00Z'
   },
@@ -64,13 +66,14 @@ const COURSES = [
     lesson_count: 2,
     quiz_count: 1,
     folder_count: 1,
+    timezone: 'Asia/Kolkata',
     is_published: true,
     created_at: '2026-09-03T10:00:00Z'
   }
 ];
 
 const LESSONS = [
-  { id: 11, course: 1, folder: 101, title: 'Units and measurement', description: '', video_url: 'https://embed.vcdn.me/embed/28c4af9f-d817-460a-80ab-9a09f8c47c69', duration_minutes: 42, position: 1, is_published: true, is_locked: false },
+  { id: 11, course: 1, folder: 101, title: 'Units and measurement', description: '', video_url: 'https://embed.vcdn.me/embed/28c4af9f-d817-460a-80ab-9a09f8c47c69', starts_at: iso(-4 * 3600000), duration_minutes: 42, position: 1, is_published: true, is_locked: false },
   { id: 12, course: 1, folder: 101, title: 'Kinematics in one dimension', description: 'Displacement, velocity and acceleration.', video_url: 'https://cdn.example/kinematics.mp4', duration_minutes: 51, position: 2, is_published: true, is_locked: false },
   { id: 13, course: 1, folder: 102, title: 'Mole concept', description: '', video_url: '', duration_minutes: 38, position: 1, is_published: true, is_locked: false },
   { id: 21, course: 2, folder: 201, title: 'Cell — the unit of life', description: '', video_url: '', duration_minutes: 44, position: 1, is_published: true, is_locked: false }
@@ -228,6 +231,76 @@ const RESULT = {
 
 /* Weak-topic analysis. The rules travel with the payload so the screen prints
  * the threshold it actually used. */
+/* The timetable. Times are relative to the run so a fixture never looks stale;
+ * statuses are fixed here because the server computes them, not the page. */
+const classEntry = (id, title, section, offsets, status, over = {}) => ({
+  id,
+  title,
+  section,
+  starts_at: iso(offsets[0]),
+  ends_at: iso(offsets[1]),
+  duration_minutes: Math.round((offsets[1] - offsets[0]) / 60000),
+  status,
+  recording: status !== 'upcoming',
+  is_locked: false,
+  can_open: true,
+  course: { id: 1, title: 'JEE Main 2027 Complete Batch', slug: 'jee-main-2027' },
+  ...over
+});
+
+const SCHEDULE_CLASSES = [
+  classEntry(11, 'Kinematics in one dimension', 'Mechanics', [-12 * 60000, 40 * 60000], 'live'),
+  classEntry(12, 'Units, dimensions and errors', 'Mechanics', [-4 * 3600000, -3 * 3600000], 'ended'),
+  classEntry(14, 'Mole concept', 'Chemistry', [2 * 3600000, 3 * 3600000], 'upcoming', { recording: false }),
+  classEntry(21, 'Cell — the unit of life', 'Cell Biology', [20 * 3600000, 21 * 3600000], 'upcoming', {
+    recording: false,
+    course: { id: 2, title: 'NEET Biology Foundation', slug: 'neet-biology-foundation' }
+  })
+];
+
+/** Groups the classes by local day, the way `courses/schedule.py` does. */
+function schedulePayload({ course = null, quiet = false, empty = false } = {}) {
+  let pool = quiet ? SCHEDULE_CLASSES.slice(3) : SCHEDULE_CLASSES.slice();
+  if (course) pool = pool.filter((entry) => entry.course.slug === course);
+  if (empty) pool = [];
+
+  const groups = [];
+  for (const entry of pool) {
+    const day = new Date(entry.starts_at).toLocaleDateString('en-CA');
+    let group = groups.find((row) => row.date === day);
+    if (!group) {
+      const date = new Date(entry.starts_at);
+      group = {
+        date: day,
+        label: date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }),
+        is_today: new Date(entry.starts_at).toDateString() === new Date().toDateString(),
+        classes: []
+      };
+      groups.push(group);
+    }
+    group.classes.push(entry);
+  }
+  groups.sort((a, b) => a.date.localeCompare(b.date));
+
+  const all = groups.flatMap((group) => group.classes);
+  const today = groups.find((group) => group.is_today);
+  return {
+    timezone: 'Asia/Kolkata',
+    now: iso(0),
+    scope: course ? 'course' : 'mine',
+    window_days: 7,
+    counts: {
+      today: today ? today.classes.length : 0,
+      live: all.filter((entry) => entry.status === 'live').length,
+      upcoming: all.filter((entry) => entry.status === 'upcoming').length,
+      total: all.length
+    },
+    groups,
+    next: all.find((entry) => entry.status === 'live') || all.find((entry) => entry.status === 'upcoming') || null,
+    ...(course ? { course: pool[0]?.course || null } : {})
+  };
+}
+
 const INSIGHTS = {
   released_attempts: 2,
   questions: 9,
@@ -257,6 +330,8 @@ const json = (body, status = 200) =>
  *   noTelegram — every batch is served without a Telegram handle, so the
  *               "Get code" button has nothing to point at
  *   emptyInsights — a learner with no released papers (the empty focus panel)
+ *   quietSchedule — nothing today, one class later in the week
+ *   emptySchedule — nothing scheduled at all in the window
  */
 /* A paper frozen at attempt start. The prompts deliberately differ from the
  * live `QUESTIONS`, so a test can prove the player renders the attempt's copy
@@ -287,7 +362,9 @@ function makeStub({
   noTelegram = false,
   frozenPaper = false,
   mcq = false,
-  emptyInsights = false
+  emptyInsights = false,
+  quietSchedule = false,
+  emptySchedule = false
 } = {}) {
   const pick = (rows) =>
     (empty ? [] : noTelegram ? rows.map((row) => ({ ...row, telegram_dm: '', telegram_handle: '' })) : rows);
@@ -551,6 +628,13 @@ function makeStub({
       return json({ id: 1, title: 'Revise mole concept', due_at: '2026-10-28T10:00:00Z', is_completed: done });
     }
 
+    if (path === '/schedule/' || path === '/schedule') {
+      const course = url.searchParams.get('course');
+      if (!course && !(signedIn || authed)) {
+        return json({ detail: 'Sign in to see your timetable.' }, 401);
+      }
+      return json(schedulePayload({ course, quiet: quietSchedule, empty: emptySchedule }));
+    }
     if (path === '/insights/topics/') {
       return signedIn || authed
         ? json(emptyInsights ? { ...INSIGHTS, topics: [], focus: [], released_attempts: 0, questions: 0 } : INSIGHTS)

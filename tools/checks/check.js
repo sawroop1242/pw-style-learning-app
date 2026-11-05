@@ -53,7 +53,7 @@ async function inspect(page, mods, query, opts, label) {
   if (errors.length) problems.push(errors[0].slice(0, 200));
   if (opts.expectData) {
     const rows = doc.querySelectorAll(
-      '.batch-card, .test-card, .today-card, .lesson-item, .dl-row, .post-card, .upcoming-item, .note-preview, .menu-row'
+      '.batch-card, .test-card, .class-row, .lesson-item, .dl-row, .post-card, .upcoming-item, .note-preview, .menu-row'
     ).length;
     if (!rows) problems.push('no rows rendered');
   } else if (!OUTAGE_COPY.test(main) && main.length > 0) {

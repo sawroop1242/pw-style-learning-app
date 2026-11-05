@@ -665,6 +665,27 @@ class Command(BaseCommand):
                         },
                     )
 
+            # A timetable for the demo: one class a day at 19:00, starting
+            # today. The first class of the first batch started a few minutes
+            # ago, so "live now" is visible without waiting for an hour. Times
+            # are relative to the run, so a preview is never stale.
+            scheduled = list(
+                course.lessons.order_by("folder__position", "position", "id")
+            )
+            now = timezone.now()
+            seven_pm = timezone.localtime(now).replace(
+                hour=19, minute=0, second=0, microsecond=0
+            )
+            for index, lesson in enumerate(scheduled):
+                if spec["slug"] == "demo-jee-main-2027" and index == 0:
+                    starts = now - timedelta(minutes=12)
+                else:
+                    starts = seven_pm + timedelta(days=index)
+                # `update()` skips `auto_now`, so the timestamp is set here.
+                Lesson.objects.filter(pk=lesson.pk).update(
+                    starts_at=starts, updated_at=now
+                )
+
             for faculty_position, (name, subject, bio) in enumerate(
                 FACULTY.get(spec["slug"], []), start=1
             ):

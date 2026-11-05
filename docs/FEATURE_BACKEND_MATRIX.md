@@ -95,7 +95,8 @@ worse than no bell.
 | # | Feature | Screen | Endpoint | Verdict |
 |---|---|---|---|---|
 | 5.1 | Class list inside a batch | `course.html` | `GET /api/courses/<slug>/` (folders and their lessons) | connected — the batch page is the only place a class is listed |
-| 5.1a | "Today's classes" on the home screen | `index.html` | `GET /api/lessons/?added=today&has_video=1` | connected — today's uploads in the batches the learner joined; a quiet day is an empty state, not an error |
+| 5.1b | Class timetable (the week, live window, next class) | `index.html` `#schedule-list`, `course.html` `#class-timetable` | `GET /api/schedule/?days=&course=` (`courses/schedule.py`) | connected — the live badge is computed from `Lesson.starts_at` + `duration_minutes`, never stored; a lesson with no air time is on demand and stays off the timetable; `video_url` never appears in the payload |
+| 5.1a | "Today's classes" (retired) | — | `GET /api/lessons/?added=today&has_video=1` | **replaced by 5.1b** — "uploaded today" is not a timetable and could not say "Live now"; the endpoint survives for the player |
 | 5.2 | Chapter PDFs | `player.html` (Notes tab), `pdf.html` | `GET /api/pdfs/?course=`, `GET /api/pdfs/<id>/` | connected — the reader shows the document; no screen offers a file download |
 | 5.3 | Papers | `tests.html` | `GET /api/quizzes/` | connected |
 | 5.3a | The former Downloads screen | — | — | **removed** (run 30): page, module, nav entry, profile row, quick tile, home rail link, `.dl-*` styles and service-worker entries deleted; its lists live on the batch page and in the class player |
@@ -130,15 +131,21 @@ worse than no bell.
 A free batch used to be readable by anyone, which meant "free" and "joined"
 were the same thing. Since run 28 they are not: the catalogue shows the batch,
 its description and its price, and the media (video URL, PDF file and viewer
-URL, today's classes) appears only for a learner with an active
+URL) appears only for a learner with an active
 `CourseAccessGrant` — which a free batch creates when the learner presses
-**Enrol — free**. `?mine=1` therefore lists grants, not free batches.
+**Enrol — free**. `?mine=1` therefore lists grants, not free batches. The
+batch timetable is the exception, and deliberately so: *when* a class airs
+is public metadata, *what it plays* is not — `GET /api/schedule/?course=`
+lists every air time and marks each recording `is_locked` for a learner
+without a grant.
 
 | Where | Rule |
 |---|---|
 | `policy.is_enrolled(user, course)` | an active `CourseAccessGrant` |
 | `policy.can_consume_course` | enrolled, or staff/owner |
 | `LessonViewSet` | published lessons in granted ∪ owned batches |
+| `GET /api/schedule/` (no `?course=`) | the caller's own week: granted ∪ owned, published batches only; a guest is answered `401` with a sign-in message |
+| `GET /api/schedule/?course=` | public — a batch's air times are metadata; recordings stay `is_locked` / `can_open: false` for anyone without access, and `video_url` is never serialised |
 | `PdfResourceSerializer` | `file_url`/`viewer_url` null unless enrolled |
 | `POST /courses/<id>/enroll/` | free only; paid answers `400` and points at the access code |
 
