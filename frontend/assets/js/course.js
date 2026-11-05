@@ -14,7 +14,7 @@ import {
 } from './core.js';
 import {
   mountChrome, batchCard, icon, thumbTone, emptyState, toast, wireRetry,
-  scheduleRow, clockLabel
+  scheduleRow, clockLabel, dayLabel
 } from './ui.js';
 
 mountChrome('courses');
@@ -82,7 +82,6 @@ function render(detail, testRows) {
   renderPurchase();
   renderOverview();
   renderClasses();
-  renderNotes();
   renderPapers(testRows);
   renderTeachers();
   renderAside();
@@ -98,7 +97,7 @@ function renderHeadline() {
   const facts = [
     ['play', `${current.lessons} ${current.lessons === 1 ? 'lesson' : 'lessons'}`],
     ['file-text', `${current.tests} ${current.tests === 1 ? 'test' : 'tests'}`],
-    ['book', `${current.folders.length} ${current.folders.length === 1 ? 'section' : 'sections'}`]
+    ['book', `${current.folders.length} ${current.folders.length === 1 ? 'chapter' : 'chapters'}`]
   ];
 
   host.innerHTML = `
@@ -184,39 +183,6 @@ function renderPurchase() {
   }
 }
 
-function lessonRow(lesson) {
-  return `
-    <div class="lesson-item ${lesson.is_locked ? 'is-locked' : ''}">
-      <span class="lesson-num">${icon(lesson.is_locked ? 'lock' : 'play')}</span>
-      <span class="lesson-main">
-        <strong>${esc(lesson.title)}</strong>
-        <small>${lesson.starts_at ? `${esc(clockLabel(lesson.starts_at, current.timezone || ''))} · ` : ''}${lesson.duration_minutes || 0} min${lesson.is_locked ? ' · locked' : ''}</small>
-      </span>
-      ${
-        lesson.is_locked
-          ? '<span class="lesson-state" aria-hidden="true">' + icon('lock') + '</span>'
-          : `<a class="link" href="player.html?lesson=${lesson.id}">Open ${icon('arrow-right')}</a>`
-      }
-    </div>`;
-}
-
-function pdfRow(pdf) {
-  const locked = pdf.is_locked || !pdf.file_url;
-  return `
-    <div class="pdf-row">
-      <span class="pdf-thumb">${icon('note')}</span>
-      <span class="pdf-main">
-        <strong>${esc(pdf.title)}</strong>
-        <small>${esc(pdf.description || 'PDF notes')}${locked ? ' · locked' : ''}</small>
-      </span>
-      ${
-        locked
-          ? '<span class="badge badge-outline">Locked</span>'
-          : `<a class="pdf-action" href="pdf.html?pdf=${pdf.id}" aria-label="Read ${esc(pdf.title)}">${icon('book')}</a>`
-      }
-    </div>`;
-}
-
 /**
  * The batch's own numbers, written on the tab that leads to them.
  *
@@ -224,11 +190,13 @@ function pdfRow(pdf) {
  * "Notes", not "Notes 0", because a zero badge is noise, not information.
  */
 function renderCounts(testRows) {
+  // The Classes tab holds classes *and* notes now that the tree nests both,
+  // so its badge counts both: a tab that says "5" and opens on seven rows is
+  // a small lie the screen has no reason to tell.
   const lessons = current.folders.reduce((n, folder) => n + (folder.lessons || []).length, 0);
   const notes = current.folders.reduce((n, folder) => n + (folder.pdf_resources || []).length, 0);
   const counts = {
-    classes: lessons,
-    notes,
+    classes: lessons + notes,
     papers: (testRows || []).length,
     teachers: (current.faculty || []).length
   };
@@ -249,9 +217,9 @@ function renderOverview() {
       <div class="card card-pad">
         <strong style="display:block;margin-bottom:6px">What is inside</strong>
         <ul class="feature-list" style="margin:0">
-          <li>${icon('play')}<span>${lessonCount} ${lessonCount === 1 ? 'lesson' : 'lessons'} across ${current.folders.length} ${current.folders.length === 1 ? 'section' : 'sections'}</span></li>
+          <li>${icon('play')}<span>${lessonCount} ${lessonCount === 1 ? 'lesson' : 'lessons'} across ${current.folders.length} ${current.folders.length === 1 ? 'chapter' : 'chapters'}</span></li>
           <li>${icon('file-text')}<span>${current.tests} ${current.tests === 1 ? 'paper' : 'papers'} in this batch</span></li>
-          <li>${icon('note')}<span>Notes and PDFs, grouped by section under Notes</span></li>
+          <li>${icon('note')}<span>Notes and PDFs, filed in the chapter they belong to</span></li>
         </ul>
       </div>
       <div class="card card-pad">
@@ -283,33 +251,201 @@ function renderOverview() {
     </div>`;
 }
 
+/* ------------------------------------------------------------------ */
+/* The batch tree: subject → chapter → files                          */
+/* ------------------------------------------------------------------ */
+
+/** "3 classes · 1 note" — the summary a folder line carries. */
+function itemCount(classes, notes) {
+  const parts = [];
+  if (classes) parts.push(`${classes} ${classes === 1 ? 'class' : 'classes'}`);
+  if (notes) parts.push(`${notes} ${notes === 1 ? 'note' : 'notes'}`);
+  return parts.join(' · ') || 'Empty';
+}
+
+/**
+ * Chapters grouped by the subject they are filed under.
+ *
+ * `CourseFolder.subject` is what the provider typed; when it is blank the
+ * chapter files under the batch's own subject rather than a heading the
+ * faculty never chose. A chapter that arrives with a subject the batch does
+ * not carry still gets a group of its own — the screen follows the data.
+ */
+function groupBySubject(folders) {
+  const groups = new Map();
+  folders.forEach((folder) => {
+    const subject = (folder.subject || '').trim() || current.subject || 'General';
+    if (!groups.has(subject)) groups.set(subject, []);
+    groups.get(subject).push(folder);
+  });
+  return [...groups.entries()].map(([subject, chapters]) => ({
+    subject,
+    chapters,
+    classes: chapters.reduce((n, c) => n + (c.lessons || []).length, 0),
+    notes: chapters.reduce((n, c) => n + (c.pdf_resources || []).length, 0)
+  }));
+}
+
+/** One row in a chapter: a class, or a note. Both read the same way. */
+function fileRow({ kind, id, title, meta, href, locked, description }) {
+  const iconName = kind === 'note' ? 'note' : 'play';
+  const label = `<span class="tree-file-icon" aria-hidden="true">${icon(iconName)}</span>
+        <span class="tree-file-name">${esc(title)}${
+          description ? `<small>${esc(description)}</small>` : ''
+        }</span>
+        <span class="tree-file-meta">${esc(meta)}</span>`;
+
+  if (locked) {
+    return `<div class="tree-file is-locked" data-kind="${kind}" data-file="${id}">
+        ${label}
+        <span class="tree-file-action"><span class="badge badge-outline">Locked</span></span>
+      </div>`;
+  }
+  return `<a class="tree-file" data-kind="${kind}" data-file="${id}" href="${esc(href)}">
+        ${label}
+        <span class="tree-file-action">Open ${icon('arrow-right')}</span>
+      </a>`;
+}
+
+function chapterBlock(folder) {
+  const lessons = folder.lessons || [];
+  const notes = folder.pdf_resources || [];
+  const rows = [
+    ...lessons.map((lesson) =>
+      fileRow({
+        kind: 'class',
+        id: lesson.id,
+        title: lesson.title,
+        description: lesson.starts_at
+          ? `${dayLabel(lesson.starts_at, current.timezone || '')} · ${clockLabel(lesson.starts_at, current.timezone || '')}`
+          : lesson.description,
+        meta: `${lesson.duration_minutes || 0} min`,
+        href: `player.html?lesson=${lesson.id}`,
+        locked: lesson.is_locked
+      })
+    ),
+    ...notes.map((note) =>
+      fileRow({
+        kind: 'note',
+        id: note.id,
+        title: note.title,
+        description: note.description,
+        meta: 'PDF',
+        href: `pdf.html?pdf=${note.id}`,
+        locked: note.is_locked || !note.file_url
+      })
+    )
+  ];
+
+  return `
+    <details class="tree-chapter" open>
+      <summary class="tree-chapter-head">
+        <span class="tree-caret" aria-hidden="true"></span>
+        <span class="tree-chapter-name">${esc(folder.title)}</span>
+        <span class="tree-meta">${itemCount(lessons.length, notes.length)}</span>
+      </summary>
+      ${
+        folder.description
+          ? `<p class="tree-chapter-note">${esc(folder.description)}</p>`
+          : ''
+      }
+      <div class="tree-files">
+        ${rows.join('') || '<p class="tree-empty">Nothing published in this chapter yet.</p>'}
+      </div>
+    </details>`;
+}
+
 function renderClasses() {
   const host = $('#panel-classes');
   if (!current.folders.length) {
     host.innerHTML = emptyState({
-      title: 'No classes published yet',
-      body: 'Sections and lessons appear here as soon as the faculty publishes them.',
+      title: 'No chapters published yet',
+      body: 'Chapters, classes and notes appear here as soon as the faculty publishes them.',
       iconName: 'play'
     });
     return;
   }
-  host.innerHTML = '<div class="card card-pad batch-schedule" id="class-timetable" aria-live="polite"></div>' + current.folders
-    .map(
-      (folder) => `
-      <div class="card card-pad" style="margin-bottom:var(--sp-4)">
-        <div class="row-between" style="margin-bottom:10px">
-          <strong>${esc(folder.title)}</strong>
-          <span class="tiny subtle">${(folder.lessons || []).length} ${(folder.lessons || []).length === 1 ? 'lesson' : 'lessons'}</span>
-        </div>
-        ${folder.description ? `<p class="small muted" style="margin:0 0 10px">${esc(folder.description)}</p>` : ''}
-        <div class="lesson-list">
-          ${(folder.lessons || []).map(lessonRow).join('') || '<p class="tiny subtle" style="margin:0">No lessons in this section yet.</p>'}
-        </div>
-      </div>`
-    )
-    .join('');
 
+  const groups = groupBySubject(current.folders);
+  const totalClasses = groups.reduce((n, g) => n + g.classes, 0);
+  const totalNotes = groups.reduce((n, g) => n + g.notes, 0);
+
+  host.innerHTML = `
+    <div class="card card-pad batch-schedule" id="class-timetable" aria-live="polite"></div>
+    <div class="content-tree" id="content-tree">
+      <div class="tree-toolbar">
+        <label class="visually-hidden" for="content-search">Search this batch</label>
+        <input id="content-search" type="search" autocomplete="off" placeholder="Search chapters, classes and notes">
+        <p class="tree-total">${groups.length} ${groups.length === 1 ? 'subject' : 'subjects'} · ${totalClasses} ${totalClasses === 1 ? 'class' : 'classes'} · ${totalNotes} ${totalNotes === 1 ? 'note' : 'notes'}</p>
+      </div>
+      <p class="tree-no-match" id="tree-no-match" hidden>Nothing in this batch matches that search.</p>
+      ${groups
+        .map(
+          (group) => `
+        <details class="tree-subject" open>
+          <summary class="tree-subject-head">
+            <span class="tree-caret" aria-hidden="true"></span>
+            <span class="tree-subject-name">${esc(group.subject)}</span>
+            <span class="tree-meta">${group.chapters.length} ${group.chapters.length === 1 ? 'chapter' : 'chapters'} · ${itemCount(group.classes, group.notes)}</span>
+          </summary>
+          <div class="tree-chapters">${group.chapters.map(chapterBlock).join('')}</div>
+        </details>`
+        )
+        .join('')}
+    </div>`;
+
+  wireTreeSearch(host);
   loadBatchSchedule();
+}
+
+/**
+ * Filter the tree as you type.
+ *
+ * The rows stay in the document and are hidden, so the open/closed state of a
+ * chapter survives a search: a learner who searched "integration", cleared it,
+ * and came back to the same chapter they had open is the behaviour a file
+ * manager has taught them to expect.
+ */
+function wireTreeSearch(host) {
+  const input = host.querySelector('#content-search');
+  const nothing = host.querySelector('#tree-no-match');
+  if (!input || !nothing) return;
+
+  const apply = () => {
+    const term = input.value.trim().toLowerCase();
+    const matches = (text) => !term || text.toLowerCase().includes(term);
+    let anyVisible = false;
+
+    host.querySelectorAll('.tree-subject').forEach((subject) => {
+      const subjectHit = matches(subject.querySelector('.tree-subject-name').textContent);
+      let subjectVisible = false;
+
+      subject.querySelectorAll('.tree-chapter').forEach((chapter) => {
+        // A chapter matches on its own name, on any file inside it, or
+        // because the subject above it already matched.
+        const chapterHit =
+          subjectHit || matches(chapter.querySelector('.tree-chapter-name').textContent);
+        let hits = 0;
+
+        chapter.querySelectorAll('.tree-file').forEach((row) => {
+          const hit = chapterHit || matches(row.textContent);
+          row.hidden = !hit;
+          if (hit) hits += 1;
+        });
+
+        chapter.hidden = Boolean(term) && !chapterHit && hits === 0;
+        if (!chapter.hidden) subjectVisible = true;
+      });
+
+      subject.hidden = Boolean(term) && !subjectHit && !subjectVisible;
+      if (!subject.hidden) anyVisible = true;
+    });
+
+    nothing.hidden = !term || anyVisible;
+  };
+
+  input.addEventListener('input', apply);
+  input.addEventListener('search', apply);
 }
 
 /**
@@ -359,42 +495,7 @@ async function loadBatchSchedule() {
     </div>`;
 }
 
-/**
- * Every PDF on the batch, grouped by the section it belongs to.
- *
- * These used to be nested inside the lesson list, which meant a student who
- * wanted "the notes" scrolled a curriculum to find them, and the same row
- * appeared twice once Classes and Notes became separate tabs.
- */
-function renderNotes() {
-  const host = $('#panel-notes');
-  const groups = current.folders
-    .map((folder) => ({ folder, pdfs: folder.pdf_resources || [] }))
-    .filter((group) => group.pdfs.length);
-
-  if (!groups.length) {
-    host.innerHTML = emptyState({
-      title: 'No notes in this batch yet',
-      body: 'PDFs appear here as soon as the faculty uploads them. Protected notes open once the batch is unlocked.',
-      iconName: 'note'
-    });
-    return;
-  }
-
-  host.innerHTML = groups
-    .map(
-      ({ folder, pdfs }) => `
-      <div class="card card-pad" style="margin-bottom:var(--sp-4)">
-        <div class="row-between" style="margin-bottom:10px">
-          <strong>${esc(folder.title)}</strong>
-          <span class="tiny subtle">${pdfs.length} ${pdfs.length === 1 ? 'file' : 'files'}</span>
-        </div>
-        <div class="pdf-list">${pdfs.map(pdfRow).join('')}</div>
-      </div>`
-    )
-    .join('');
-}
-
+/** The batch's papers, card for card, from `/quizzes/?course=`. */
 function renderPapers(testRows) {
   const host = $('#panel-papers');
   if (!testRows.length) {
@@ -490,7 +591,7 @@ function renderAside() {
   const facts = [
     ['Subject', current.subject],
     ['Price', current.free ? 'Free' : money(current.price)],
-    ['Sections', String(current.folders.length)],
+    ['Chapters', String(current.folders.length)],
     ['Tests', String(current.tests)],
     ['Access', current.hasAccess ? 'Unlocked' : 'Locked']
   ];
@@ -541,13 +642,17 @@ async function loadSimilar() {
 /* ------------------------------------------------------------------ */
 
 /**
- * The tab strip: five panels, one visible, and the choice written into the URL.
+ * The tab strip: four panels, one visible, and the choice written into the URL.
  *
- * `?tab=notes` is a link a teacher can send and a student can bookmark. The
+ * `?tab=classes` is a link a teacher can send and a student can bookmark. The
  * strip follows the ARIA tabs pattern — one tab in the tab order (roving
  * tabindex), arrow keys move between tabs, Home and End jump to the ends.
+ *
+ * Notes used to be a fifth tab. They are files inside a chapter now, which is
+ * where a learner looks for them, so a tab listing them again would be a
+ * second answer to the same question. `?tab=notes` falls back to Overview.
  */
-const TABS = ['overview', 'classes', 'notes', 'papers', 'teachers'];
+const TABS = ['overview', 'classes', 'papers', 'teachers'];
 
 function tabFromUrl() {
   const wanted = (qsParam('tab') || '').toLowerCase();

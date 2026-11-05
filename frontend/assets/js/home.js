@@ -54,7 +54,8 @@ function fill(host, html, { empty, emptyBody, actionLabel, actionHref, iconName 
  * It used to list lessons *created* today, so a recording pushed at 11pm for
  * next week's class counted as today's and the class being taught this evening
  * did not appear at all. `/schedule/` answers the real question — what is on,
- * when — and marks a class live only inside its own window.
+ * when — and says whether that hour has passed. It never says "live": these
+ * classes are recordings, not streams.
  *
  * The seven-day payload is requested once and rendered in three parts: today,
  * "later this week", and nothing at all. A quiet day is stated as a quiet day,
@@ -103,7 +104,6 @@ async function loadSchedule() {
       ? 'Nothing scheduled in the next seven days'
       : [
           `${counts.today} ${counts.today === 1 ? 'class' : 'classes'} today`,
-          counts.live ? `${counts.live} live now` : '',
           counts.upcoming ? `${counts.upcoming} still to come this week` : ''
         ].filter(Boolean).join(' · ');
   }

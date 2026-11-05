@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Prefetch
 from django.utils import timezone as django_timezone
 from rest_framework import serializers
 
@@ -134,21 +135,40 @@ class CourseFacultySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+def _published(folder, attr):
+    """The published rows of a prefetched relation, without re-querying.
+
+    ``folder.lessons.filter(...)`` looks harmless and is not: calling
+    ``.filter()`` on a prefetched manager throws away the prefetch and runs one
+    query per chapter, which is exactly the fan-out a batch page with a dozen
+    chapters cannot afford. When the relation was prefetched the cache already
+    holds those rows, so the published filter runs over them in Python; when it
+    was not, the query is the correct answer.
+    """
+    cache = getattr(folder, "_prefetched_objects_cache", {}).get(attr)
+    if cache is not None:
+        return [row for row in cache if row.is_published]
+    return getattr(folder, attr).filter(is_published=True)
+
+
 class CourseFolderSerializer(serializers.ModelSerializer):
     lessons = serializers.SerializerMethodField()
     pdf_resources = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseFolder
-        fields = ["id", "course", "title", "description", "position", "lessons", "pdf_resources"]
+        fields = [
+            "id", "course", "subject", "title", "description", "position",
+            "lessons", "pdf_resources",
+        ]
         read_only_fields = ["id"]
 
     def get_lessons(self, folder):
-        lessons = folder.lessons.filter(is_published=True)
+        lessons = _published(folder, "lessons")
         return LessonSerializer(lessons, many=True, context=self.context).data
 
     def get_pdf_resources(self, folder):
-        pdfs = folder.pdf_resources.filter(is_published=True)
+        pdfs = _published(folder, "pdf_resources")
         return PdfResourceSerializer(pdfs, many=True, context=self.context).data
 
 
@@ -310,8 +330,11 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     ``has_access`` tells the client whether media URLs are present or locked;
     the URLs themselves are gated by the nested serializers.
     """
-    lesson_count = serializers.IntegerField(source="lessons.count", read_only=True)
-    folder_count = serializers.IntegerField(source="folders.count", read_only=True)
+    # The detail response carries the same three counts as a catalogue card;
+    # reading them from the viewset's annotation keeps a batch page from paying
+    # two COUNT queries it already has the answers to.
+    lesson_count = serializers.SerializerMethodField()
+    folder_count = serializers.SerializerMethodField()
     quiz_count = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
     is_enrolled = serializers.SerializerMethodField()
@@ -336,6 +359,18 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             "has_access", "is_enrolled", "folders", "faculty", "created_at", "updated_at"
         ]
 
+    def get_lesson_count(self, course):
+        annotated = getattr(course, "lesson_count", None)
+        if annotated is not None:
+            return annotated
+        return course.lessons.filter(is_published=True).count()
+
+    def get_folder_count(self, course):
+        annotated = getattr(course, "folder_count", None)
+        if annotated is not None:
+            return annotated
+        return course.folders.count()
+
     def get_quiz_count(self, course):
         annotated = getattr(course, "quiz_total", None)
         if annotated is not None:
@@ -355,7 +390,22 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         return course.telegram_dm_url
 
     def get_folders(self, course):
-        folders = course.folders.all().prefetch_related("lessons", "pdf_resources")
+        """Every chapter, its published classes and its published notes.
+
+        The PDFs come with their chapter *and* their batch joined, because the
+        serializer asks both for the lock decision; without the join that is
+        one query per note on a page that is entirely made of notes.
+        """
+        folders = course.folders.all().prefetch_related(
+            # A class carries its batch too: `get_video_url` asks the access
+            # rule about `lesson.course`, and without the join that is one
+            # query per row of the tree.
+            Prefetch("lessons", queryset=Lesson.objects.select_related("course")),
+            Prefetch(
+                "pdf_resources",
+                queryset=PdfResource.objects.select_related("folder__course"),
+            ),
+        )
         return CourseFolderSerializer(folders, many=True, context=self.context).data
 
     def get_faculty(self, course):

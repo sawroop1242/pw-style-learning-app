@@ -2,13 +2,14 @@
 
 Two things can go wrong with a schedule, and both have shipped elsewhere:
 
-* **A badge that outlives its truth.** "Live" stored as a flag keeps saying
-  live after the class ended, or after the row was created and never aired at
-  all. Here "live" is a half-open window, ``[starts_at, starts_at + duration)``,
-  computed from one ``now`` per build — so every class in a payload agrees about
-  what time it is, and a class can never be live without a start.
+* **A claim the product cannot keep.** These classes are recordings at an
+  embed URL, never a stream, so nothing here may say "live". A stored flag
+  keeps saying it after the class ended; a computed window still claims a
+  broadcast that does not exist. The timetable therefore has two states —
+  ``upcoming`` before the hour, ``ended`` after it — computed from one ``now``
+  per build, so every class in a payload agrees about what time it is.
 * **A class that appears at a made-up hour.** A lesson with no ``starts_at`` is
-  on demand. It is left out of the timetable rather than parked at midnight.
+  not on the timetable. It is left out rather than parked at midnight.
 
 The tests also pin the parts that are easy to get subtly wrong: today's finished
 classes stay in today's group, the window is local midnight to local midnight,
@@ -122,9 +123,9 @@ class ScheduleData(TestCase):
 
 
 class StatusAndGroupingTests(ScheduleData):
-    def test_the_three_states_are_computed_from_one_clock(self):
+    def test_the_two_states_are_computed_from_one_clock(self):
         ended = self.lesson("Ended", at(self.today, hours=9))
-        live = self.lesson("Live", at(self.now, minutes=-12), duration_minutes=52)
+        now = self.lesson("Now", at(self.now, minutes=-12), duration_minutes=52)
         later = self.lesson("Later", at(self.today, hours=19))
         self.enrol()
 
@@ -134,14 +135,25 @@ class StatusAndGroupingTests(ScheduleData):
             for entry in group["classes"]
         }
         self.assertEqual(entries["Ended"], "ended")
-        self.assertEqual(entries["Live"], "live")
+        self.assertEqual(entries["Now"], "ended")
         self.assertEqual(entries["Later"], "upcoming")
         self.assertIs(ended.starts_at < self.now, True)
 
-    def test_the_live_window_is_half_open(self):
-        lesson = self.lesson("Boundary", at(self.now, minutes=-30), duration_minutes=30)
-        self.assertEqual(schedule.status_for(lesson, self.now - timedelta(minutes=30)), "live")
-        self.assertEqual(schedule.status_for(lesson, self.now), "ended")
+    def test_a_class_that_started_is_not_called_live(self):
+        """The video is an embed. The moment it airs, it is simply there."""
+        lesson = self.lesson("Published", at(self.now, minutes=-1), duration_minutes=52)
+
+        for moment in (self.now, at(self.now, minutes=10)):
+            self.assertEqual(schedule.status_for(lesson, moment), "ended")
+        self.assertEqual(schedule.status_for(lesson, at(self.now, minutes=-2)), "upcoming")
+
+    def test_no_payload_carries_a_live_count(self):
+        self.lesson("Mine", at(self.now, minutes=-12))
+        self.enrol()
+
+        counts = self.payload()["counts"]
+        self.assertNotIn("live", counts)
+        self.assertEqual(set(counts), {"today", "upcoming", "total"})
 
     def test_todays_finished_class_stays_on_todays_list(self):
         self.lesson("This morning", at(self.today, hours=9))

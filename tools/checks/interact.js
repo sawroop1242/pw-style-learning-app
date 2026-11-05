@@ -86,15 +86,23 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     const { window, doc, errors } = await open('index.html', ['core', 'content', 'ui', 'home'], { signedIn: true });
 
     check('welcome line names the visitor', /Hello|Welcome/i.test(doc.querySelector('#welcome-title').textContent), doc.querySelector('#welcome-title').textContent.trim());
-    // P5: "Today's classes" is a timetable, not a feed of uploads. The rows
-    // carry a time, and only the class inside its own window says "Live now".
+    // P5: "Today's classes" is a timetable, not a feed of uploads. Every class
+    // is a recording, so no row may claim to be live.
     const todayRows = [...doc.querySelectorAll('#schedule-list .class-row')];
     check('timetable rows come from the schedule', todayRows.length === 4, String(todayRows.length));
     check('each row leads with its time', todayRows.every((row) => /\d/.test(row.querySelector('.class-time time')?.textContent || '')));
-    check('the live class is badged, and only it', doc.querySelectorAll('#schedule-list .badge-live').length === 1, String(doc.querySelectorAll('#schedule-list .badge-live').length));
-    check('an ended class offers its recording', [...doc.querySelectorAll('#schedule-list .class-row[data-status="ended"] a')].some((a) => /Watch recording/.test(a.textContent)));
-    check('a finished row is marked ended', doc.querySelectorAll('#schedule-list .class-row[data-status="ended"] .badge-neutral').length === 1);
-    check('the summary counts what is on', /3 classes today/.test(doc.querySelector('#schedule-summary').textContent) && /1 live now/.test(doc.querySelector('#schedule-summary').textContent), doc.querySelector('#schedule-summary').textContent);
+    check('no row claims to be live', doc.querySelectorAll('#schedule-list .badge-live').length === 0, String(doc.querySelectorAll('#schedule-list .badge-live').length));
+    check('nothing offers to join a class', !/Join class/i.test(doc.querySelector('#schedule-list').textContent));
+    check('an ended class offers its recording', [...doc.querySelectorAll('#schedule-list .class-row[data-status="ended"] a')].some((a) => /Watch\b/.test(a.textContent)));
+    check('a finished row is marked recorded', doc.querySelectorAll('#schedule-list .class-row[data-status="ended"] .badge-neutral').length === 2, String(doc.querySelectorAll('#schedule-list .badge-neutral').length));
+    check('an upcoming row says so', doc.querySelectorAll('#schedule-list .class-row[data-status="upcoming"] .badge-outline').length === 2);
+    check(
+      'the summary counts what is on, without a live figure',
+      /3 classes today/.test(doc.querySelector('#schedule-summary').textContent) &&
+        /2 still to come this week/.test(doc.querySelector('#schedule-summary').textContent) &&
+        !/live/i.test(doc.querySelector('#schedule-summary').textContent),
+      doc.querySelector('#schedule-summary').textContent
+    );
     check('batch rail filled from the API', doc.querySelectorAll('#trending-grid .batch-card').length === 3, String(doc.querySelectorAll('#trending-grid .batch-card').length));
     check('test rail filled from the API', doc.querySelectorAll('#home-tests .test-card').length === 2, String(doc.querySelectorAll('#home-tests .test-card').length));
     check('notice rail filled from the API', doc.querySelectorAll('#home-notices .notice-item').length === 2, String(doc.querySelectorAll('#home-notices .notice-item').length));
@@ -306,50 +314,116 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     await wait(250);
 
     const tabs = [...doc.querySelectorAll('#batch-tabs .tab')];
-    check('five tabs on a batch page', tabs.length === 5, tabs.map((t) => t.id).join('|'));
+    check('four tabs on a batch page', tabs.length === 4, tabs.map((t) => t.id).join('|'));
     check(
-      'the tabs read Overview, Classes, Notes, Papers, Teachers',
-      tabs.map((t) => t.textContent.replace(/\d+/g, '').trim()).join('|') === 'Overview|Classes|Notes|Papers|Teachers',
+      'the tabs read Overview, Classes, Papers, Teachers',
+      tabs.map((t) => t.textContent.replace(/\d+/g, '').trim()).join('|') === 'Overview|Classes|Papers|Teachers',
       tabs.map((t) => t.textContent.trim()).join('|')
     );
     check('Overview is open first', doc.querySelector('#tab-overview').getAttribute('aria-selected') === 'true');
-    check('the other four panels start hidden', [...doc.querySelectorAll('.tab-panel[hidden]')].length === 4);
-    check('one tab in the tab order, not five', tabs.filter((t) => t.getAttribute('tabindex') === '0').length === 1);
+    check('the other three panels start hidden', [...doc.querySelectorAll('.tab-panel[hidden]')].length === 3);
+    check('one tab in the tab order, not four', tabs.filter((t) => t.getAttribute('tabindex') === '0').length === 1);
 
     // Nobody wants "Notes 0": a badge only appears when it counts something.
     const counts = Object.fromEntries(
       [...doc.querySelectorAll('.tab-count')].map((n) => [n.dataset.count, n.hidden ? null : n.textContent.trim()])
     );
-    check('classes tab counts the lessons', counts.classes === '3', String(counts.classes));
-    check('notes tab counts the PDFs', counts.notes === '2', String(counts.notes));
+    // The Classes tab holds the tree, which nests classes and notes together.
+    check('classes tab counts classes and notes', counts.classes === '7', String(counts.classes));
+    check('there is no separate notes tab any more', !doc.querySelector('#tab-notes'));
     check('papers tab counts the papers', counts.papers === '1', String(counts.papers));
     check('teachers tab counts the faculty', counts.teachers === '2', String(counts.teachers));
 
-    click(window, doc.querySelector('#tab-notes'));
+    click(window, doc.querySelector('#tab-classes'));
     await wait(150);
-    check('clicking Notes opens the notes panel', !doc.querySelector('#panel-notes').hidden);
-    check('and closes the classes panel', doc.querySelector('#panel-classes').hidden);
-    check('the URL remembers the tab', /[?&]tab=notes\b/.test(window.location.search), window.location.search);
-    check('the notes panel groups by section', doc.querySelectorAll('#panel-notes .card').length === 2, String(doc.querySelectorAll('#panel-notes .card').length));
-    check('every PDF is listed once', doc.querySelectorAll('#panel-notes .pdf-list .pdf-row').length === 2, String(doc.querySelectorAll('#panel-notes .pdf-row').length));
+    check('clicking Classes opens the content panel', !doc.querySelector('#panel-classes').hidden);
+    check('and closes the overview panel', doc.querySelector('#panel-overview').hidden);
+    check('the URL remembers the tab', /[?&]tab=classes\b/.test(window.location.search), window.location.search);
+
+    // The tree: subject → chapter → classes and notes.
+    const subjects = [...doc.querySelectorAll('#content-tree .tree-subject')];
+    const subjectNames = subjects.map((s) => s.querySelector('.tree-subject-name').textContent.trim());
+    check('the batch is grouped into subjects', subjects.length === 2, subjectNames.join('|'));
+    check('the subjects are the ones the chapters are filed under', subjectNames.join('|') === 'Physics|Chemistry', subjectNames.join('|'));
+    check('every chapter sits under a subject', doc.querySelectorAll('#content-tree .tree-chapter').length === 3);
+    check(
+      'a chapter carries its own class count',
+      /2 classes · 1 note/.test(doc.querySelector('#content-tree .tree-chapter .tree-meta')?.textContent || ''),
+      doc.querySelector('#content-tree .tree-chapter .tree-meta')?.textContent
+    );
+
+    const physics = subjects[0];
+    const chemistry = subjects[1];
+    check('Physics has two chapters', physics.querySelectorAll('.tree-chapter').length === 2, String(physics.querySelectorAll('.tree-chapter').length));
+    check('Chemistry has one chapter', chemistry.querySelectorAll('.tree-chapter').length === 1);
+
+    // A class and a note live in the same chapter list, in that order.
+    const mechanicsRows = [...physics.querySelector('.tree-chapter .tree-files').querySelectorAll('.tree-file')];
+    check('the chapter lists its classes and its note', mechanicsRows.length === 3, mechanicsRows.map((r) => r.dataset.kind).join('|'));
+    check('classes come before notes', mechanicsRows.map((r) => r.dataset.kind).join('|') === 'class|class|note', mechanicsRows.map((r) => r.textContent.trim().slice(0, 24)).join(' / '));
+    check(
+      'a class row opens the player and shows its length',
+      /player\.html\?lesson=11/.test(mechanicsRows[0].getAttribute('href') || '') && /42 min/.test(mechanicsRows[0].textContent),
+      mechanicsRows[0].getAttribute('href')
+    );
+    check(
+      'a note row opens the reader',
+      /pdf\.html\?pdf=1/.test(mechanicsRows[2].getAttribute('href') || ''),
+      mechanicsRows[2].getAttribute('href')
+    );
+
     // A locked note is badged, not linked: the row must not offer a reader the
     // server never gave a file for.
+    const locked = chemistry.querySelector('.tree-file.is-locked');
+    check('a locked note is badged', Boolean(locked) && /Locked/.test(locked.textContent));
+    check('a locked note is not a link', locked.tagName !== 'A');
+
+    // Search narrows the tree without unopening it.
+    const search = doc.querySelector('#content-search');
+    search.value = 'mole';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await wait(60);
+    check('a search hides the subjects that do not match', physics.hidden === true && chemistry.hidden === false);
+    const survivors = [...chemistry.querySelectorAll('.tree-file')].filter((row) => !row.hidden);
     check(
-      'the locked note is badged, not linked',
-      doc.querySelectorAll('#panel-notes .pdf-row .badge-outline').length === 1 &&
-        doc.querySelectorAll('#panel-notes .pdf-row a.pdf-action').length === 1,
-      `${doc.querySelectorAll('#panel-notes .pdf-row .badge-outline').length} badges / ${doc.querySelectorAll('#panel-notes .pdf-row a.pdf-action').length} links`
+      'only the matching files survive inside a chapter',
+      survivors.length === 2 && survivors.every((row) => /mole/i.test(row.textContent)),
+      `${survivors.length} visible`
     );
-    check('Classes does not repeat the notes', doc.querySelectorAll('#panel-classes .pdf-row').length === 0);
+    check('the no-match message stays out of the way', doc.querySelector('#tree-no-match').hidden);
+
+    search.value = 'physics';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await wait(60);
+    check(
+      'searching a subject name keeps that subject and its chapters',
+      physics.hidden === false && chemistry.hidden === true && [...physics.querySelectorAll('.tree-file')].every((row) => !row.hidden),
+      `physics ${physics.hidden ? 'hidden' : 'shown'} / chemistry ${chemistry.hidden ? 'hidden' : 'shown'}`
+    );
+
+    search.value = 'zzzz';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await wait(60);
+    check('a search that matches nothing says so', !doc.querySelector('#tree-no-match').hidden && subjects.every((s) => s.hidden));
+
+    search.value = '';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await wait(60);
+    check(
+      'clearing the search brings the whole tree back',
+      subjects.every((s) => !s.hidden) && doc.querySelector('#tree-no-match').hidden
+    );
+    check('and every file with it', [...doc.querySelectorAll('.tree-file')].every((row) => !row.hidden));
 
     // P5: the batch page shows when its classes air, before anyone enrols.
     const strip = [...doc.querySelectorAll('#class-timetable .class-row')];
     check('the batch timetable lists its classes', strip.length > 0, String(strip.length));
     check('the strip does not repeat the batch name', !/JEE Main 2027 Complete Batch/.test(doc.querySelector('#class-timetable').textContent));
+    check('no row in the strip claims to be live', doc.querySelectorAll('#class-timetable .badge-live').length === 0);
     check(
-      'a lesson row carries its air time',
-      /\d{1,2}:\d{2}/.test(doc.querySelector('#panel-classes .lesson-item small')?.textContent || ''),
-      doc.querySelector('#panel-classes .lesson-item small')?.textContent
+      'a class row carries its air time',
+      /\d{1,2}:\d{2}/.test(doc.querySelector('.tree-file[data-kind="class"] .tree-file-name small')?.textContent || ''),
+      doc.querySelector('.tree-file[data-kind="class"] .tree-file-name small')?.textContent
     );
 
     // Arrow keys walk the strip; a tab that is not selected is not focusable.
@@ -373,14 +447,25 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
 
   /* ------------------- batch page: a deep link to one tab ---------------- */
   {
-    console.log('\ncourse.html (?tab=notes deep link)');
+    console.log('\ncourse.html (?tab=classes deep link)');
+    const { doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
+      query: '?slug=jee-main-2027&tab=classes',
+      signedIn: true
+    });
+    await wait(250);
+    check('the deep link opens Classes', !doc.querySelector('#panel-classes').hidden && doc.querySelector('#panel-overview').hidden);
+    check('the tab strip agrees', doc.querySelector('#tab-classes').getAttribute('aria-selected') === 'true');
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    console.log('\ncourse.html (?tab=notes, retired)');
     const { doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
       query: '?slug=jee-main-2027&tab=notes',
       signedIn: true
     });
     await wait(250);
-    check('the deep link opens Notes', !doc.querySelector('#panel-notes').hidden && doc.querySelector('#panel-overview').hidden);
-    check('the tab strip agrees', doc.querySelector('#tab-notes').getAttribute('aria-selected') === 'true');
+    check('a retired tab falls back to Overview', !doc.querySelector('#panel-overview').hidden);
     check('no console errors', errors.length === 0, errors[0]);
   }
 

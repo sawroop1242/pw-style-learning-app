@@ -125,10 +125,30 @@ class Course(TimeStampedModel):
 
 
 class CourseFolder(TimeStampedModel):
-    """Ordered subject folder within a course; parent of lessons and PDFs."""
+    """A chapter of a batch: the parent of its classes and its PDFs.
+
+    A batch is read the way a syllabus is read — subject, then chapter, then
+    what is inside it. The chapter is this row; the subject is the group it
+    files under. It is a plain name rather than a foreign key because a
+    provider types "Physics" once per chapter and there is nothing else to
+    store about it; a table would add a join to every batch page to hold one
+    string.
+
+    Blank means "not filed", and the batch page then lists the chapter under
+    the batch's own subject rather than inventing one.
+    """
 
     course = models.ForeignKey(
         Course, on_delete=models.CASCADE, related_name="folders"
+    )
+    subject = models.CharField(
+        max_length=80,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "The subject this section belongs to, e.g. Physics. Leave blank and "
+            "the section is listed under the batch's own subject on the batch page."
+        ),
     )
     title = models.CharField(max_length=180)
     description = models.TextField(blank=True)
@@ -193,18 +213,19 @@ class Lesson(TimeStampedModel):
     description = models.TextField(blank=True)
     video_url = models.URLField(blank=True)
     duration_minutes = models.PositiveIntegerField(default=0)
-    #: When the class airs, in the batch's timetable. Blank means "on demand":
-    #: the lesson exists to be watched, not to be attended at a time, so it is
-    #: never listed in the schedule. There is deliberately no ``is_live`` flag:
-    #: "live" is a window computed from this start and the duration, so a stale
-    #: flag can never make a finished class look live.
+    #: When the class airs, in the batch's timetable. Blank means "not on the
+    #: timetable": the lesson is a recording to watch whenever, so nobody has
+    #: to pick an hour for it. There is deliberately no ``is_live`` flag — the
+    #: video is an embed, never a stream, and a stored "live" would be a claim
+    #: the product could not keep.
     starts_at = models.DateTimeField(
         null=True,
         blank=True,
         db_index=True,
         help_text=(
-            "When the class airs. Leave blank for an on-demand lesson with no "
-            "fixed time. The live window is this start plus the duration."
+            "When the class airs. Leave blank for a lesson with no fixed time. "
+            "This is a publishing hour, not a live stream: the class is a "
+            "recording, and the timetable only says whether the hour has passed."
         ),
     )
     position = models.PositiveIntegerField(default=1)

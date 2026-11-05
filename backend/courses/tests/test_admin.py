@@ -618,7 +618,7 @@ class AdminStructureTests(AdminTestDataMixin, TestCase):
         response = self.client.get(reverse("admin:courses_course_change", args=[self.own_course.pk]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Sections (folders of classes)")
+        self.assertContains(response, "Sections (subject folders of classes and PDFs)")
         self.assertContains(response, "Mechanics")
 
     def test_a_class_added_inside_a_section_lands_in_the_sections_batch(self):

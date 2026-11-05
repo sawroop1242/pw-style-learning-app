@@ -333,11 +333,11 @@ class CourseFolderInline(StaffInlineMixin, admin.TabularInline):
 
     model = CourseFolder
     fk_name = "course"
-    fields = ("title", "position")
+    fields = ("subject", "title", "position")
     extra = 1
     ordering = ("position", "id")
     verbose_name = "section"
-    verbose_name_plural = "Sections (folders of classes)"
+    verbose_name_plural = "Sections (subject folders of classes and PDFs)"
     show_change_link = True
 
 
@@ -694,10 +694,10 @@ class CourseFacultyAdmin(OwnershipScopedAdmin):
 
 @admin.register(CourseFolder)
 class CourseFolderAdmin(OwnershipScopedAdmin):
-    ordering = ("course__title", "position", "title")
-    list_display = ("title", "course", "lesson_total", "position", "created_at")
-    list_filter = ("course__subject", "course")
-    search_fields = ("title", "course__title")
+    ordering = ("course__title", "subject", "position", "title")
+    list_display = ("title", "subject", "course", "lesson_total", "position", "created_at")
+    list_filter = ("course__subject", "subject", "course")
+    search_fields = ("title", "subject", "course__title")
     list_select_related = ("course",)
     autocomplete_fields = ("course",)
     inlines = [FolderLessonInline, FolderPdfInline]
@@ -709,7 +709,14 @@ class CourseFolderAdmin(OwnershipScopedAdmin):
                 "fields": ("course",),
                 "description": "Type a few letters — the list is searchable.",
             }),
-            ("The section", {"fields": ("title", "description", "position")}),
+            ("The section", {
+                "fields": ("subject", "title", "description", "position"),
+                "description": (
+                    "A section files under its subject on the batch page: "
+                    "Physics → Mechanics → its classes and PDFs. Leave the "
+                    "subject blank and it is listed under the batch's subject."
+                ),
+            }),
         )
         if obj is None:
             return base

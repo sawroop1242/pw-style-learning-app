@@ -107,8 +107,8 @@ worst possible way to express an order.
 | P1 | Real progress, never a placeholder | Frappe `lms_course_progress` | `ProgressSerializer` + `dashboard.js` | S |
 | P2 | Streak and study time from completed work | PW / Unacademy dashboards | dashboard figures | S |
 | P3 | Weak-topic analysis from marked answers | PW (G2 reviews), edX analytics | `/api/insights/topics/` + `dashboard.html` (shipped) | M |
-| P4 | Batch page as tabs: overview / classes / notes / papers / teachers | PW batch-overview URL | `course.html` (shipped) | M |
-| P5 | Schedule ("today's classes") | PW, Frappe `lms_batch_timetable` | `GET /api/schedule/` + `#schedule-list` / `#class-timetable` (shipped) | L |
+| P4 | Batch page as tabs: overview / classes / papers / teachers | PW batch-overview URL | `course.html` (shipped) | M |
+| P5 | Schedule ("today's classes"), with no live claim | PW, Frappe `lms_batch_timetable` | `GET /api/schedule/` + `#schedule-list` / `#class-timetable` (shipped) | L |
 | P6 | Drag-and-drop outline in the console | Frappe `CourseOutline.vue` | `/admin/courses/course/<id>/outline/` (shipped) | M |
 | P7 | Faceted catalogue filters | Unacademy, richie | `courses.html` + `/api/courses/facets/` (shipped) | M |
 | P8 | Goal-first entry ("what are you preparing for?") | Unacademy landing | home hero | S |
@@ -119,12 +119,12 @@ worst possible way to express an order.
 
 - **No downloads, no "download video".** The user removed it; PW's offline mode
   is not a licence to bring it back.
-- **No live-class infrastructure.** PW's live classes need a conferencing
-  provider, a teacher presence and a studio. We embed video and do not pretend
-  otherwise — no "join the stream" button exists. What we do have is a
-  **timetable**: a class states the hour it airs, and the "Live now" badge is
-  computed from that hour (P5). The badge is a claim about the clock, never a
-  flag somebody set and forgot.
+- **No live-class infrastructure, and no live claims either.** PW's live
+  classes need a conferencing provider, a teacher presence and a studio. We
+  embed video. So there is no "join the stream" button, no Live badge and no
+  `live` state in the API: a class is a recording, the timetable says the hour
+  it airs, and whether that hour has passed. A badge that cannot be earned is
+  a lie with a nice colour.
 - **No invented numbers anywhere.** If a panel cannot be computed from a row in
   the database, it renders an empty state — the rule that P1 exists to enforce.
 - **No brand, no logo, no teacher photo, no copied sentence.** Structure only.
@@ -245,12 +245,11 @@ the batch page had been missing (`lms_batch_timetable` is the Frappe doctype
 that makes it look easy; §1, above).
 
 - **A class got one field, not a status.** `Lesson.starts_at` (`0013`) is an
-  optional date-time; nothing else was added. `is_live` is deliberately absent:
-  a stored boolean is true until the next person remembers to clear it, so the
-  badge would outlive the class. The live window is computed —
-  `[starts_at, starts_at + duration_minutes)` — by `courses/schedule.py`, which
-  is the only place that decides. Half-open, so two back-to-back classes never
-  both claim to be live in the same second.
+  optional date-time; nothing else was added. `is_live` is deliberately absent,
+  and as of the next run so is every other claim of liveness: these classes are
+  recordings at an embed URL, and `courses/schedule.py` computes only whether
+  the hour has passed. A stored boolean would outlive its class; a computed
+  live window would still describe a broadcast that never happened.
 - **No air time means on demand, and on demand is not midnight.** A lesson with
   `starts_at IS NULL` is excluded from the timetable rather than parked at
   00:00. Putting an undated recording on a timetable would invent an hour.
@@ -263,11 +262,12 @@ that makes it look easy; §1, above).
   duration_minutes, status, recording, is_locked, can_open, course}`.
   **`video_url` is never in it** — the timetable says when a class airs, the
   player says what it plays.
-- **Three states, and today's group keeps its finished classes.** `live`,
-  `upcoming`, `ended`. 19:00 Physics that ended at 19:52 stays on today's row
-  all evening: a timetable that erases itself at half past is not a record of
-  what happened. `next` is the first class that has **not ended**, so it points
-  at the live class rather than past it.
+- **Two states, and today's group keeps its finished classes.** `upcoming`
+  before the hour, `ended` from it. 19:00 Physics that ran until 19:52 stays on
+  today's row all evening — a timetable that erases itself at half past is not
+  a record of what happened — and a row only offers **Watch** when the payload
+  says there is a recording behind it. `next` is the first class that has not
+  aired yet.
 - **Who sees what.** No `?course=`: the signed-in learner's own week, built from
   the batches they hold a grant for (plus ones they own) — a guest is asked to
   sign in rather than shown a stranger's timetable. `?course=<id|slug>` is the
@@ -287,13 +287,41 @@ that makes it look easy; §1, above).
   timetable") are different facts and get different copy. Neither is styled as
   an error.
 - **Where it lands.** `index.html` draws `#schedule-list` grouped by day, today
-  first and marked, with a summary line ("N classes today · N live now · N still
-  to come this week"). `course.html` gains a `#class-timetable` card above the
-  curriculum — the "Schedule" anchor PW puts on every batch page — and each
-  lesson row shows its air time when it has one.
+  first and marked, with a summary line ("N classes today · N still to come
+  this week"). `course.html` gains a `#class-timetable` card above the content
+  tree — the "Schedule" anchor PW puts on every batch page — and each class row
+  in the tree shows its air time when it has one.
 - **The old "today's classes" is retired.** `GET /api/lessons/?added=today` was
-  "what was uploaded today", which is not a timetable and cannot say "Live now".
-  It is gone from the home screen; the endpoint still exists for the player.
+  "what was uploaded today", which is not a timetable. It is gone from the home
+  screen; the endpoint still exists for the player.
+
+**The batch tree shipped** — the structure every batch page in the reference
+had and ours did not: **subject → section → its classes and its notes**, read
+the way a syllabus is read.
+
+- **`CourseFolder.subject`** (`0014`) is the third level. A plain name rather
+  than a table: a provider types "Physics" once per section, and there is
+  nothing else to store about it, so a foreign key would add a join to every
+  batch page to hold one string. Blank means *not filed*, and the page then
+  lists the section under the batch's own subject — it never invents a subject
+  the faculty did not choose, and the API returns the blank verbatim.
+- **Notes stopped being a place and became files.** They were a fifth tab
+  listing every PDF; now each one sits in the section it belongs to, next to
+  the classes, which is where a learner looks for "the DPP for this chapter".
+  The tab is gone rather than duplicated — two answers to one question is how a
+  product starts disagreeing with itself.
+- **A file manager's habits, without a file manager's weight.** Native
+  `<details>`/`<summary>` disclosure (keyboard, find-in-page, works if the
+  module never loads), a search box that filters rows while keeping the open
+  chapters open, counts on every folder line, and a row that says what it is —
+  a class with its length, a note labelled PDF. A locked note is listed and
+  badged, never linked.
+- **The page costs five queries, not five per chapter.** The detail endpoint's
+  counts read the viewset's annotation instead of re-counting, and classes and
+  notes are prefetched with the batch they will ask about. Twelve sections cost
+  the same as two, pinned by `test_the_page_does_not_cost_a_query_per_chapter`;
+  `_published()` exists because `.filter()` on a prefetched relation silently
+  throws the prefetch away.
 
 The next milestone is a decision, not a queue: P9 (console command palette) is
 the cheapest thing left, P8 (goal-first home) is the most visible, and P10
