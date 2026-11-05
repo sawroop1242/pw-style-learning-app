@@ -15,6 +15,7 @@ const PAGES = [
   ['index.html', ['core', 'content', 'ui', 'home']],
   ['courses.html', ['core', 'content', 'ui', 'courses']],
   ['course.html', ['core', 'content', 'ui', 'course'], '?slug=jee-main-2027'],
+  ['subject.html', ['core', 'content', 'ui', 'subject'], '?course=jee-main-2027&subject=Physics'],
   ['tests.html', ['core', 'content', 'ui', 'tests']],
   ['community.html', ['core', 'content', 'ui', 'community']],
   ['profile.html', ['core', 'content', 'ui', 'profile']],
@@ -53,7 +54,7 @@ async function inspect(page, mods, query, opts, label) {
   if (errors.length) problems.push(errors[0].slice(0, 200));
   if (opts.expectData) {
     const rows = doc.querySelectorAll(
-      '.batch-card, .test-card, .class-row, .lesson-item, .dl-row, .post-card, .upcoming-item, .note-preview, .menu-row'
+      '.batch-card, .test-card, .class-row, .lesson-item, .dl-row, .post-card, .upcoming-item, .note-preview, .menu-row, .subject-card, .lecture-card'
     ).length;
     if (!rows) problems.push('no rows rendered');
   } else if (!OUTAGE_COPY.test(main) && main.length > 0) {

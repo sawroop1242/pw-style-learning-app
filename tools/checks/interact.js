@@ -304,7 +304,7 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('no console errors', errors.length === 0, errors[0]);
   }
 
-  /* ------------------- batch page: five tabs, one URL ------------------- */
+  /* -------------- batch page: subjects, timetable, tabs ---------------- */
   {
     console.log('\ncourse.html (tabs)');
     const { window, doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
@@ -316,145 +316,97 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     const tabs = [...doc.querySelectorAll('#batch-tabs .tab')];
     check('four tabs on a batch page', tabs.length === 4, tabs.map((t) => t.id).join('|'));
     check(
-      'the tabs read Overview, Classes, Papers, Teachers',
-      tabs.map((t) => t.textContent.replace(/\d+/g, '').trim()).join('|') === 'Overview|Classes|Papers|Teachers',
+      'the tabs read Subjects, Overview, Papers, Teachers',
+      tabs.map((t) => t.textContent.replace(/\d+/g, '').trim()).join('|') === 'Subjects|Overview|Papers|Teachers',
       tabs.map((t) => t.textContent.trim()).join('|')
     );
-    check('Overview is open first', doc.querySelector('#tab-overview').getAttribute('aria-selected') === 'true');
-    check('the other three panels start hidden', [...doc.querySelectorAll('.tab-panel[hidden]')].length === 3);
+    check('Subjects is open first', doc.querySelector('#tab-subjects').getAttribute('aria-selected') === 'true');
+    check('the other three panels start hidden', doc.querySelectorAll('.tab-panel[hidden]').length === 3);
     check('one tab in the tab order, not four', tabs.filter((t) => t.getAttribute('tabindex') === '0').length === 1);
 
-    // Nobody wants "Notes 0": a badge only appears when it counts something.
+    // Nobody wants "Subjects 0": a badge only appears when it counts something.
     const counts = Object.fromEntries(
       [...doc.querySelectorAll('.tab-count')].map((n) => [n.dataset.count, n.hidden ? null : n.textContent.trim()])
     );
-    // The Classes tab holds the tree, which nests classes and notes together.
-    check('classes tab counts classes and notes', counts.classes === '7', String(counts.classes));
-    check('there is no separate notes tab any more', !doc.querySelector('#tab-notes'));
+    check('the subjects tab counts the subject cards', counts.subjects === '2', String(counts.subjects));
     check('papers tab counts the papers', counts.papers === '1', String(counts.papers));
     check('teachers tab counts the faculty', counts.teachers === '2', String(counts.teachers));
 
-    click(window, doc.querySelector('#tab-classes'));
-    await wait(150);
-    check('clicking Classes opens the content panel', !doc.querySelector('#panel-classes').hidden);
-    check('and closes the overview panel', doc.querySelector('#panel-overview').hidden);
-    check('the URL remembers the tab', /[?&]tab=classes\b/.test(window.location.search), window.location.search);
-
-    // The tree: subject → chapter → classes and notes.
-    const subjects = [...doc.querySelectorAll('#content-tree .tree-subject')];
-    const subjectNames = subjects.map((s) => s.querySelector('.tree-subject-name').textContent.trim());
-    check('the batch is grouped into subjects', subjects.length === 2, subjectNames.join('|'));
-    check('the subjects are the ones the chapters are filed under', subjectNames.join('|') === 'Physics|Chemistry', subjectNames.join('|'));
-    check('every chapter sits under a subject', doc.querySelectorAll('#content-tree .tree-chapter').length === 3);
+    // The grid: one card per subject, carrying what is behind the click.
+    const cards = [...doc.querySelectorAll('#subject-grid .subject-card')];
+    check('the batch opens on one card per subject', cards.length === 2, cards.map((c) => c.dataset.subject).join('|'));
     check(
-      'a chapter carries its own class count',
-      /2 classes · 1 note/.test(doc.querySelector('#content-tree .tree-chapter .tree-meta')?.textContent || ''),
-      doc.querySelector('#content-tree .tree-chapter .tree-meta')?.textContent
-    );
-
-    const physics = subjects[0];
-    const chemistry = subjects[1];
-    check('Physics has two chapters', physics.querySelectorAll('.tree-chapter').length === 2, String(physics.querySelectorAll('.tree-chapter').length));
-    check('Chemistry has one chapter', chemistry.querySelectorAll('.tree-chapter').length === 1);
-
-    // A class and a note live in the same chapter list, in that order.
-    const mechanicsRows = [...physics.querySelector('.tree-chapter .tree-files').querySelectorAll('.tree-file')];
-    check('the chapter lists its classes and its note', mechanicsRows.length === 3, mechanicsRows.map((r) => r.dataset.kind).join('|'));
-    check('classes come before notes', mechanicsRows.map((r) => r.dataset.kind).join('|') === 'class|class|note', mechanicsRows.map((r) => r.textContent.trim().slice(0, 24)).join(' / '));
-    check(
-      'a class row opens the player and shows its length',
-      /player\.html\?lesson=11/.test(mechanicsRows[0].getAttribute('href') || '') && /42 min/.test(mechanicsRows[0].textContent),
-      mechanicsRows[0].getAttribute('href')
+      'the cards are the subjects the chapters are filed under',
+      cards.map((c) => c.dataset.subject).join('|') === 'Physics|Chemistry',
+      cards.map((c) => c.dataset.subject).join('|')
     );
     check(
-      'a note row opens the reader',
-      /pdf\.html\?pdf=1/.test(mechanicsRows[2].getAttribute('href') || ''),
-      mechanicsRows[2].getAttribute('href')
+      'a card counts its chapters, classes and notes',
+      cards[0].querySelector('.subject-meta').textContent.trim() === '2 chapters · 3 classes · 2 notes',
+      cards[0].querySelector('.subject-meta').textContent
     );
-
-    // A locked note is badged, not linked: the row must not offer a reader the
-    // server never gave a file for.
-    const locked = chemistry.querySelector('.tree-file.is-locked');
-    check('a locked note is badged', Boolean(locked) && /Locked/.test(locked.textContent));
-    check('a locked note is not a link', locked.tagName !== 'A');
-
-    // Search narrows the tree without unopening it.
-    const search = doc.querySelector('#content-search');
-    search.value = 'mole';
-    search.dispatchEvent(new window.Event('input', { bubbles: true }));
-    await wait(60);
-    check('a search hides the subjects that do not match', physics.hidden === true && chemistry.hidden === false);
-    const survivors = [...chemistry.querySelectorAll('.tree-file')].filter((row) => !row.hidden);
     check(
-      'only the matching files survive inside a chapter',
-      survivors.length === 2 && survivors.every((row) => /mole/i.test(row.textContent)),
-      `${survivors.length} visible`
+      'a card links to that subject',
+      cards[0].getAttribute('href') === 'subject.html?course=jee-main-2027&subject=Physics',
+      cards[0].getAttribute('href')
     );
-    check('the no-match message stays out of the way', doc.querySelector('#tree-no-match').hidden);
-
-    // A file manager lets you open the whole thing at once.
-    const collapse = doc.querySelector('[data-tree="collapse"]');
-    collapse.click();
-    await wait(30);
     check(
-      'collapse all shuts every folder',
-      doc.querySelectorAll('#content-tree details[open]').length === 0,
-      `${doc.querySelectorAll('#content-tree details[open]').length} open`
+      'the grid states the batch total',
+      doc.querySelector('#panel-subjects .subject-total').textContent.trim() === '2 subjects · 4 classes · 3 notes',
+      doc.querySelector('#panel-subjects .subject-total').textContent
     );
-    doc.querySelector('[data-tree="expand"]').click();
-    await wait(30);
     check(
-      'expand all opens every folder',
-      doc.querySelectorAll('#content-tree details').length === doc.querySelectorAll('#content-tree details[open]').length,
-      `${doc.querySelectorAll('#content-tree details[open]').length}/${doc.querySelectorAll('#content-tree details').length} open`
+      'no file is listed on this page any more',
+      doc.querySelectorAll('#panel-subjects .tree-file, #panel-subjects .lecture-card').length === 0
     );
 
-    search.value = 'physics';
-    search.dispatchEvent(new window.Event('input', { bubbles: true }));
-    await wait(60);
+    // P5: the timetable sits above the tabs, before anyone enrols.
+    const strip = doc.querySelector('#class-timetable');
+    const stripRows = [...strip.querySelectorAll('.class-row')];
+    check('the batch timetable lists its classes', stripRows.length > 0, String(stripRows.length));
     check(
-      'searching a subject name keeps that subject and its chapters',
-      physics.hidden === false && chemistry.hidden === true && [...physics.querySelectorAll('.tree-file')].every((row) => !row.hidden),
-      `physics ${physics.hidden ? 'hidden' : 'shown'} / chemistry ${chemistry.hidden ? 'hidden' : 'shown'}`
+      'the timetable is above the tabs',
+      Boolean(strip.compareDocumentPosition(doc.querySelector('#batch-tabs')) & window.Node.DOCUMENT_POSITION_FOLLOWING)
+    );
+    check('no row in the strip claims to be live', strip.querySelectorAll('.badge-live').length === 0);
+    check(
+      'the strip links to the whole week',
+      strip.querySelector('a.btn')?.getAttribute('href') === 'index.html#schedule',
+      strip.querySelector('a.btn')?.getAttribute('href')
+    );
+    check(
+      'a strip row carries its air time',
+      /\d{1,2}:\d{2}/.test(stripRows[0].querySelector('.class-time')?.textContent || ''),
+      stripRows[0].querySelector('.class-time')?.textContent
     );
 
-    search.value = 'zzzz';
-    search.dispatchEvent(new window.Event('input', { bubbles: true }));
-    await wait(60);
-    check('a search that matches nothing says so', !doc.querySelector('#tree-no-match').hidden && subjects.every((s) => s.hidden));
-
-    search.value = '';
-    search.dispatchEvent(new window.Event('input', { bubbles: true }));
-    await wait(60);
-    check(
-      'clearing the search brings the whole tree back',
-      subjects.every((s) => !s.hidden) && doc.querySelector('#tree-no-match').hidden
-    );
-    check('and every file with it', [...doc.querySelectorAll('.tree-file')].every((row) => !row.hidden));
-
-    // P5: the batch page shows when its classes air, before anyone enrols.
-    const strip = [...doc.querySelectorAll('#class-timetable .class-row')];
-    check('the batch timetable lists its classes', strip.length > 0, String(strip.length));
-    check('the strip does not repeat the batch name', !/JEE Main 2027 Complete Batch/.test(doc.querySelector('#class-timetable').textContent));
-    check('no row in the strip claims to be live', doc.querySelectorAll('#class-timetable .badge-live').length === 0);
-    check(
-      'a class row carries its air time',
-      /\d{1,2}:\d{2}/.test(doc.querySelector('.tree-file[data-kind="class"] .tree-file-name small')?.textContent || ''),
-      doc.querySelector('.tree-file[data-kind="class"] .tree-file-name small')?.textContent
-    );
+    click(window, doc.querySelector('#tab-overview'));
+    await wait(120);
+    check('clicking Overview opens it', !doc.querySelector('#panel-overview').hidden && doc.querySelector('#panel-subjects').hidden);
+    check('the URL remembers the tab', /[?&]tab=overview\b/.test(window.location.search), window.location.search);
+    check('the overview links back into the syllabus', Boolean(doc.querySelector('#panel-overview')));
 
     // Arrow keys walk the strip; a tab that is not selected is not focusable.
-    const overview = doc.querySelector('#tab-overview');
-    overview.focus();
-    key(window, overview, 'ArrowRight');
+    const subjectsTab = doc.querySelector('#tab-subjects');
+    subjectsTab.focus();
+    key(window, subjectsTab, 'ArrowRight');
     await wait(80);
-    check('ArrowRight moves to Classes', doc.activeElement === doc.querySelector('#tab-classes') && doc.querySelector('#tab-classes').getAttribute('aria-selected') === 'true', doc.activeElement?.id);
+    check(
+      'ArrowRight moves to Overview',
+      doc.activeElement === doc.querySelector('#tab-overview') &&
+        doc.querySelector('#tab-overview').getAttribute('aria-selected') === 'true',
+      doc.activeElement?.id
+    );
     key(window, doc.activeElement, 'End');
     await wait(80);
-    check('End jumps to Teachers', doc.querySelector('#tab-teachers').getAttribute('aria-selected') === 'true' && !doc.querySelector('#panel-teachers').hidden);
+    check(
+      'End jumps to Teachers',
+      doc.querySelector('#tab-teachers').getAttribute('aria-selected') === 'true' &&
+        !doc.querySelector('#panel-teachers').hidden
+    );
     key(window, doc.activeElement, 'ArrowRight');
     await wait(80);
-    check('ArrowRight wraps round to Overview', doc.querySelector('#tab-overview').getAttribute('aria-selected') === 'true');
+    check('ArrowRight wraps round to Subjects', doc.querySelector('#tab-subjects').getAttribute('aria-selected') === 'true');
     key(window, doc.activeElement, 'Home');
     key(window, doc.activeElement, 'ArrowLeft');
     await wait(80);
@@ -464,25 +416,25 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
 
   /* ------------------- batch page: a deep link to one tab ---------------- */
   {
-    console.log('\ncourse.html (?tab=classes deep link)');
+    console.log('\ncourse.html (?tab=papers deep link)');
+    const { doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
+      query: '?slug=jee-main-2027&tab=papers',
+      signedIn: true
+    });
+    await wait(250);
+    check('the deep link opens Papers', !doc.querySelector('#panel-papers').hidden && doc.querySelector('#panel-subjects').hidden);
+    check('the tab strip agrees', doc.querySelector('#tab-papers').getAttribute('aria-selected') === 'true');
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    console.log('\ncourse.html (?tab=classes, retired)');
     const { doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
       query: '?slug=jee-main-2027&tab=classes',
       signedIn: true
     });
     await wait(250);
-    check('the deep link opens Classes', !doc.querySelector('#panel-classes').hidden && doc.querySelector('#panel-overview').hidden);
-    check('the tab strip agrees', doc.querySelector('#tab-classes').getAttribute('aria-selected') === 'true');
-    check('no console errors', errors.length === 0, errors[0]);
-  }
-
-  {
-    console.log('\ncourse.html (?tab=notes, retired)');
-    const { doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
-      query: '?slug=jee-main-2027&tab=notes',
-      signedIn: true
-    });
-    await wait(250);
-    check('a retired tab falls back to Overview', !doc.querySelector('#panel-overview').hidden);
+    check('a retired tab falls back to Subjects', !doc.querySelector('#panel-subjects').hidden);
     check('no console errors', errors.length === 0, errors[0]);
   }
 
@@ -493,26 +445,191 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
       signedIn: true
     });
     await wait(250);
-    check('an unknown tab falls back to Overview', !doc.querySelector('#panel-overview').hidden && doc.querySelector('#tab-overview').getAttribute('aria-selected') === 'true');
+    check(
+      'an unknown tab falls back to Subjects',
+      !doc.querySelector('#panel-subjects').hidden && doc.querySelector('#tab-subjects').getAttribute('aria-selected') === 'true'
+    );
     check('and the bad value is dropped from the URL', !/tab=nonsense/.test(window.location.search), window.location.search);
     check('no console errors', errors.length === 0, errors[0]);
   }
 
-  /* --------------- batch page: “Start learning” lands on Classes --------- */
+  /* ------------- batch page: “Start learning” opens the first subject ----- */
   {
-    console.log('\ncourse.html (“Start learning” opens Classes)');
-    const { window, doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
+    console.log('\ncourse.html (“Start learning”)');
+    const { doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
       query: '?slug=neet-biology-foundation',
       signedIn: true
     });
     await wait(250);
-    const start = doc.querySelector('#purchase-slot [data-open-tab]');
+    const start = doc.querySelector('#purchase-slot a.btn-primary');
     check('an open batch offers “Start learning”', Boolean(start), start?.textContent?.trim());
-    check('it points at the classes panel', start?.dataset.openTab === 'classes' && start?.getAttribute('href') === '#panel-classes');
-    click(window, start);
-    await wait(150);
-    check('the click opens Classes', !doc.querySelector('#panel-classes').hidden && doc.querySelector('#tab-classes').getAttribute('aria-selected') === 'true');
-    check('and the URL follows', /[?&]tab=classes\b/.test(window.location.search), window.location.search);
+    check(
+      'it points at the first subject, not at a tab',
+      start?.getAttribute('href') === 'subject.html?course=neet-biology-foundation&subject=Physics',
+      start?.getAttribute('href')
+    );
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  /* --------------- subject page: chapters, classes, notes --------------- */
+  {
+    console.log('\nsubject.html (Physics)');
+    const { window, doc, errors } = await open('subject.html', ['core', 'content', 'ui', 'subject'], {
+      query: '?course=jee-main-2027&subject=Physics',
+      signedIn: true
+    });
+    await wait(250);
+
+    check('the headline is the subject', doc.querySelector('#subject-headline').textContent.trim() === 'Physics', doc.querySelector('#subject-headline').textContent);
+    check(
+      'the breadcrumb names the batch and links back to it',
+      doc.querySelector('#crumb-batch').textContent.includes('JEE Main 2027') &&
+        doc.querySelector('#crumb-batch').getAttribute('href') === 'course.html?slug=jee-main-2027',
+      doc.querySelector('#crumb-batch').getAttribute('href')
+    );
+    check(
+      'the lead line carries the same counts the card did',
+      /2 chapters · 3 classes · 2 notes/.test(doc.querySelector('#subject-lead').textContent),
+      doc.querySelector('#subject-lead').textContent
+    );
+    check(
+      'and names the teacher the batch lists for this subject',
+      /Taught by Dr\. Meera Kulkarni/.test(doc.querySelector('#subject-lead').textContent),
+      doc.querySelector('#subject-lead').textContent
+    );
+    check(
+      'two tabs: Lectures and Notes',
+      [...doc.querySelectorAll('#subject-tabs .tab')].map((t) => t.dataset.tab).join('|') === 'lectures|notes'
+    );
+    check('Lectures is open first', !doc.querySelector('#panel-lectures').hidden && doc.querySelector('#panel-notes').hidden);
+    const tabCounts = Object.fromEntries(
+      [...doc.querySelectorAll('.tab-count')].map((n) => [n.dataset.count, n.hidden ? null : n.textContent.trim()])
+    );
+    check('the lectures tab counts the classes', tabCounts.lectures === '3', String(tabCounts.lectures));
+    check('the notes tab counts the notes', tabCounts.notes === '2', String(tabCounts.notes));
+
+    // Only the chapters filed under this subject are here.
+    const chapters = [...doc.querySelectorAll('#panel-lectures .tree-chapter')];
+    check('the subject holds only its own chapters', chapters.length === 2, chapters.map((c) => c.querySelector('.tree-chapter-name').textContent).join('|'));
+    check(
+      'and nothing from another subject',
+      !/Physical chemistry|Mole concept/.test(doc.querySelector('#panel-lectures').textContent)
+    );
+    check(
+      'a chapter states how many classes it holds',
+      chapters[0].querySelector('.tree-meta').textContent.trim() === '2 classes',
+      chapters[0].querySelector('.tree-meta').textContent
+    );
+
+    const cards = [...doc.querySelectorAll('#panel-lectures .lecture-card')];
+    check('every class is a card', cards.length === 3, String(cards.length));
+    check('a card opens the player', cards[0].getAttribute('href') === 'player.html?lesson=11', cards[0].getAttribute('href'));
+    check('a card carries the length of the recording', /42 min/.test(cards[0].textContent), cards[0].textContent.trim().slice(0, 60));
+    check(
+      'a card carries the hour it airs',
+      /\d{1,2}:\d{2}/.test(cards[0].querySelector('.lecture-meta')?.textContent || ''),
+      cards[0].querySelector('.lecture-meta')?.textContent
+    );
+    check(
+      'a class with no air time says nothing rather than inventing one',
+      cards[1].querySelector('.lecture-meta') === null || !/\d{1,2}:\d{2}/.test(cards[1].querySelector('.lecture-meta').textContent),
+      cards[1].querySelector('.lecture-meta')?.textContent || '(no meta)'
+    );
+
+    // The Notes tab holds the same chapters, one row per PDF.
+    click(window, doc.querySelector('#tab-notes'));
+    await wait(120);
+    check('the Notes tab opens its own panel', !doc.querySelector('#panel-notes').hidden && doc.querySelector('#panel-lectures').hidden);
+    check('and the URL remembers it', /[?&]tab=notes\b/.test(window.location.search), window.location.search);
+    const noteRows = [...doc.querySelectorAll('#panel-notes .tree-file')];
+    check('every note in the subject is listed', noteRows.length === 2, String(noteRows.length));
+    check('a note opens the reader', noteRows[0].getAttribute('href') === 'pdf.html?pdf=1', noteRows[0].getAttribute('href'));
+    check('a note says what it is', /PDF/.test(noteRows[0].textContent));
+
+    // One search box, applied to whichever panel is showing.
+    const search = doc.querySelector('#subject-search');
+    search.value = 'formula';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await wait(60);
+    const visibleNotes = noteRows.filter((row) => !row.hidden);
+    check(
+      'the search narrows the panel that is showing',
+      visibleNotes.length === 1 && /formula/i.test(visibleNotes[0].textContent),
+      `${visibleNotes.length} visible`
+    );
+    check('the no-match message stays out of the way', doc.querySelector('#subject-no-match').hidden);
+
+    click(window, doc.querySelector('#tab-lectures'));
+    await wait(120);
+    check('switching tab carries the search with it', cards.filter((card) => !card.hidden).length === 0);
+    check('and says so when nothing matches', !doc.querySelector('#subject-no-match').hidden);
+
+    search.value = 'vectors';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await wait(60);
+    check(
+      'searching a class keeps its chapter and hides the other',
+      chapters[0].hidden === true && chapters[1].hidden === false,
+      `mechanics ${chapters[0].hidden ? 'hidden' : 'shown'} / vectors ${chapters[1].hidden ? 'hidden' : 'shown'}`
+    );
+
+    search.value = '';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await wait(60);
+    check(
+      'clearing the search brings every chapter back',
+      chapters.every((chapter) => !chapter.hidden) && cards.every((card) => !card.hidden) && doc.querySelector('#subject-no-match').hidden
+    );
+
+    // A subject can run to a dozen chapters; both ends are one click away.
+    doc.querySelector('[data-tree="collapse"]').click();
+    await wait(30);
+    check('collapse all shuts every chapter', doc.querySelectorAll('#panel-lectures details[open]').length === 0);
+    doc.querySelector('[data-tree="expand"]').click();
+    await wait(30);
+    check(
+      'expand all opens every chapter',
+      doc.querySelectorAll('#panel-lectures details').length === doc.querySelectorAll('#panel-lectures details[open]').length
+    );
+
+    check(
+      'the aside names the subject and links back to the batch',
+      /Physics/.test(doc.querySelector('#subject-aside').textContent) &&
+        doc.querySelector('#subject-aside a.btn').getAttribute('href') === 'course.html?slug=jee-main-2027'
+    );
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    console.log('\nsubject.html (Chemistry, a locked note)');
+    const { doc, errors } = await open('subject.html', ['core', 'content', 'ui', 'subject'], {
+      query: '?course=jee-main-2027&subject=Chemistry&tab=notes',
+      signedIn: true
+    });
+    await wait(250);
+    const rows = [...doc.querySelectorAll('#panel-notes .tree-file')];
+    check('the deep link opens the Notes tab', !doc.querySelector('#panel-notes').hidden);
+    check('the subject has exactly its one note', rows.length === 1, String(rows.length));
+    check(
+      'a subject with no teacher listed claims none',
+      !/Taught by/.test(doc.querySelector('#subject-lead').textContent),
+      doc.querySelector('#subject-lead').textContent
+    );
+    check('a locked note is badged', /Locked/.test(rows[0].textContent));
+    check('a locked note is not a link', rows[0].tagName !== 'A');
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    console.log('\nsubject.html (a subject the batch does not carry)');
+    const { doc, errors } = await open('subject.html', ['core', 'content', 'ui', 'subject'], {
+      query: '?course=jee-main-2027&subject=Astrology',
+      signedIn: true
+    });
+    await wait(250);
+    check('the page says the subject is not in the batch', /Subject not found/.test(doc.querySelector('#subject-headline').textContent), doc.querySelector('#subject-headline').textContent);
+    check('and offers the way back', Boolean(doc.querySelector('#subject-aside a.btn')));
+    check('no file is invented for it', doc.querySelectorAll('.lecture-card, .tree-file').length === 0);
     check('no console errors', errors.length === 0, errors[0]);
   }
 
