@@ -4,7 +4,7 @@
  */
 
 import {
-  $, $$, esc, money, compact, shortDate, countdown,
+  $, $$, esc, money, compact, shortDate, countdown, apiQuery,
   initials, isSignedIn, storage, getJson, request, API_BASE
 } from './core.js';
 
@@ -553,6 +553,22 @@ export function renderTabbar(active = '') {
 /* Cards                                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * A cover that failed to load leaves its hue behind.
+ *
+ * Every cover image is opted in with `data-hide-on-error`, so a broken or
+ * expired URL falls back to the subject's colour band instead of a torn icon.
+ * One listener, capture phase: `error` on an image does not bubble.
+ */
+document.addEventListener(
+  'error',
+  (event) => {
+    const image = event.target;
+    if (image && image.tagName === 'IMG' && image.hasAttribute('data-hide-on-error')) image.remove();
+  },
+  true
+);
+
 const THUMB_TONES = {
   Physics: 'thumb-physics',
   Chemistry: 'thumb-chemistry',
@@ -574,7 +590,16 @@ const BADGE_LABEL = {
   free: 'Free'
 };
 
-export function batchCard(course) {
+/**
+ * One catalogue card.
+ *
+ * ``href`` is where the card leads. The catalogue points it at the batch's
+ * public page; **My batches** points it at the classroom (`learn.html`),
+ * because a card in "my batches" is a door into a batch the learner already
+ * owns, not a sales page for it.
+ */
+export function batchCard(course, { href = '' } = {}) {
+  const link = href || `course.html?slug=${encodeURIComponent(course.slug)}`;
   // Only server-supplied facts: subject, batch size, price and access. No
   // invented rating, learner count, discount or language.
   const badge = course.free
@@ -592,7 +617,7 @@ export function batchCard(course) {
 
   return `
     <article class="batch-card">
-      <a class="batch-cover ${thumbTone(course.subject)}" href="course.html?slug=${encodeURIComponent(course.slug)}" aria-label="${esc(course.title)}">
+      <a class="batch-cover ${thumbTone(course.subject)}" href="${link}" aria-label="${esc(course.title)}">
         ${art}
         ${badge}
         <span class="cover-tag">${esc(course.subject || 'Batch')}</span>
@@ -602,7 +627,7 @@ export function batchCard(course) {
       </a>
       <div class="batch-body">
         <h3 class="batch-title">
-          <a href="course.html?slug=${encodeURIComponent(course.slug)}">${esc(course.title)}</a>
+          <a href="${link}">${esc(course.title)}</a>
         </h3>
         <p class="batch-meta">
           <span>${esc(course.subject || 'General')}</span>
@@ -613,12 +638,207 @@ export function batchCard(course) {
           <span>${course.lessons} ${course.lessons === 1 ? 'lesson' : 'lessons'} · ${course.tests} ${course.tests === 1 ? 'test' : 'tests'}</span>
         </p>
         <div class="batch-foot">
-          <a class="btn btn-primary btn-sm batch-cta" href="course.html?slug=${encodeURIComponent(course.slug)}">
+          <a class="btn btn-primary btn-sm batch-cta" href="${link}">
             ${course.hasAccess ? 'Open batch' : 'View details'} ${icon('arrow-right')}
           </a>
         </div>
       </div>
     </article>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* The batch, cut one level down                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Chapters grouped by the subject they are filed under.
+ *
+ * `CourseFolder.subject` is what the provider typed; when it is blank the
+ * chapter files under the batch's own subject rather than a heading the
+ * faculty never chose. A chapter that arrives with a subject the batch does
+ * not carry still gets a group of its own — the screen follows the data.
+ */
+export function groupBySubject(folders = [], fallbackSubject = '') {
+  const groups = new Map();
+  folders.forEach((folder) => {
+    const subject = (folder.subject || '').trim() || fallbackSubject || 'General';
+    if (!groups.has(subject)) groups.set(subject, []);
+    groups.get(subject).push(folder);
+  });
+  return [...groups.entries()].map(([subject, chapters]) => ({
+    subject,
+    chapters,
+    classes: chapters.reduce((n, chapter) => n + (chapter.lessons || []).length, 0),
+    notes: chapters.reduce((n, chapter) => n + (chapter.pdf_resources || []).length, 0)
+  }));
+}
+
+/**
+ * A guess at the icon that belongs to a subject name — decoration only.
+ *
+ * Matched on words a provider is likely to type; a subject nobody has seen
+ * before gets the generic icon rather than the wrong one. Nothing here says
+ * anything about the data, which is why the icon is always `aria-hidden`.
+ */
+const SUBJECT_ICONS = [
+  [/physic|mechanic|optic|electric|magnet|kinemat|atomic|astro/i, 'atom'],
+  [/chem|organic|inorganic|mole/i, 'flask'],
+  [/maths?|mathemat|quant|aptitude|algebra|calculus|geometry|trigo/i, 'chart'],
+  [/reason|logic|puzzle|mental ability/i, 'target'],
+  [/biol|botany|zoolog|science/i, 'heart'],
+  [/english|hindi|language|grammar|comprehension|literature/i, 'book'],
+  [/computer|program|coding|python|java/i, 'cpu'],
+  [/notice|announce|current affair|gk|general knowledge/i, 'megaphone']
+];
+
+export function subjectIcon(name = '') {
+  for (const [pattern, iconName] of SUBJECT_ICONS) {
+    if (pattern.test(name)) return iconName;
+  }
+  return 'layers';
+}
+
+/** The classroom's URLs. Both carry names the provider typed, never ids. */
+export const subjectHref = (slug, subject) => `subject.html${apiQuery({ course: slug, subject })}`;
+export const learnHref = (slug) => `learn.html${apiQuery({ course: slug })}`;
+
+/**
+ * One notice from the feed.
+ *
+ * Written by faculty, read-only: a title, the body and who signed it. `Pinned`
+ * is the only decoration, and only when the server says so. The batch link is
+ * optional because on a batch's own feed every post belongs to the page you are
+ * already on.
+ */
+export function postCard(post, { showCourse = true } = {}) {
+  const mark = (post.author_name || 'Faculty')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join('');
+  return `
+    <article class="post-card">
+      <div class="post-head">
+        <span class="post-avatar">${esc(mark || 'SS')}</span>
+        <span class="post-who">
+          <strong>${esc(post.author_name || 'Faculty')}</strong>
+          <small>${esc(post.course_title || 'All batches')} · ${esc(shortDate(post.created_at))}</small>
+        </span>
+        ${post.pinned ? '<span class="badge badge-live">Pinned</span>' : ''}
+      </div>
+      <h3>${esc(post.title)}</h3>
+      <p>${esc(post.body || '')}</p>
+      ${
+        showCourse && post.course_slug
+          ? `<div class="post-actions"><a class="link" href="course.html?slug=${encodeURIComponent(post.course_slug)}">Open the batch ${icon('arrow-right')}</a></div>`
+          : ''
+      }
+    </article>`;
+}
+
+/** "2 chapters · 5 classes · 1 note" — what a subject card promises inside. */
+export function subjectCounts(group) {
+  const parts = [
+    `${group.chapters.length} ${group.chapters.length === 1 ? 'chapter' : 'chapters'}`,
+    `${group.classes} ${group.classes === 1 ? 'class' : 'classes'}`
+  ];
+  if (group.notes) parts.push(`${group.notes} ${group.notes === 1 ? 'note' : 'notes'}`);
+  return parts.join(' · ');
+}
+
+/**
+ * The batch's subjects, as a grid of cards.
+ *
+ * This is the level a learner opens a batch on, and the reason is plain: a
+ * batch is chosen for its subject, then read chapter by chapter. The counts on
+ * each card are the chapters and classes behind the click, so nobody has to
+ * open a folder to find out whether it is empty.
+ *
+ * ``hrefFor`` decides where a card leads: the classroom points at the subject
+ * page for that batch, and the public batch page does the same. The renderer
+ * lives here so both pages print identical cards from identical data.
+ */
+export function subjectGrid(groups = [], hrefFor) {
+  const classes = groups.reduce((n, group) => n + group.classes, 0);
+  const notes = groups.reduce((n, group) => n + group.notes, 0);
+  const link = hrefFor || (() => '#');
+  return `
+    <p class="subject-total">${groups.length} ${groups.length === 1 ? 'subject' : 'subjects'} · ${classes} ${classes === 1 ? 'class' : 'classes'} · ${notes} ${notes === 1 ? 'note' : 'notes'}</p>
+    <div class="subject-grid" id="subject-grid">
+      ${groups
+        .map(
+          (group) => `
+        <a class="subject-card" href="${esc(link(group))}" data-subject="${esc(group.subject)}">
+          <span class="subject-icon ${thumbTone(group.subject)}" aria-hidden="true">${icon(subjectIcon(group.subject))}</span>
+          <span class="subject-body">
+            <span class="subject-name">${esc(group.subject)}</span>
+            <span class="subject-meta">${esc(subjectCounts(group))}</span>
+          </span>
+          ${icon('chevron-right')}
+        </a>`
+        )
+        .join('')}
+    </div>`;
+}
+
+/**
+ * The batch's timetable: what airs next, and how much of it this strip leaves
+ * out. Shared by the public batch page and the classroom, so the two can never
+ * print a different week.
+ *
+ * `weeklyLink` adds the "Weekly schedule" button the classroom has; the public
+ * page does not offer it, because a visitor has no timetable of their own yet.
+ */
+export async function renderScheduleStrip(host, { slug, days = 14, weeklyLink = false } = {}) {
+  if (!host || !slug) return;
+
+  let payload;
+  try {
+    payload = await getJson(`/schedule/${apiQuery({ course: slug, days })}`);
+  } catch {
+    host.innerHTML = '<p class="tiny muted" style="margin:0">The timetable could not be loaded.</p>';
+    return;
+  }
+
+  const entries = (payload.groups || []).flatMap((group) => group.classes);
+  // `ahead` stays unsliced so the head can count what the strip left out;
+  // slicing it first made every strip look complete.
+  const ahead = entries.filter((entry) => entry.status !== 'ended');
+  const shown = ahead.length ? ahead.slice(0, 6) : entries.slice(-3);
+  const link = weeklyLink
+    ? '<a class="btn btn-ghost btn-sm" href="index.html#schedule">Weekly schedule</a>'
+    : '';
+
+  if (!shown.length) {
+    host.innerHTML = `
+      <div class="batch-schedule-head">
+        <div class="batch-schedule-title">
+          <strong>Today’s classes</strong>
+          <span class="tiny subtle">Next 14 days</span>
+        </div>
+        ${link}
+      </div>
+      <p class="tiny muted" style="margin:0">No class has an air time yet. The classes can be watched on demand.</p>`;
+    return;
+  }
+
+  // A strip cannot be the whole timetable. When it stops short, say so
+  // instead of letting six rows look like all of them.
+  const rest = ahead.length - shown.length;
+  const scope = rest > 0 ? `${rest} more below` : ahead.length ? 'Next 14 days' : 'Last 14 days';
+
+  host.innerHTML = `
+    <div class="batch-schedule-head">
+      <div class="batch-schedule-title">
+        <strong>${ahead.length ? 'Today’s classes' : 'Recent classes'}</strong>
+        <span class="tiny subtle">${scope}</span>
+      </div>
+      ${link}
+    </div>
+    <div class="day-schedule">
+      ${shown.map((entry) => scheduleRow(entry, { showCourse: false, timeZone: payload.timezone || '' })).join('')}
+    </div>`;
 }
 
 /**

@@ -6,37 +6,10 @@
  * second tab narrows the feed to the batches the signed-in learner can open.
  */
 
-import { $$, esc, getJson, rows, apiQuery, shortDate, isSignedIn } from './core.js';
-import { mountChrome, icon, emptyState, errorState, wireRetry } from './ui.js';
+import { $$, getJson, rows, apiQuery, isSignedIn } from './core.js';
+import { mountChrome, icon, emptyState, errorState, wireRetry, postCard } from './ui.js';
 
 mountChrome('community');
-
-function postCard(post) {
-  const initials = (post.author_name || 'Faculty')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0].toUpperCase())
-    .join('');
-  return `
-    <article class="post-card">
-      <div class="post-head">
-        <span class="post-avatar">${esc(initials || 'SS')}</span>
-        <span class="post-who">
-          <strong>${esc(post.author_name || 'Faculty')}</strong>
-          <small>${esc(post.course_title || 'All batches')} · ${esc(shortDate(post.created_at))}</small>
-        </span>
-        ${post.pinned ? '<span class="badge badge-live">Pinned</span>' : ''}
-      </div>
-      <h3>${esc(post.title)}</h3>
-      <p>${esc(post.body || '')}</p>
-      ${
-        post.course_slug
-          ? `<div class="post-actions"><a class="link" href="course.html?slug=${encodeURIComponent(post.course_slug)}">Open the batch ${icon('arrow-right')}</a></div>`
-          : ''
-      }
-    </article>`;
-}
 
 function paint(host, list, empty) {
   host.innerHTML = list.length

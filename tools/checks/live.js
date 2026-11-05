@@ -344,6 +344,149 @@ const FIXTURES = [
     check('no console errors', errors.length === 0, errors[0]);
   }
 
+  console.log('\nlearn.html (the classroom)');
+  {
+    // A batch the account actually holds: the classroom is gated on access, so
+    // checking it on a batch the learner has not joined would only prove the
+    // gate. `ensureEnrolment` has already joined a free batch by now.
+    const owned = session ? await api('/api/courses/?mine=1&page_size=1', session.auth) : null;
+    const row = rowsOf(owned)[0];
+    if (!row) {
+      check('a joined batch is available for the classroom check', false, 'no batch on the account');
+    } else {
+      const detail = await api(`/api/courses/${row.id}/`, session?.auth);
+      const folders = detail.folders || [];
+      const groups = new Map();
+      folders.forEach((folder) => {
+        const name = (folder.subject || '').trim() || detail.subject || 'General';
+        if (!groups.has(name)) groups.set(name, []);
+        groups.get(name).push(folder);
+      });
+      const classes = folders.reduce((n, folder) => n + (folder.lessons || []).length, 0);
+      const notes = folders.reduce((n, folder) => n + (folder.pdf_resources || []).length, 0);
+
+      const { doc, window, errors } = await liveBoot(
+        'learn.html',
+        ['core', 'content', 'ui', 'learn'],
+        `?course=${row.slug}`,
+        session?.storage
+      );
+      await wait(600);
+
+      check('the headline is the API title', text(doc.querySelector('#learn-title')) === detail.title, text(doc.querySelector('#learn-title')));
+      check(
+        'the line under it counts the server folders',
+        text(doc.querySelector('#learn-sub')) ===
+          `${folders.length} ${folders.length === 1 ? 'chapter' : 'chapters'} · ${classes} ${classes === 1 ? 'class' : 'classes'} · ${notes} ${notes === 1 ? 'note' : 'notes'}`,
+        text(doc.querySelector('#learn-sub'))
+      );
+      check(
+        'the batch page is still one click away',
+        doc.querySelector('#overview-link').getAttribute('href') === `course.html?slug=${row.slug}`
+      );
+
+      const tabs = [...doc.querySelectorAll('#learn-tabs .tab')];
+      check(
+        'four tabs: Subjects, Tests, Announcements, Community',
+        tabs.map((tab) => tab.dataset.tab).join('|') === 'subjects|tests|announcements|community',
+        tabs.map((tab) => tab.dataset.tab).join('|')
+      );
+      check(
+        'the header names the faculty the batch lists',
+        (detail.faculty || []).length === 0 ||
+          (detail.faculty || []).every((person) => text(doc.querySelector('#learn-faculty')).includes(person.name)),
+        text(doc.querySelector('#learn-faculty')).slice(0, 60)
+      );
+
+      const cards = [...doc.querySelectorAll('#subject-grid .subject-card')];
+      check('one card per server subject', cards.length === groups.size, `${cards.length}/${groups.size}`);
+      const expected = [...groups.entries()].map(([name, chapters]) => {
+        const held = chapters.reduce((n, folder) => n + (folder.lessons || []).length, 0);
+        const kept = chapters.reduce((n, folder) => n + (folder.pdf_resources || []).length, 0);
+        const parts = [
+          `${chapters.length} ${chapters.length === 1 ? 'chapter' : 'chapters'}`,
+          `${held} ${held === 1 ? 'class' : 'classes'}`
+        ];
+        if (kept) parts.push(`${kept} ${kept === 1 ? 'note' : 'notes'}`);
+        return [name, parts.join(' · ')];
+      });
+      check(
+        'every card counts what the API says is inside',
+        expected.every(([name, meta]) => {
+          const card = cards.find((item) => item.dataset.subject === name);
+          return card && text(card.querySelector('.subject-meta')) === meta;
+        }),
+        expected.map(([name, meta]) => `${name}: ${meta}`).join(' / ')
+      );
+      check(
+        'a card continues into that subject of this batch',
+        cards.every(
+          (card) =>
+            card.getAttribute('href') ===
+            `subject.html?${new URLSearchParams({ course: row.slug, subject: card.dataset.subject }).toString()}`
+        ),
+        cards[0]?.getAttribute('href')
+      );
+
+      // The papers and the feed are the batch's own rows, counted from the API.
+      const papers = rowsOf(await api(`/api/quizzes/?course=${row.id}&page_size=50`));
+      const posts = rowsOf(await api(`/api/community/?course=${row.id}&page_size=10`));
+      doc.querySelector('#tab-tests').click();
+      await wait(400);
+      const paperCards = doc.querySelectorAll('#panel-tests .test-card').length;
+      check(
+        'the Tests tab holds exactly the batch papers',
+        paperCards === papers.length &&
+          (papers.length > 0 || /No papers in this batch yet/.test(text(doc.querySelector('#panel-tests')))),
+        `${paperCards}/${papers.length}`
+      );
+      doc.querySelector('#tab-announcements').click();
+      await wait(400);
+      const pinned = posts.filter((post) => post.pinned);
+      const noticeCards = doc.querySelectorAll('#panel-announcements .post-card').length;
+      check(
+        'the Announcements tab holds exactly the pinned notices',
+        noticeCards === pinned.length,
+        `${noticeCards}/${pinned.length}`
+      );
+      doc.querySelector('#tab-community').click();
+      await wait(400);
+      const feedCards = doc.querySelectorAll('#panel-community .post-card').length;
+      check(
+        'the Community tab holds exactly the batch feed',
+        feedCards === posts.length &&
+          (posts.length > 0 || /Nothing posted in this batch yet/.test(text(doc.querySelector('#panel-community')))),
+        `${feedCards}/${posts.length}`
+      );
+
+      // Today's classes, above the tabs, from the same schedule endpoint.
+      const schedule = await api(`/api/schedule/?course=${row.slug}&days=14`);
+      const ahead = (schedule?.groups || [])
+        .flatMap((group) => group.classes)
+        .filter((entry) => entry.status !== 'ended');
+      const stripRows = doc.querySelectorAll('#class-timetable .day-schedule .class-row').length;
+      const stripNote = text(doc.querySelector('#class-timetable .batch-schedule-head .subtle'));
+      const hiddenAhead = ahead.length - stripRows;
+      check(
+        'the strip shows at most six classes and says what it holds back',
+        stripRows === Math.min(ahead.length, 6) &&
+          (hiddenAhead > 0 ? stripNote === `${hiddenAhead} more below` : /Next 14 days|Last 14 days/.test(stripNote)),
+        `${stripRows}/${ahead.length} rows / "${stripNote}"`
+      );
+
+      // `.badge-live` also paints a *Pinned* notice, so the check is about
+      // claims, not the class: the batch header and the syllabus must never
+      // say a class is on air.
+      check(
+        'nothing in the batch header or the syllabus claims to be live',
+        doc.querySelectorAll('.learn-hero .badge-live, #panel-subjects .badge-live').length === 0 &&
+          !/\blive\b/i.test(text(doc.querySelector('.learn-hero'))) &&
+          !/\blive\b/i.test(text(doc.querySelector('#panel-subjects')))
+      );
+      check('no console errors', errors.length === 0, errors[0]);
+    }
+  }
+
   console.log('\nsubject.html');
   {
     const row = rowsOf(courses)[0];
@@ -679,6 +822,7 @@ const FIXTURES = [
       ['index.html', ['core', 'content', 'ui', 'home'], '', false],
       ['courses.html', ['core', 'content', 'ui', 'courses'], '', false],
       ['course.html', ['core', 'content', 'ui', 'course'], '?slug=jee-main-2027', false],
+      ['learn.html', ['core', 'content', 'ui', 'learn'], '?course=jee-main-2027', true],
       ['tests.html', ['core', 'content', 'ui', 'tests'], '', false],
       ['community.html', ['core', 'content', 'ui', 'community'], '', false],
       ['profile.html', ['core', 'content', 'ui', 'profile'], '', true],

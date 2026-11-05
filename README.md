@@ -78,6 +78,7 @@ page can only offer a clearly-labelled local demo session there.
 | `courses.html` | Catalogue with faceted filters, sort, search and pagination |
 | `course.html` | Batch detail: purchase card, today's classes, a card per subject, papers, faculty |
 | `subject.html` | One subject of a batch: its chapters, the classes in them as cards, and the notes beside them |
+| `learn.html` | My batch, as a classroom: today's classes, then a card per subject, its papers, its feed and its teachers — what a card in My batches opens |
 | `tests.html` | Test series listing with exam filters |
 | `test-player.html` | Full exam window: instructions gate, section tabs, question palette, timer, mark/clear, autosave, submit summary, scored answer sheet with solutions and print |
 | `dashboard.html` | Streak, mock-trend chart, upcoming tests, notes |
@@ -124,6 +125,7 @@ pw-style-learning-app/
 │   ├── courses.html        # Catalogue
 │   ├── course.html         # Batch detail
 │   ├── subject.html        # One subject: chapters, classes, notes
+│   ├── learn.html          # My batch: today, subjects, papers, feed
 │   ├── tests.html          # Test series
 │   ├── test-player.html    # Exam-window test player + result screen
 │   ├── player.html         # Class player

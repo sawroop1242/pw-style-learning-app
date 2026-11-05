@@ -453,7 +453,7 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     check('no console errors', errors.length === 0, errors[0]);
   }
 
-  /* ------------- batch page: “Start learning” opens the first subject ----- */
+  /* ------------ batch page: “Start learning” opens the classroom ---------- */
   {
     console.log('\ncourse.html (“Start learning”)');
     const { doc, errors } = await open('course.html', ['core', 'content', 'ui', 'course'], {
@@ -464,9 +464,177 @@ const open = (page, mods, { query = '', signedIn = false } = {}) =>
     const start = doc.querySelector('#purchase-slot a.btn-primary');
     check('an open batch offers “Start learning”', Boolean(start), start?.textContent?.trim());
     check(
-      'it points at the first subject, not at a tab',
-      start?.getAttribute('href') === 'subject.html?course=neet-biology-foundation&subject=Physics',
+      'it opens the classroom, not the sales page it is already on',
+      start?.getAttribute('href') === 'learn.html?course=neet-biology-foundation',
       start?.getAttribute('href')
+    );
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  /* ------------------ my batches: the card opens a classroom ------------ */
+  {
+    console.log('\ncourses.html (My batches)');
+    const { doc, errors } = await open('courses.html', ['core', 'content', 'ui', 'courses'], {
+      query: '?mine=1',
+      signedIn: true
+    });
+    await wait(300);
+    const cards = [...doc.querySelectorAll('#my-grid .batch-card')];
+    check('the signed-in learner has batches on the tab', cards.length >= 1, String(cards.length));
+    const covers = cards.map((card) => card.querySelector('.batch-cover').getAttribute('href'));
+    check(
+      'a card in My batches opens the classroom',
+      covers.every((href) => /^learn\.html\?course=/.test(href)),
+      covers.join('|')
+    );
+    check(
+      'and the title and the button follow the same door',
+      cards.every(
+        (card) =>
+          card.querySelector('.batch-title a').getAttribute('href') === card.querySelector('.batch-cover').getAttribute('href') &&
+          card.querySelector('.batch-cta').getAttribute('href') === card.querySelector('.batch-cover').getAttribute('href')
+      )
+    );
+    check('every card is for a batch the account holds', cards.length === 2, String(cards.length));
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  /* ------------------------- learn.html: the classroom ------------------ */
+  {
+    console.log('\nlearn.html (an owned batch)');
+    const { window, doc, errors } = await open('learn.html', ['core', 'content', 'ui', 'learn'], {
+      query: '?course=neet-biology-foundation',
+      signedIn: true
+    });
+    await wait(300);
+
+    check('the headline is the batch', doc.querySelector('#learn-title').textContent.trim() === 'NEET Biology Foundation', doc.querySelector('#learn-title').textContent);
+    check(
+      'the breadcrumb names it and links back to My batches',
+      doc.querySelector('#crumb-title').textContent.trim() === 'NEET Biology Foundation' &&
+        /courses\.html\?mine=1/.test(doc.querySelector('.breadcrumb a[href*="mine=1"]').getAttribute('href')),
+      doc.querySelector('#crumb-title').textContent
+    );
+    check(
+      'the line under the name carries the counts of the syllabus',
+      /3 chapters · 4 classes · 3 notes/.test(doc.querySelector('#learn-sub').textContent),
+      doc.querySelector('#learn-sub').textContent
+    );
+    check(
+      'the public page is one click away',
+      doc.querySelector('#overview-link').getAttribute('href') === 'course.html?slug=neet-biology-foundation',
+      doc.querySelector('#overview-link').getAttribute('href')
+    );
+
+    const tabs = [...doc.querySelectorAll('#learn-tabs .tab')];
+    check('four tabs in the classroom', tabs.length === 4, tabs.map((t) => t.dataset.tab).join('|'));
+    check(
+      'they read Subjects, Tests, Announcements, Community',
+      tabs.map((t) => t.textContent.replace(/\d+/g, '').trim()).join('|') === 'Subjects|Tests|Announcements|Community',
+      tabs.map((t) => t.textContent.trim()).join('|')
+    );
+    check('Subjects is open first', doc.querySelector('#tab-subjects').getAttribute('aria-selected') === 'true');
+    check('the other three panels start hidden', doc.querySelectorAll('#learn-tabs ~ .tab-panel[hidden]').length === 3);
+    check('one tab in the tab order, not four', tabs.filter((t) => t.getAttribute('tabindex') === '0').length === 1);
+
+    const cards = [...doc.querySelectorAll('#subject-grid .subject-card')];
+    check('one card per subject', cards.length === 2, cards.map((c) => c.dataset.subject).join('|'));
+    check(
+      'a card counts the chapters and classes behind it',
+      cards[0].querySelector('.subject-meta').textContent.trim() === '2 chapters · 3 classes · 2 notes',
+      cards[0].querySelector('.subject-meta').textContent
+    );
+    check(
+      'a card opens that subject of this batch',
+      cards[0].getAttribute('href') === 'subject.html?course=neet-biology-foundation&subject=Physics',
+      cards[0].getAttribute('href')
+    );
+    check(
+      'the grid states the batch total',
+      doc.querySelector('#panel-subjects .subject-total').textContent.trim() === '2 subjects · 4 classes · 3 notes',
+      doc.querySelector('#panel-subjects .subject-total').textContent
+    );
+    check('a subject card carries an icon tile', Boolean(cards[0].querySelector('.subject-icon svg')));
+
+    // The aside repeats the same numbers as the page, from the same payload.
+    const facts = [...doc.querySelectorAll('#learn-aside .facts-row')].map((row) => row.textContent.replace(/\s+/g, ' ').trim());
+    check('the aside counts what the page counted', facts.join('|') === 'Subjects 2|Chapters 3|Classes 4|Notes 3', facts.join('|'));
+
+    // Today's classes sit above the tabs, as on the public page.
+    const strip = doc.querySelector('#class-timetable');
+    check('the timetable sits above the tabs', Boolean(strip?.querySelector('.batch-schedule-head')), strip?.textContent.trim().slice(0, 40));
+    check('the strip offers the weekly schedule', /Weekly schedule/.test(strip.textContent));
+
+    click(window, doc.querySelector('#tab-tests'));
+    await wait(150);
+    check('Tests opens', !doc.querySelector('#panel-tests').hidden && doc.querySelector('#panel-subjects').hidden);
+    check('the URL remembers the tab', /[?&]tab=tests\b/.test(window.location.search), window.location.search);
+    check(
+      'a batch with no papers says so instead of showing another batch\'s',
+      /No papers in this batch yet/.test(doc.querySelector('#panel-tests').textContent),
+      doc.querySelector('#panel-tests').textContent.trim().slice(0, 60)
+    );
+
+    click(window, doc.querySelector('#tab-announcements'));
+    await wait(150);
+    check('Announcements opens', !doc.querySelector('#panel-announcements').hidden && doc.querySelector('#panel-community').hidden);
+    check(
+      'a batch with nothing pinned says so',
+      /No pinned notice yet/.test(doc.querySelector('#panel-announcements').textContent),
+      doc.querySelector('#panel-announcements').textContent.trim().slice(0, 60)
+    );
+
+    click(window, doc.querySelector('#tab-community'));
+    await wait(150);
+    check('Community opens', !doc.querySelector('#panel-community').hidden && doc.querySelector('#panel-announcements').hidden);
+    check(
+      'and the batch feed is not the whole site feed',
+      /Nothing posted in this batch yet/.test(doc.querySelector('#panel-community').textContent),
+      doc.querySelector('#panel-community').textContent.trim().slice(0, 60)
+    );
+
+    // The people teaching: a line in the header, as the reference has it,
+    // linking to the page that carries their bios.
+    const faculty = doc.querySelector('#learn-faculty');
+    check('the header names the faculty the batch lists', /Taught by Dr\. Meera Kulkarni, Anil Bhatt/.test(faculty.textContent), faculty.textContent.trim());
+    check(
+      'and links to the page with their bios',
+      faculty.querySelector('a').getAttribute('href') === 'course.html?slug=neet-biology-foundation&tab=teachers',
+      faculty.querySelector('a').getAttribute('href')
+    );
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    console.log('\nlearn.html (?tab=community deep link)');
+    const { doc, errors } = await open('learn.html', ['core', 'content', 'ui', 'learn'], {
+      query: '?course=neet-biology-foundation&tab=community',
+      signedIn: true
+    });
+    await wait(250);
+    check('the deep link opens Community', !doc.querySelector('#panel-community').hidden && doc.querySelector('#panel-subjects').hidden);
+    check('the tab strip agrees', doc.querySelector('#tab-community').getAttribute('aria-selected') === 'true');
+    check('no console errors', errors.length === 0, errors[0]);
+  }
+
+  {
+    console.log('\nlearn.html (a batch not on the account)');
+    const { doc, errors } = await open('learn.html', ['core', 'content', 'ui', 'learn'], {
+      query: '?course=jee-main-2027',
+      signedIn: true
+    });
+    await wait(250);
+    check('the batch is still named', doc.querySelector('#learn-title').textContent.trim() === 'JEE Main 2027 Complete Batch', doc.querySelector('#learn-title').textContent);
+    check(
+      'the page says the batch is not on the account',
+      /not on your account/.test(doc.querySelector('#learn-sub').textContent),
+      doc.querySelector('#learn-sub').textContent
+    );
+    check('no syllabus is shown for a batch that is not open', doc.querySelectorAll('.subject-card').length === 0);
+    check(
+      'and the way in is the batch page',
+      doc.querySelector('#panel-subjects a.btn')?.getAttribute('href') === 'course.html?slug=jee-main-2027',
+      doc.querySelector('#panel-subjects a.btn')?.getAttribute('href')
     );
     check('no console errors', errors.length === 0, errors[0]);
   }
