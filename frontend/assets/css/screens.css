@@ -187,6 +187,8 @@
   color: var(--text-subtle);
   white-space: nowrap;
 }
+.tree-actions { display: flex; gap: var(--sp-2); }
+.tree-actions .chip { min-height: 34px; }
 .tree-no-match {
   margin: 0;
   padding: 10px 14px;
