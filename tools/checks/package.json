@@ -4,13 +4,15 @@
   "version": "1.0.0",
   "description": "Dev-only DOM checks for the StudySpace front end. Not shipped in any build.",
   "scripts": {
-    "offline": "node check.js && node a11y.js && node interact.js",
+    "offline": "node check.js && node markup.js && node a11y.js && node interact.js",
     "live": "node live.js",
-    "all": "node check.js && node a11y.js && node interact.js && node live.js",
-    "css": "node css.js"
+    "all": "node check.js && node markup.js && node a11y.js && node interact.js && node live.js",
+    "css": "node css.js",
+    "markup": "node markup.js"
   },
   "devDependencies": {
     "css-tree": "^3.2.1",
-    "jsdom": "^30.1.3"
+    "jsdom": "^30.1.3",
+    "parse5": "^8.0.1"
   }
 }

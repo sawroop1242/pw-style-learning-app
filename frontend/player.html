@@ -7,7 +7,7 @@
   <meta name="description" content="Watch a recorded class, read the notes for its section and follow the batch announcements.">
   <meta name="theme-color" content="#0b0f1a">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="assets/img/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/tokens.css">
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="assets/css/components.css">
@@ -58,9 +58,9 @@
         <p class="player-brief" id="player-brief"></p>
 
         <div class="tabs" role="tablist" aria-label="Class sections">
-          <button class="tab" role="tab" aria-selected="true" aria-controls="panel-chapters" id="tab-chapters">Section lessons</button>
-          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-notes" id="tab-notes">Notes</button>
-          <button class="tab" role="tab" aria-selected="false" aria-controls="panel-notices" id="tab-notices">Announcements</button>
+          <button type="button" class="tab" role="tab" aria-selected="true" aria-controls="panel-chapters" id="tab-chapters">Section lessons</button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="panel-notes" id="tab-notes">Notes</button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="panel-notices" id="tab-notices">Announcements</button>
         </div>
 
         <section class="tab-panel" id="panel-chapters" role="tabpanel" aria-labelledby="tab-chapters">
@@ -102,8 +102,9 @@
         </section>
 
         <div class="player-nav">
-          <a class="btn btn-ghost" href="#" id="prev-link" hidden><svg><use href="#i-chevron-left"/></svg> Prev lesson</a>
-          <a class="btn btn-primary" href="#" id="next-link" hidden>Next lesson <svg><use href="#i-chevron-right"/></svg></a>
+          <!-- Assigned by `player.js` when the lesson resolves; hidden until then. -->
+          <a class="btn btn-ghost" href="#" data-placeholder id="prev-link" hidden><svg><use href="#i-chevron-left"/></svg> Prev lesson</a>
+          <a class="btn btn-primary" href="#" data-placeholder id="next-link" hidden>Next lesson <svg><use href="#i-chevron-right"/></svg></a>
         </div>
       </div>
     </div>

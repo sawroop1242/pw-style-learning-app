@@ -124,9 +124,12 @@ class ScheduleData(TestCase):
 
 class StatusAndGroupingTests(ScheduleData):
     def test_the_two_states_are_computed_from_one_clock(self):
-        ended = self.lesson("Ended", at(self.today, hours=9))
+        # Anchored to *now*, never to a wall-clock hour: a fixture at "19:00
+        # today" is already over when the suite runs at 20:00, and the test
+        # then fails for the time of day rather than for the code.
+        ended = self.lesson("Ended", at(self.now, hours=-3))
         now = self.lesson("Now", at(self.now, minutes=-12), duration_minutes=52)
-        later = self.lesson("Later", at(self.today, hours=19))
+        later = self.lesson("Later", at(self.now, minutes=90))
         self.enrol()
 
         entries = {
@@ -156,6 +159,10 @@ class StatusAndGroupingTests(ScheduleData):
         self.assertEqual(set(counts), {"today", "upcoming", "total"})
 
     def test_todays_finished_class_stays_on_todays_list(self):
+        # Fixed to today rather than to now: the assertions are about *which
+        # day* the class is grouped under, and they hold whether the class is
+        # behind the clock or ahead of it. Only the status assertions above
+        # need a clock-relative fixture.
         self.lesson("This morning", at(self.today, hours=9))
         self.enrol()
 
@@ -207,15 +214,15 @@ class StatusAndGroupingTests(ScheduleData):
         self.assertEqual([entry["title"] for entry in day["classes"]], ["Morning", "Evening"])
 
     def test_next_is_the_first_class_that_has_not_ended(self):
-        self.lesson("Finished", at(self.today, hours=8))
-        self.lesson("Next up", at(self.today, hours=20))
-        self.lesson("After that", at(self.today, days=1, hours=19))
+        self.lesson("Finished", at(self.now, hours=-4))
+        self.lesson("Next up", at(self.now, minutes=120))
+        self.lesson("After that", at(self.now, days=1))
         self.enrol()
 
         self.assertEqual(self.payload()["next"]["title"], "Next up")
 
     def test_next_is_null_when_everything_has_finished(self):
-        self.lesson("Finished", at(self.today, hours=8))
+        self.lesson("Finished", at(self.now, hours=-4))
         self.enrol()
 
         self.assertIsNone(self.payload()["next"])

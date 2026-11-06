@@ -1047,6 +1047,45 @@ a.lecture-card:focus-visible { outline: 2px solid var(--violet-600); outline-off
   .mobile-buy .btn { min-width: 150px; min-height: 42px; }
 }
 
+/* "Continue learning" and the attempted papers: one card, rendered by both the
+   dashboard and the test series. It lives here rather than in app.css because
+   `tests.html` draws these cards and never loads app.css — the cards used to
+   arrive there unstyled. */
+.continue-card {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: center;
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.continue-card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.continue-thumb {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: rgba(91, 91, 246, 0.14);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
+.continue-body { flex: 1 1 auto; min-width: 0; display: grid; gap: 8px; }
+.continue-body h3 { font-size: var(--text-sm); font-weight: 600; }
+.continue-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+}
+
 /* ===================== API-DRIVEN DETAIL SCREENS ====================== */
 /* The class player and batch detail render live rows, so they need a few
    small pieces that the fixture-era markup did not use. */
@@ -1096,11 +1135,11 @@ a.lecture-card:focus-visible { outline: 2px solid var(--violet-600); outline-off
   .batch-actions .btn { width: 100%; }
 }
 
-.notice-row { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-1); }
+.notice-row { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-raised); }
 .notice-row + .notice-row { margin-top: 10px; }
 .notice-row strong { font-size: var(--text-sm); color: var(--text-strong); }
 
-.acc-item { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-1); }
+.acc-item { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-raised); }
 .acc-item + .acc-item { margin-top: 10px; }
 .acc-head-static { display: flex; align-items: center; }
 .acc-title { font-size: var(--text-sm); font-weight: 700; color: var(--text-strong); }

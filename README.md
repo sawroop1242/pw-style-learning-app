@@ -184,11 +184,12 @@ python manage.py seed_demo          # 6 batches, 4 series, 5 timed tests — saf
 python manage.py seed_demo --clear  # remove exactly the rows it made
 ```
 
-Frontend checks (no build step; `tools/checks/` installs jsdom + css-tree on demand):
+Frontend checks (no build step; `tools/checks/` installs jsdom, css-tree and parse5 on demand):
 
 ```bash
 cd tools/checks && npm install
 
+node markup.js    # HTML is well formed, every asset exists, every CSS token is defined
 node check.js     # every page boots, renders server rows, and admits an outage
 node a11y.js      # one h1, labelled controls, landmarks, no skipped levels
 node css.js       # every class used is defined; cascade order; layout invariants

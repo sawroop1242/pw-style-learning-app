@@ -7,7 +7,7 @@
   <meta name="description" content="Your batches, your attempts, your notes and the papers opening next.">
   <meta name="theme-color" content="#0b0f1a">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="assets/img/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/tokens.css">
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="assets/css/components.css">
@@ -112,7 +112,7 @@
           <form id="task-form" class="stack" style="gap:8px" hidden novalidate>
             <div class="field">
               <label class="visually-hidden" for="task-title">Task</label>
-              <input class="input" id="task-title" placeholder="e.g. Finish the mechanics problem set" required maxlength="180">
+              <input class="input" id="task-title" type="text" placeholder="e.g. Finish the mechanics problem set" required maxlength="180">
             </div>
             <div class="row" style="gap:8px">
               <label class="visually-hidden" for="task-due">Due date</label>
@@ -152,7 +152,7 @@
       <form id="note-form" class="stack" style="gap:var(--sp-4)">
         <div class="field">
           <label for="note-heading">Title</label>
-          <input class="input" id="note-heading" name="title" placeholder="Rotational motion — key formulae" required maxlength="180">
+          <input class="input" id="note-heading" type="text" name="title" placeholder="Rotational motion — key formulae" required maxlength="180">
         </div>
         <div class="field">
           <label for="note-body">Note</label>

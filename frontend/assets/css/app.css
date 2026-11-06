@@ -60,46 +60,6 @@
   padding-block: var(--sp-7) var(--sp-9);
 }
 
-/* Continue learning */
-.continue-card {
-  display: flex;
-  gap: var(--sp-4);
-  align-items: center;
-  padding: var(--sp-4) var(--sp-5);
-  background: var(--paper);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
-}
-
-.continue-card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
-
-.continue-thumb {
-  width: 46px;
-  height: 46px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: rgba(91, 91, 246, 0.14);
-  color: var(--violet-400);
-  font-family: var(--font-display);
-  font-size: 0.8rem;
-  color: var(--text-subtle);
-}
-
-.continue-body { flex: 1 1 auto; min-width: 0; display: grid; gap: 8px; }
-.continue-body h3 { font-size: var(--text-sm); font-weight: 600; }
-.continue-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  font-size: var(--text-2xs);
-  color: var(--text-subtle);
-}
-
 /* Streak */
 .streak-card { padding: var(--sp-5); display: grid; gap: var(--sp-4); }
 .streak-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }

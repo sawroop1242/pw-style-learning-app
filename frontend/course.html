@@ -46,6 +46,7 @@
           </div>
           <div class="batch-info">
             <h1 id="course-headline">
+              <span class="visually-hidden">Loading this batch</span>
               <span class="skeleton skeleton-text" style="display:block;width:180px;height:18px"></span>
               <span class="skeleton" style="display:block;height:40px;width:82%;margin:14px 0"></span>
               <span class="skeleton" style="display:block;height:14px;width:60%"></span>
@@ -70,10 +71,10 @@
                  (?tab=papers) so it can be shared, bookmarked and reached with
                  the Back button. -->
             <div class="tabs" role="tablist" aria-label="Batch sections" id="batch-tabs">
-              <button class="tab" role="tab" id="tab-subjects" aria-controls="panel-subjects" aria-selected="true" tabindex="0" data-tab="subjects">Subjects<span class="tab-count" data-count="subjects" hidden></span></button>
-              <button class="tab" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="false" tabindex="-1" data-tab="overview">Overview</button>
-              <button class="tab" role="tab" id="tab-papers" aria-controls="panel-papers" aria-selected="false" tabindex="-1" data-tab="papers">Papers<span class="tab-count" data-count="papers" hidden></span></button>
-              <button class="tab" role="tab" id="tab-teachers" aria-controls="panel-teachers" aria-selected="false" tabindex="-1" data-tab="teachers">Teachers<span class="tab-count" data-count="teachers" hidden></span></button>
+              <button type="button" class="tab" role="tab" id="tab-subjects" aria-controls="panel-subjects" aria-selected="true" tabindex="0" data-tab="subjects">Subjects<span class="tab-count" data-count="subjects" hidden></span></button>
+              <button type="button" class="tab" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="false" tabindex="-1" data-tab="overview">Overview</button>
+              <button type="button" class="tab" role="tab" id="tab-papers" aria-controls="panel-papers" aria-selected="false" tabindex="-1" data-tab="papers">Papers<span class="tab-count" data-count="papers" hidden></span></button>
+              <button type="button" class="tab" role="tab" id="tab-teachers" aria-controls="panel-teachers" aria-selected="false" tabindex="-1" data-tab="teachers">Teachers<span class="tab-count" data-count="teachers" hidden></span></button>
             </div>
 
             <section class="tab-panel" id="panel-subjects" role="tabpanel" aria-labelledby="tab-subjects" data-panel="subjects"></section>
@@ -110,12 +111,12 @@
           <h2 class="modal-title" id="redeem-title">Redeem access code</h2>
           <p class="tiny muted" style="margin-top:4px">Paid batches unlock with a 12-character code from your institute, or by messaging the teacher on Telegram.</p>
         </div>
-        <button class="icon-btn" data-close-modal aria-label="Close" style="width:32px;height:32px"><svg><use href="#i-x"/></svg></button>
+        <button type="button" class="icon-btn" data-close-modal aria-label="Close" style="width:32px;height:32px"><svg><use href="#i-x"/></svg></button>
       </div>
       <form id="redeem-form" class="stack" style="gap:14px">
         <div class="field">
           <label for="code-input">Access code</label>
-          <input class="input" id="code-input" name="code" placeholder="ABCD-2345-EFGH" autocomplete="off" spellcheck="false" required style="letter-spacing:.12em;text-transform:uppercase;font-family:var(--font-mono)">
+          <input class="input" id="code-input" type="text" name="code" placeholder="ABCD-2345-EFGH" autocomplete="off" spellcheck="false" required style="letter-spacing:.12em;text-transform:uppercase;font-family:var(--font-mono)">
           <span class="field-hint">Codes are case-insensitive. One code unlocks one batch for your account.</span>
         </div>
         <div class="alert alert-info">
