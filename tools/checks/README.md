@@ -12,6 +12,7 @@ on the DOM the user would see.
 cd tools/checks
 npm install            # jsdom + css-tree, dev only
 
+node markup.js         # HTML parses, every asset exists, every CSS token is defined
 node check.js          # every page renders rows, an honest outage state, no errors
 node a11y.js           # h1, labels, accessible names, aria-controls, duplicate ids
 node interact.js       # drawer, filters, tabs, the exam window end to end, notes
@@ -23,7 +24,21 @@ from the API. So the DOM suites answer the page's requests from `stub.js` — a
 deterministic double of the Django serializers — and `check.js` repeats each
 page with the network switched off to prove the outage path is honest.
 
-`a11y.js` and `css.js` read the files only and need no API at all.
+`markup.js`, `a11y.js` and `css.js` read the files only and need no API at all.
+
+## Markup and tokens
+
+`markup.js` is the suite that catches what a browser quietly repairs: a tag that
+does not parse (a stray character after an attribute — the browser drops the
+attribute and moves on), a favicon pointed at a path that does not exist, a
+`var(--surface-1)` where the token is `--surface-raised` (the declaration is
+dropped and the element paints blank), an `aria-controls` that names an id
+nobody has, a button with no `type` inside a form, an empty heading, or two
+`<main>` landmarks visible at once. It also checks the service worker's shell
+list against the files on disk.
+
+Each rule prints the page and the line it would put a reviewer on, and the exit
+code fails the build.
 
 ## Live checks
 

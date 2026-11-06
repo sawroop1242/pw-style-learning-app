@@ -49,6 +49,12 @@ jobs:
       - name: Install check dependencies
         run: npm ci --no-audit --no-fund
 
+      # Documents first: a tag that does not parse, a favicon that 404s and a
+      # custom property nobody defined are invisible to `check.js`, which only
+      # asks whether the page renders.
+      - name: Every page is well-formed HTML, and every file it points at exists
+        run: node markup.js
+
       - name: Every page boots without console errors
         run: node check.js
 

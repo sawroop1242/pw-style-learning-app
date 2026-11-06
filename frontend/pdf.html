@@ -27,7 +27,9 @@
         <div class="player-top">
           <a class="icon-btn" href="courses.html" aria-label="Back to my batches"><svg><use href="#i-arrow-left"/></svg></a>
           <h1 id="reader-title">Note</h1>
-          <a class="icon-btn" id="reader-external" href="#" target="_blank" rel="noopener" aria-label="Open in a new tab" hidden>
+          <!-- Both links are placeholders on purpose: `reader.js` assigns the note's own
+             URL before either is shown, and the frame one stays hidden until then. -->
+          <a class="icon-btn" id="reader-external" href="#" data-placeholder target="_blank" rel="noopener" aria-label="Open in a new tab" hidden>
             <svg><use href="#i-arrow-up-right"/></svg>
           </a>
         </div>
@@ -39,7 +41,7 @@
           <div class="reader-fallback" id="reader-fallback" hidden>
             <strong id="reader-fallback-title">Loading…</strong>
             <p id="reader-fallback-body"></p>
-            <a class="btn btn-primary btn-sm" id="reader-open" href="#" target="_blank" rel="noopener">Open the PDF</a>
+            <a class="btn btn-primary btn-sm" id="reader-open" href="#" data-placeholder target="_blank" rel="noopener">Open the PDF</a>
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@
     { "source": "/token/:path*", "destination": "https://studyspace-eta-tan.vercel.app/token/:path*" },
     { "source": "/auth/:path*", "destination": "https://studyspace-eta-tan.vercel.app/auth/:path*" },
     { "source": "/admin/:path*", "destination": "https://studyspace-eta-tan.vercel.app/admin/:path*" },
-    { "source": "/healthz/:path*", "destination": "https://studyspace-eta-tan.vercel.app/healthz/:path*" }
+    { "source": "/healthz/:path*", "destination": "https://studyspace-eta-tan.vercel.app/healthz/:path*" },
+    { "source": "/static/:path*", "destination": "https://studyspace-eta-tan.vercel.app/static/:path*" }
   ]
 }

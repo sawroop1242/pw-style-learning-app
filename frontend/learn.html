@@ -45,6 +45,7 @@
           <span class="learn-cover thumb-default" id="learn-cover" aria-hidden="true"></span>
           <div class="learn-info">
             <h1 class="learn-title" id="learn-title">
+              <span class="visually-hidden">Loading this batch</span>
               <span class="skeleton skeleton-text" style="display:block;width:220px;height:22px"></span>
             </h1>
             <p class="learn-sub" id="learn-sub">Loading this batch…</p>
@@ -68,10 +69,10 @@
                  people teaching it. Each is a real URL (?tab=tests), so a
                  teacher can link straight to one. -->
             <div class="tabs" role="tablist" aria-label="My batch" id="learn-tabs">
-              <button class="tab" role="tab" id="tab-subjects" aria-controls="panel-subjects" aria-selected="true" tabindex="0" data-tab="subjects">Subjects<span class="tab-count" data-count="subjects" hidden></span></button>
-              <button class="tab" role="tab" id="tab-tests" aria-controls="panel-tests" aria-selected="false" tabindex="-1" data-tab="tests">Tests<span class="tab-count" data-count="tests" hidden></span></button>
-              <button class="tab" role="tab" id="tab-announcements" aria-controls="panel-announcements" aria-selected="false" tabindex="-1" data-tab="announcements">Announcements<span class="tab-count" data-count="announcements" hidden></span></button>
-              <button class="tab" role="tab" id="tab-community" aria-controls="panel-community" aria-selected="false" tabindex="-1" data-tab="community">Community<span class="tab-count" data-count="community" hidden></span></button>
+              <button type="button" class="tab" role="tab" id="tab-subjects" aria-controls="panel-subjects" aria-selected="true" tabindex="0" data-tab="subjects">Subjects<span class="tab-count" data-count="subjects" hidden></span></button>
+              <button type="button" class="tab" role="tab" id="tab-tests" aria-controls="panel-tests" aria-selected="false" tabindex="-1" data-tab="tests">Tests<span class="tab-count" data-count="tests" hidden></span></button>
+              <button type="button" class="tab" role="tab" id="tab-announcements" aria-controls="panel-announcements" aria-selected="false" tabindex="-1" data-tab="announcements">Announcements<span class="tab-count" data-count="announcements" hidden></span></button>
+              <button type="button" class="tab" role="tab" id="tab-community" aria-controls="panel-community" aria-selected="false" tabindex="-1" data-tab="community">Community<span class="tab-count" data-count="community" hidden></span></button>
             </div>
 
             <section class="tab-panel" id="panel-subjects" role="tabpanel" aria-labelledby="tab-subjects" data-panel="subjects"></section>

@@ -8,8 +8,42 @@
  * Both cases must mount the shell (sidebar + tabbar), keep one h1, and log no
  * console errors. `live.js` repeats the data case against the real server.
  */
-const { boot } = require('./harness');
+const fs = require('fs');
+const path = require('path');
+const csstree = require('css-tree');
+const { boot, ROOT } = require('./harness');
 const { makeStub } = require('./stub');
+
+/**
+ * Which classes each stylesheet defines.
+ *
+ * A page can render markup for a component whose styles live in a sheet it
+ * never loads — the cards appear, they are simply naked. `tests.html` shipped
+ * that way with the "attempted papers" cards, whose rules lived only in
+ * `app.css`. Parsing the sheets once lets every render be checked against the
+ * styles the page actually asked for.
+ */
+const SHEET_CLASSES = new Map();
+for (const file of fs.readdirSync(path.join(ROOT, 'assets/css')).filter((f) => f.endsWith('.css'))) {
+  const ast = csstree.parse(fs.readFileSync(path.join(ROOT, 'assets/css', file), 'utf8'));
+  const names = new Set();
+  csstree.walk(ast, {
+    visit: 'ClassSelector',
+    enter(node) {
+      names.add(node.name);
+    }
+  });
+  SHEET_CLASSES.set(file, names);
+}
+
+const PAGE_HTML = new Map();
+function styledClasses(page) {
+  if (!PAGE_HTML.has(page)) PAGE_HTML.set(page, fs.readFileSync(path.join(ROOT, page), 'utf8'));
+  const loaded = [...PAGE_HTML.get(page).matchAll(/assets\/css\/([\w-]+\.css)/g)].map((m) => m[1]);
+  const defined = new Set();
+  for (const sheet of loaded) for (const name of SHEET_CLASSES.get(sheet) || []) defined.add(name);
+  return defined;
+}
 
 const PAGES = [
   ['index.html', ['core', 'content', 'ui', 'home']],
@@ -53,6 +87,19 @@ async function inspect(page, mods, query, opts, label) {
   if (!sidebar) problems.push('no sidebar');
   if (!tabs) problems.push('no tabbar');
   if (errors.length) problems.push(errors[0].slice(0, 200));
+  // Every class on screen must have a rule in a sheet this page loads.
+  {
+    const watched = styledClasses(page);
+    const unstyled = new Set();
+    for (const el of doc.querySelectorAll('[class]')) {
+      for (const name of el.getAttribute('class').split(/\s+/)) {
+        // A trailing dash is a prefix assembled at runtime (`thumb-${tone}`).
+        if (name && !name.endsWith('-') && !watched.has(name)) unstyled.add(name);
+      }
+    }
+    if (unstyled.size) problems.push(`unstyled: ${[...unstyled].slice(0, 6).join(', ')}`);
+  }
+
   if (opts.expectData) {
     const rows = doc.querySelectorAll(
       '.batch-card, .test-card, .class-row, .lesson-item, .dl-row, .post-card, .upcoming-item, .note-preview, .menu-row, .subject-card, .lecture-card'

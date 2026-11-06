@@ -32,9 +32,15 @@ stable production domain changes.
 - `/token/*`
 - `/admin/*`
 - `/healthz/*`
+- `/static/*` — Django's own admin CSS, JavaScript and images
 
-Static frontend assets are served directly by Cloudflare Pages. Do not add
-a catch-all function because that would intercept static files.
+The last one is not optional. `/admin/` returns HTML that links its stylesheet at
+`/static/admin/css/base.css`; without that route the admin console loads and
+paints unstyled, which looks like a front-end defect and is not one.
+
+The app's own assets live under `/assets/`, so they never collide with Django's
+`/static/`. Static frontend assets are served directly by Cloudflare Pages. Do
+not add a catch-all function because that would intercept those files.
 
 ## Supabase
 
