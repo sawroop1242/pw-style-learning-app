@@ -219,6 +219,26 @@
     window.addEventListener('scroll', onScroll, { passive: true });
   }
 
+  /* ------------------------------------------------ the header owns its height */
+
+  /* `--ss-topbar` is what `#main` pads at the top and what the rail hangs
+     from, so it has to be the header's real height. It cannot be a constant:
+     below 760px the header wraps to two rows (brand, then the jump field) and
+     is 107px tall while the stylesheet reserved 64px, which put the page's
+     own <h1> underneath the bar. Rather than guess a second number, measure
+     the element and write it back; the ResizeObserver keeps it true across
+     rotation, zoom and a wrapped wordmark. The CSS value stays as the
+     no-JavaScript fallback. */
+  if (header && window.ResizeObserver) {
+    var root = document.documentElement;
+    var paint = function () {
+      var height = Math.round(header.getBoundingClientRect().height);
+      if (height > 0) root.style.setProperty('--ss-topbar', height + 'px');
+    };
+    paint();
+    new ResizeObserver(paint).observe(header);
+  }
+
 
   /* -------------------------------------------------- a failed save is announced */
 

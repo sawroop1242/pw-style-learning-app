@@ -146,3 +146,101 @@ jobs:
 
       - name: The locked set can run the application
         run: python manage.py check
+
+  # The stylesheet, the markup and the browser disagree in ways neither the
+  # unit tests nor a CSS parser can see: a width from Django's own dashboard
+  # rules, a flex item whose padding sits outside its max-width, a white
+  # `.module` background painted inside the navy rail, a wordmark rendered in
+  # white on a white card. Every one of those passed `manage.py test` and the
+  # static checks; the page on screen was still wrong.
+  #
+  # This job renders the real console in Chromium at three widths and asks the
+  # browser for the computed result — horizontal overflow, WCAG AA contrast
+  # against the background text actually lands on, whether the fixed header's
+  # height is the one the page reserves, and whether the rail kept its surface.
+  render:
+    name: The console as a browser renders it
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      ENVIRONMENT: development
+      DEBUG: "True"
+      SECRET_KEY: "test-only-not-a-production-secret"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Install the render check's dependencies
+        working-directory: tools/checks
+        run: npm ci --no-audit --no-fund
+
+      # The runner usually has Chrome already; "usually" is not something to
+      # build a check on, so this finds it and downloads a known-good build
+      # only when it has to.
+      - name: Locate a browser
+        working-directory: tools/checks
+        run: |
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -z "$CHROME" ]; then
+            npx --yes @puppeteer/browsers install chrome@stable --path "$RUNNER_TEMP/chrome"
+            CHROME="$(find "$RUNNER_TEMP/chrome" -type f -name chrome | head -n 1)"
+          fi
+          echo "using $CHROME"
+          echo "CHROME_PATH=$CHROME" >> "$GITHUB_ENV"
+
+      # A seeded catalogue, so the screens have rows, filters and a change form
+      # to lay out. `seed_demo` is the same command the demo deployment runs.
+      - name: Build a database with something in it
+        run: |
+          python manage.py migrate --noinput
+          python manage.py seed_demo
+
+      - name: Create the account the check signs in with
+        run: |
+          python manage.py shell -c "
+          from django.contrib.auth import get_user_model
+          U = get_user_model()
+          u, _ = U.objects.get_or_create(username='render-admin', defaults={'email': 'render@example.com'})
+          u.is_staff = u.is_superuser = True
+          u.set_password('render-check-password')
+          u.save()
+          "
+
+      - name: Serve the console
+        run: |
+          python manage.py runserver 127.0.0.1:8010 --noreload &
+          # Wait for the port rather than sleeping a guessed number of seconds.
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:8010/admin/login/; then exit 0; fi
+            sleep 1
+          done
+          echo "the server never answered" >&2
+          exit 1
+
+      - name: Every console screen, rendered
+        working-directory: tools/checks
+        env:
+          ADMIN_BASE: http://127.0.0.1:8010
+          ADMIN_USER: render-admin
+          ADMIN_PASSWORD: render-check-password
+        run: node admin-render.js

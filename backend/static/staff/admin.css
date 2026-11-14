@@ -262,29 +262,47 @@ body.ss-admin {
   min-width: 0;
 }
 
+/* The trail is read from its first crumb towards the current one, so when the
+ * bar runs out of room it is the *oldest* crumb that should leave, not the
+ * root: "Authentication and Authorization / Users" means nothing without the
+ * "Admin" on the front. A flex row with overflow clips from the end (the
+ * right), which dropped "Admin" and left a bare "/ Users" — so the trail is
+ * never allowed to shrink; the jump box gives up its width first. */
 .ss-admin .ss-breadcrumbs {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 8px;
   min-width: 0;
   font-size: 13px;
   color: var(--ss-muted);
   white-space: nowrap;
-  overflow: hidden;
 }
 
-.ss-admin .ss-breadcrumbs a {
+/* Django styles every `#header a` with `--header-link-color`, which its navy
+ * bar sets to white. That id-level selector outweighs any number of classes
+ * on our side, so the trail's links rendered white on this white bar: only
+ * the separators and the current crumb (spans) were visible, and the bar read
+ * as "/ / Users". The colours are restated here at the same weight. The
+ * variable itself keeps its white — Django also uses it for table headings
+ * that really are on navy. */
+.ss-admin #header .ss-breadcrumbs a:link,
+.ss-admin #header .ss-breadcrumbs a:visited {
   color: var(--ss-muted);
   font-weight: 500;
 }
 
-.ss-admin .ss-breadcrumbs a:hover {
+.ss-admin #header .ss-breadcrumbs a:hover,
+.ss-admin #header .ss-breadcrumbs a:focus-visible {
   color: var(--ss-ink);
   text-decoration: none;
 }
 
+/* Decorative (marked `aria-hidden`), but it is still a visible glyph on the
+ * bar, so it is held to the same 3:1 that any non-text UI mark needs rather
+ * than being a 1.41:1 whisper. */
 .ss-admin .ss-crumb-sep {
-  color: var(--ss-line-strong);
+  color: #878fa5;
 }
 
 .ss-admin .ss-crumb-current {
@@ -305,7 +323,11 @@ body.ss-admin {
 .ss-admin .ss-jump {
   position: relative;
   margin-left: auto;
-  flex: 0 1 300px;
+  /* `1 1` so the box can give width back to the trail; the input inside is
+   * `width: 100%`, so a shrunk box shrinks the field instead of overflowing. */
+  flex: 1 1 300px;
+  max-width: 300px;
+  min-width: 120px;
   display: flex;
   align-items: center;
 }
@@ -583,6 +605,30 @@ body.ss-admin {
   background: transparent;
 }
 
+/* The rail's groups arrive as `div.module.ss-nav-group` (admin/nav_sidebar.html),
+ * so the generic `.module` surface above dressed each one as a white card with
+ * a border, a 14px radius and a shadow — a stack of white boxes inside the
+ * navy rail. That is also what destroyed the text: the rail's link colour is
+ * a light grey chosen for navy, and it was being drawn on white (2.26:1, an
+ * AA failure across all nine rows). The rail owns its own surface; these
+ * wrappers are layout, not cards. */
+.ss-admin #nav-sidebar .module,
+.ss-admin #nav-sidebar .ss-nav-group,
+.ss-admin #nav-sidebar fieldset.module {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Django zebra-stripes table rows for readability. In a dark rail the stripe
+ * has to be a lift off navy, not a light grey block. */
+.ss-admin #nav-sidebar tr,
+.ss-admin #nav-sidebar tbody tr:nth-child(even),
+.ss-admin #nav-sidebar tbody tr:nth-child(odd) {
+  background: transparent;
+}
+
 .ss-admin .ss-nav-group {
   margin-bottom: 20px;
 }
@@ -597,7 +643,9 @@ body.ss-admin {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #63719a;
+  /* 7.4:1 on the navy rail. The old #63719a measured 3.72:1, under AA for
+   * this 10.5px label — small caps at that size need it more than most. */
+  color: #9aa7c2;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: .12em;
@@ -722,15 +770,30 @@ body.ss-admin {
   padding-top: var(--ss-topbar);
 }
 
+/* `#main` is a flex row (Django's nav_sidebar.css makes it one so the rail can
+ * sit beside the page). That makes this box a flex item, and a flex item's
+ * automatic minimum size is its content's min-content width — so one wide
+ * table cell could push the whole page 9px past the viewport at 1440 and 28px
+ * at 390, past even the `max-width` set here, because `min-width` wins over
+ * `max-width`. It is also measured border-box: below 1024px the rail margin
+ * goes away and `max-width: 100%` starts applying, at which point content-box
+ * would add the 28px of side padding on top of a full-width box. */
 .ss-admin #main > #content-start {
   margin-left: var(--ss-rail);
   padding: 26px 30px 64px;
+  min-width: 0;
   min-height: calc(100vh - var(--ss-topbar));
+  box-sizing: border-box;
 }
 
+/* One gutter, not two. Django gives `#content` 20px/40px of padding and the
+ * shell above it pads 26px/30px again, so every page lost 70px on each side
+ * and 46px off the top to the same gap drawn twice. The shell owns the gutter;
+ * the content box is measured inside it. */
 .ss-admin #content {
   max-width: 1320px;
   margin: 0 auto;
+  padding: 0;
 }
 
 .ss-admin #content h1 {
@@ -827,7 +890,11 @@ body.ss-admin {
   color: #fff;
 }
 
-/* Django puts object-tools in a floating list; make it a header action. */
+/* Django puts object-tools in a floating list; make it a header action.
+ * The list item keeps Django's `height: 1rem`, and the anchor keeps its
+ * `float: left` — a 40px button inside a 16px box, hanging out of the page
+ * head and over the filter card below it. Both are reset here so the head
+ * measures the button it contains. */
 .ss-admin .object-tools {
   float: none;
   display: flex;
@@ -839,12 +906,14 @@ body.ss-admin {
 
 .ss-admin .object-tools li {
   float: none;
+  height: auto;
   margin: 0;
   list-style: none;
 }
 
 .ss-admin .object-tools a {
   display: inline-flex;
+  float: none;
   align-items: center;
   gap: 8px;
   padding: 10px 15px;
@@ -1035,14 +1104,19 @@ body.ss-admin {
 }
 
 .ss-admin .ss-count[data-empty="1"] {
-  color: #9aa4bd;
+  /* An empty count is still text and still has to be read: 2.33:1 was not
+   * legible. It uses the same muted grey as every other secondary label
+   * (5.07:1) — "empty" is already said by the 0 itself. */
+  color: var(--ss-muted);
 }
 
 .ss-admin .ss-add {
   padding: 4px 9px;
   border-radius: 8px;
   background: var(--ss-violet-wash);
-  color: var(--ss-violet);
+  /* The violet token is 4.01:1 on its own wash — under AA at 12px. The dark
+   * step of the same hue is 5.1:1 and still reads as the action colour. */
+  color: var(--ss-violet-dark);
   font-size: 12px;
   font-weight: 650;
 }
@@ -1052,21 +1126,42 @@ body.ss-admin {
   text-decoration: none;
 }
 
-/* The console home is two columns: the work, then the activity. */
+/* The console home is two columns: the work, then the activity.
+ *
+ * Django's own dashboard layout has to be dismantled first. Its `base.css`
+ * pins this page with `#content { width: 600px }`, floats `#content-main`
+ * left and `#content-related` right out of the column with
+ * `margin-right: -300px`, and `.colMS { margin-right: 300px }` on the
+ * `coltype` block this template sets. A grid on top of that does not replace
+ * the floats — the grid is only 600px wide, its first track collapses to the
+ * width of the tiles, and the activity column floats outside the box. Called
+ * out here rather than deleted from Django's sheet so the theme stays one
+ * file: every one of those four declarations is undone below. */
 .ss-admin.dashboard #content {
   display: grid;
+  width: auto;
+  margin: 0 auto;
   grid-template-columns: minmax(0, 1fr) 322px;
   gap: 22px;
   align-items: start;
 }
 
+.ss-admin.dashboard #content.colMS {
+  margin-right: auto;
+}
+
 .ss-admin.dashboard #content-main {
   grid-column: 1;
+  float: none;
+  width: auto;
   min-width: 0;
 }
 
 .ss-admin.dashboard #content-related {
   grid-column: 2;
+  float: none;
+  width: auto;
+  margin-right: 0;
 }
 
 /* ---------------------------------------------------------------- messages */
@@ -1111,9 +1206,16 @@ body.ss-admin {
 
 /* ------------------------------------------------------- list: the card */
 
+/* Django lays the list out as a flex row with `align-items: flex-start`.
+ * Stacked into a column, that alignment means "size each child to its
+ * max-content width" — so the card grew to the table's full 1186px inside a
+ * 1061px column, and the page scrolled sideways under it. `stretch` keeps the
+ * card inside the column and leaves the table to scroll in `.results`. */
 .ss-admin #changelist {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   background: transparent;
   border: 0;
   box-shadow: none;
@@ -1184,6 +1286,16 @@ body.ss-admin {
   margin: 0;
   color: var(--ss-muted);
   font-size: 12.3px;
+}
+
+/* The full-width rows inside the list card — search, bulk actions, footer —
+ * all carry horizontal padding. They are block boxes in a card that clips, so
+ * under content-box each one is 36px wider than the card and its right
+ * padding (or, on a phone, the end of its content) is cut off. */
+.ss-admin .ss-search,
+.ss-admin #changelist-form .actions,
+.ss-admin .paginator {
+  box-sizing: border-box;
 }
 
 /* Bulk-action row */
@@ -1415,11 +1527,16 @@ body.ss-admin {
   display: none;
 }
 
+/* Filters as rows, not as a wrapping cloud of groups. A flex row sized every
+ * group to its own widest chip and packed them side by side, so "Level" landed
+ * to the right of "Subject" and "Pricing mode" started again at the left edge
+ * underneath — five labels, three ragged left edges. One row per filter, with
+ * the label in a fixed first column, gives every chip row the same left edge
+ * and reads top to bottom in the order the queryset applies them. */
 .ss-admin .ss-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 22px;
-  padding: 14px 18px;
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
   background: #fff;
   border: 1px solid var(--ss-line);
   border-radius: var(--ss-radius);
@@ -1427,11 +1544,15 @@ body.ss-admin {
 }
 
 .ss-admin .ss-filter-group {
-  min-width: 140px;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
 }
 
 .ss-admin .ss-filter-group h3 {
-  margin: 0 2px 7px;
+  margin: 0;
   color: var(--ss-muted);
   font-size: 11.5px;
   font-weight: 700;
@@ -1937,8 +2058,13 @@ body.ss-admin {
 
 /* ----------------------------------------------------------------- login */
 
-body.ss-admin.login,
-body.ss-admin:not(.dashboard):not(.change-form):not(.change-list) {
+/* `:where()` keeps the chained `:not()`s out of the specificity count. Written
+ * plainly this selector weighs (0,4,1) and silently beat the login screen's
+ * own (0,2,1) `background: radial-gradient(...)` further down, so the sign-in
+ * page rendered on flat canvas grey — with its white wordmark invisible on
+ * it. Zeroed, the login rule wins as it was meant to. */
+body.ss-admin:where(.login),
+body.ss-admin:where(:not(.dashboard):not(.change-form):not(.change-list)) {
   background: var(--ss-canvas);
 }
 
@@ -1949,10 +2075,22 @@ body.ss-admin.login {
   background: radial-gradient(1100px 520px at 15% -10%, #1c2745, var(--ss-navy));
 }
 
+/* Django's login.css makes `#container` itself the card: a grey
+ * `--body-bg` slab with a 4px radius and `overflow: hidden`, 100px down the
+ * page. This theme puts the card on `#content` instead, so that slab became a
+ * second box behind it — grey on the navy backdrop, with the white wordmark
+ * sitting on it and the white card's top corners clipped by its radius. It is
+ * dismantled here; the page's own card is the only surface left. */
 body.ss-admin.login #container {
   width: 100%;
   max-width: 430px;
   min-height: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  box-shadow: none;
 }
 
 body.ss-admin.login #header {
@@ -1971,8 +2109,13 @@ body.ss-admin.login #branding {
   background: transparent;
 }
 
+/* A sign-in card does not own a viewport-height page. `.ss-admin #main` is
+ * `min-height: 100vh` so that a short list still paints a full column; on the
+ * login screen that left a 900px empty box hanging under a 410px card, and
+ * with it the frame the card appears to sit in. */
 body.ss-admin.login #main {
   padding: 0;
+  min-height: 0;
 }
 
 body.ss-admin.login #main > #content-start {
@@ -2157,9 +2300,10 @@ body.ss-admin.login .ss-login-foot {
     margin-left: 0;
   }
 
-  .ss-admin #main {
-    padding-top: 64px;
-  }
+  /* No hard-coded height here: the header is still 68px at this width, and
+   * guessing 64 put the page's first 4px under it. `admin.js` measures the
+   * real header and writes it back into `--ss-topbar`, so this rule and the
+   * rail's `top` follow the header at every width. */
 
   .ss-admin .ss-breadcrumbs {
     display: none;
@@ -2180,6 +2324,17 @@ body.ss-admin.login .ss-login-foot {
 }
 
 @media (max-width: 760px) {
+  /* The header wraps to two rows here, so it is taller than the 68px the
+   * desktop shell reserves — and `--ss-topbar` is what `#main` pads and what
+   * the rail hangs from. With a fixed reserve the page title sat 27px under
+   * the bar. The value below is the height this layout takes at 390px and is
+   * only the fallback: `admin.js` measures the header and overwrites the
+   * variable with the real number, so a longer wordmark or a translated
+   * placeholder that wraps to a third row still lines up. */
+  :root {
+    --ss-topbar: 108px;
+  }
+
   .ss-admin #header {
     height: auto;
     min-height: 60px;
@@ -2227,19 +2382,43 @@ body.ss-admin.login .ss-login-foot {
     grid-template-columns: 1fr;
   }
 
+  /* Django's responsive.css turns `.flex-container` into a COLUMN below 768px.
+   * A `flex-basis` there is a height, not a width: `flex-basis: 100%` made
+   * every text input grow to 320px tall and pushed the next field off screen.
+   * The controls are sized by width instead, and told not to grow or shrink
+   * on the column axis.
+   *
+   * The control list repeats the desktop rule's `input[type="…"]` selectors on
+   * purpose: a bare `> input` here has lower specificity than the desktop
+   * `> input[type="text"]`, so it loses no matter that it comes later. */
   .ss-admin .aligned .form-row .flex-container > label {
-    flex-basis: 100%;
+    flex: 0 0 auto;
     max-width: none;
     padding-top: 0;
   }
 
-  .ss-admin .aligned .form-row .flex-container > input,
+  .ss-admin .aligned .form-row .flex-container > input[type="text"],
+  .ss-admin .aligned .form-row .flex-container > input[type="url"],
+  .ss-admin .aligned .form-row .flex-container > input[type="email"],
+  .ss-admin .aligned .form-row .flex-container > input[type="number"],
+  .ss-admin .aligned .form-row .flex-container > input[type="password"],
+  .ss-admin .aligned .form-row .flex-container > input[type="date"],
+  .ss-admin .aligned .form-row .flex-container > input[type="time"],
   .ss-admin .aligned .form-row .flex-container > select,
   .ss-admin .aligned .form-row .flex-container > textarea,
+  .ss-admin .aligned .form-row .flex-container > .vTextField,
+  .ss-admin .aligned .form-row .flex-container > .vURLField,
+  .ss-admin .aligned .form-row .flex-container > .vLargeTextField,
   .ss-admin .aligned .form-row .flex-container > .readonly {
-    flex-basis: 100%;
+    flex: 0 0 auto;
     max-width: none;
     width: 100%;
+  }
+
+  /* A textarea keeps a sensible height of its own rather than the 92px
+   * desktop minimum being overridden by the column above. */
+  .ss-admin .aligned .form-row .flex-container > textarea {
+    min-height: 92px;
   }
 
   .ss-admin .aligned .form-row .help,
@@ -2249,14 +2428,41 @@ body.ss-admin.login .ss-login-foot {
   }
 
   .ss-admin .ss-filters {
-    gap: 16px;
+    gap: 14px;
     padding: 12px 14px;
+  }
+
+  /* A phone has no room for a label column beside the chips, so each filter
+   * becomes its own label-then-chips block again. */
+  .ss-admin .ss-filter-group {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
   }
 
   .ss-admin .ss-search,
   .ss-admin #changelist-form .actions,
   .ss-admin .paginator {
     padding: 12px 14px;
+  }
+
+  /* Django's responsive.css stacks the save buttons into a COLUMN below
+   * 768px. On a phone the bottom bar is sticky, so three stacked buttons made
+   * it 198px tall — 27% of the screen, covering the field the user is
+   * editing. A wrapping row keeps every command reachable at a third of that
+   * height, with Delete still pushed to the right edge by its own rule. */
+  .ss-admin .submit-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .ss-admin .submit-row input,
+  .ss-admin .submit-row input.default,
+  .ss-admin .submit-row a {
+    flex: 0 0 auto;
+    padding: 9px 12px;
+    font-size: 12.5px;
   }
 }
 
@@ -2548,6 +2754,20 @@ body.ss-admin.logged-out #header {
 
 body.ss-admin.logged-out #branding {
   background: transparent;
+}
+
+/* Below 1024px the console's header becomes a light bar and its wordmark turns
+ * ink. Signed out there is no bar at all — the brand sits straight on the navy
+ * backdrop — so it keeps the white of the dark bar rather than inheriting the
+ * small-screen swap, and the "admin" tag keeps its rail grey. */
+body.ss-admin.login #site-name a,
+body.ss-admin.logged-out #site-name a {
+  color: #fff;
+}
+
+body.ss-admin.login .ss-admin-tag,
+body.ss-admin.logged-out .ss-admin-tag {
+  color: var(--ss-rail-text);
 }
 
 .ss-admin .ss-login-card {
