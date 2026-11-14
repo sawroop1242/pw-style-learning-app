@@ -155,6 +155,34 @@ numbers the rest of the shell offsets by, so a padding or border added on top of
 them shifts every page's left edge. This is the case that catches a shell
 rewrite dropping a wrapper the CSS still paints; it fails with the id named.
 
+`DjangoDefaultOverrideTests` (in the same file) is the other half: it asserts
+that the theme *cancels* the Django rules it sits on top of, because almost
+every layout defect in this console has been a Django declaration nobody
+undid — `.dashboard #content { width: 600px }`, the `.colMS` right margin,
+`.module`'s white surface inside the navy rail, `#container`'s grey login slab,
+`#changelist { align-items: flex-start }`, and a `flex-flow: column` that turns
+`flex-basis: 100%` into a 320px-tall text input. Each case names the rule and
+the declaration that has to be present; deleting one fails with its name.
+
+None of that can see the rendered page, though. `tools/checks/admin-render.js`
+does: it drives Chromium against a running server at 1440, 1024 and 390px,
+signs in, and asks the browser for the computed result — horizontal overflow,
+WCAG AA contrast measured against the background each text node actually lands
+on, whether the fixed header's measured height equals the space the page
+reserves for it, whether the page's `<h1>` sits under that header, how wide the
+dashboard's work column really is, whether the two dashboard columns overlap,
+and whether the rail kept its navy surface. This is the only check that failed
+on the six defects above while every other check passed, which is the argument
+for keeping it. It needs a server, an account and a Chromium binary, so it runs
+as its own `render` job in `backend-checks.yml` rather than in `node markup.js`:
+
+```sh
+# backend/, with a seeded database
+python manage.py runserver 0.0.0.0:8010
+# tools/checks/
+ADMIN_BASE=http://127.0.0.1:8010 node admin-render.js
+```
+
 The outline has two suites of its own: `courses/tests/test_admin_outline.py`
 (33 tests — who may open it, what it renders, and every way a payload can be
 wrong) and `tools/checks/outline.js` (40 checks), which loads the real

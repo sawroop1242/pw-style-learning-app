@@ -12,6 +12,28 @@
 /** Attempt timestamps are relative to the run, so a stub never looks expired. */
 const iso = (offsetMs = 0) => new Date(Date.now() + offsetMs).toISOString();
 
+/* The timetable fixture is anchored to noon *today*, not to "now".
+ *
+ * It used to be built as offsets from the current instant, which meant the
+ * four demo classes only fell on the days the checks expect during part of the
+ * day: run before 04:00 and the "-4h" class belonged to yesterday, so a check
+ * that counts four rows saw three; run before 04:00 again and the "quiet day"
+ * class (+20h) was still today, so "No classes today" was false. The suite
+ * passed or failed by the hour it ran at.
+ *
+ * Noon gives every entry a fixed wall-clock time on a fixed day, and the
+ * statuses stay honest against it: ended at 09:00 and 11:00, upcoming at
+ * 14:00, and the following class tomorrow morning. */
+const ANCHOR = (() => {
+  const noon = new Date();
+  noon.setHours(12, 0, 0, 0);
+  return noon.getTime();
+})();
+// `classEntry` takes offsets from *now* and hands them to `iso()`, so the
+// anchor is converted back into an offset here — the entries still describe a
+// fixed wall-clock time, they are just expressed the way the fixture expects.
+const fromNoon = (hours) => ANCHOR + hours * 3600000 - Date.now();
+
 const COURSES = [
   {
     id: 1,
@@ -251,10 +273,10 @@ const classEntry = (id, title, section, offsets, status, over = {}) => ({
 });
 
 const SCHEDULE_CLASSES = [
-  classEntry(11, 'Kinematics in one dimension', 'Mechanics', [-52 * 60000, -12 * 60000], 'ended'),
-  classEntry(12, 'Units, dimensions and errors', 'Mechanics', [-4 * 3600000, -3 * 3600000], 'ended'),
-  classEntry(15, 'Mole concept', 'Chemistry', [2 * 3600000, 3 * 3600000], 'upcoming', { recording: false }),
-  classEntry(21, 'Cell — the unit of life', 'Cell Biology', [20 * 3600000, 21 * 3600000], 'upcoming', {
+  classEntry(11, 'Kinematics in one dimension', 'Mechanics', [fromNoon(-3) - 52 * 60000, fromNoon(-3) - 12 * 60000], 'ended'),
+  classEntry(12, 'Units, dimensions and errors', 'Mechanics', [fromNoon(-1), fromNoon(-1) + 3600000], 'ended'),
+  classEntry(15, 'Mole concept', 'Chemistry', [fromNoon(2), fromNoon(2) + 3600000], 'upcoming', { recording: false }),
+  classEntry(21, 'Cell — the unit of life', 'Cell Biology', [fromNoon(22), fromNoon(22) + 3600000], 'upcoming', {
     recording: false,
     course: { id: 2, title: 'NEET Biology Foundation', slug: 'neet-biology-foundation' }
   })
@@ -275,7 +297,7 @@ function schedulePayload({ course = null, quiet = false, empty = false } = {}) {
       group = {
         date: day,
         label: date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }),
-        is_today: new Date(entry.starts_at).toDateString() === new Date().toDateString(),
+        is_today: new Date(entry.starts_at).toDateString() === new Date(ANCHOR).toDateString(),
         classes: []
       };
       groups.push(group);

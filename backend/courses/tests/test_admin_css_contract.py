@@ -195,3 +195,93 @@ class AdminStylesheetContractTests(TestCase):
 
         for token in ("--ss-rail: 248px", "--ss-topbar: 68px"):
             self.assertIn(token, css)
+
+
+class DjangoDefaultOverrideTests(TestCase):
+    """The theme has to *undo* Django's own layout, not merely add to it.
+
+    Almost every defect this round had the same shape: `staff/admin.css` was
+    correct, and Django's `base.css` / `login.css` / `responsive.css` sat
+    underneath it with a rule the theme never cancelled — a `600px` width, a
+    float, a white `.module` background, a column flex direction, a selector
+    specific enough to win. The stylesheet parses, the markup is right, and
+    the page is wrong.
+
+    These cases read the theme against the Django it ships with, so removing
+    one of the cancelling declarations fails here rather than in a screenshot.
+    The rendered proof is `tools/checks/admin-render.js`; this is the cheap
+    half that runs in the normal suite.
+    """
+
+    def setUp(self):
+        self.css = SHEET.read_text()
+
+    def rule(self, selector: str) -> str:
+        """The declarations of the first rule whose selector list is exactly this."""
+        pattern = re.escape(selector) + r"\s*\{([^}]*)\}"
+        match = re.search(pattern, self.css)
+        self.assertIsNotNone(match, f"no rule for {selector!r}")
+        return match.group(1)
+
+    def assertDeclares(self, selector: str, declaration: str):
+        body = re.sub(r"\s+", " ", self.rule(selector))
+        self.assertIn(declaration, body, f"{selector!r} does not declare {declaration!r}")
+
+    def test_the_dashboard_is_not_left_six_hundred_pixels_wide(self):
+        """`base.css` pins `.dashboard #content { width: 600px }`.
+
+        A grid laid over that keeps the 600px box: the work column collapses to
+        the width of the stat tiles and the activity column floats outside the
+        page. `width: auto` is what releases it, and `.colMS`'s 300px right
+        margin has to go with it (the template sets `coltype` to `colMS`).
+        """
+        self.assertDeclares(".ss-admin.dashboard #content", "width: auto")
+        self.assertDeclares(".ss-admin.dashboard #content.colMS", "margin-right: auto")
+        self.assertDeclares(".ss-admin.dashboard #content-main", "float: none")
+        self.assertDeclares(".ss-admin.dashboard #content-related", "float: none")
+        self.assertDeclares(".ss-admin.dashboard #content-related", "margin-right: 0")
+
+    def test_the_rail_does_not_get_the_card_surface(self):
+        """`.module` is the card surface; the rail's groups are `div.module`."""
+        # Selector lists are written across lines in the sheet; collapse them.
+        rule = re.search(r"\.ss-admin #nav-sidebar \.module,(.*?)\{(.*?)\}", self.css, re.S)
+        self.assertIsNotNone(rule, "the rail's surface reset is missing")
+        self.assertIn(".ss-nav-group", rule.group(1))
+        self.assertIn("background: transparent", rule.group(2))
+
+    def test_the_login_screen_owns_its_backdrop(self):
+        """A `:not()` chain out-specified the login rule and killed the navy.
+
+        The guard rule is written with `:where()` so it contributes no
+        specificity; without that, `body.ss-admin.login`'s radial gradient never
+        applied and the white wordmark sat on flat canvas grey.
+        """
+        self.assertIn("body.ss-admin:where(.login)", self.css)
+        self.assertDeclares("body.ss-admin.login", "radial-gradient")
+        # Django's login.css makes `#container` a grey slab with `overflow: hidden`.
+        self.assertDeclares("body.ss-admin.login #container", "background: transparent")
+        self.assertDeclares("body.ss-admin.login #container", "overflow: visible")
+        # Signed out, the wordmark sits on navy and has to stay white.
+        self.assertIn("body.ss-admin.login #site-name a", self.css)
+        self.assertIn("body.ss-admin.logged-out #site-name a", self.css)
+
+    def test_the_list_card_is_not_sized_by_its_table(self):
+        """`changelists.css` sets `align-items: flex-start` on the flex row.
+
+        Stacked into a column, that means "shrink to max-content" — the card
+        grew to the table's full width and the page scrolled sideways.
+        """
+        self.assertDeclares(".ss-admin #changelist", "align-items: stretch")
+
+    def test_no_rule_depends_on_a_specificity_accident(self):
+        """A bare `> input` cannot beat the desktop `> input[type="text"]`.
+
+        The mobile stacked-form rule has to repeat the type selectors or it
+        loses to the desktop rule it is meant to override — and `flex-basis`
+        in a column is a *height*, which made every text input 320px tall.
+        """
+        pattern = re.compile(
+            r"\.ss-admin \.aligned \.form-row \.flex-container > input\[type=\"text\"\][\s\S]{0,900}?"
+            r"flex: 0 0 auto;"
+        )
+        self.assertRegex(self.css, pattern)
