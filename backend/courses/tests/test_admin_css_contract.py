@@ -85,15 +85,19 @@ class AdminStylesheetContractTests(TestCase):
     """Every screen the console shell draws, checked against its stylesheet."""
 
     #: A page from each shape the sheet styles: the dashboard, a list with
-    #: filters, the add/edit/delete/history screens, and a plain form.
+    #: filters, the add/edit/delete/history screens, and a plain form. The
+    #: object screens are filled in from the created course rather than a
+    #: literal id: PostgreSQL sequences are not rolled back with the test
+    #: transaction, so on the database production uses the first course in a
+    #: run is not necessarily the first one in this class.
     CONSOLE_PAGES = {
         "dashboard": "/admin/",
         "changelist": "/admin/courses/course/",
         "filtered list": "/admin/courses/course/?is_published__exact=1",
         "add form": "/admin/courses/course/add/",
-        "change form": "/admin/courses/course/1/change/",
-        "history": "/admin/courses/course/1/history/",
-        "delete": "/admin/courses/course/1/delete/",
+        "change form": "/admin/courses/course/{pk}/change/",
+        "history": "/admin/courses/course/{pk}/history/",
+        "delete": "/admin/courses/course/{pk}/delete/",
         "password change": "/admin/password_change/",
     }
 
@@ -114,13 +118,16 @@ class AdminStylesheetContractTests(TestCase):
     def setUp(self):
         self.client.force_login(self.admin)
 
+    def pages(self) -> dict[str, str]:
+        return {label: url.format(pk=self.course.pk) for label, url in self.CONSOLE_PAGES.items()}
+
     def console(self, url: str) -> str:
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200, url)
         return response.content.decode()
 
     def test_every_screen_loads_the_stylesheet_in_the_head(self):
-        for label, url in self.CONSOLE_PAGES.items():
+        for label, url in self.pages().items():
             with self.subTest(page=label):
                 body = self.console(url)
                 self.assertRegex(body, SHEET_LINK)
@@ -159,7 +166,7 @@ class AdminStylesheetContractTests(TestCase):
         """
         styled = selector_ids(SHEET.read_text())
         rendered: set[str] = set()
-        for url in self.CONSOLE_PAGES.values():
+        for url in self.pages().values():
             rendered.update(element_ids(self.console(url)))
 
         missing = styled - rendered - set(REMOVED_ON_PURPOSE)
