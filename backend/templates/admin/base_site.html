@@ -40,11 +40,20 @@
 {% endcomment %}
 {% block header %}
   <div id="header">
-    {% block branding %}
-      <div id="site-name">
-        <a href="{% url 'admin:index' %}">StudySpace<span class="ss-admin-tag">admin</span></a>
-      </div>
-    {% endblock %}
+    {% comment %}
+      Django's own header wraps `branding` in `#branding`, and the stylesheet
+      sizes that wrapper to the rail and paints the navy block behind the
+      name. This block replaces Django's header, so the wrapper has to be
+      drawn here too: without it the name is white text on the white top bar,
+      and the rail below starts under a white notch.
+    {% endcomment %}
+    <div id="branding">
+      {% block branding %}
+        <div id="site-name">
+          <a href="{% url 'admin:index' %}">StudySpace<span class="ss-admin-tag">admin</span></a>
+        </div>
+      {% endblock %}
+    </div>
 
     {% if has_permission %}
       <div class="ss-topbar-main">

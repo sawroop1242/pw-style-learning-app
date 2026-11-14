@@ -145,6 +145,16 @@ shell, and asserts the shape above — a template that loses a block or a tag th
 stops existing fails there. `objectstore/tests/` covers the storage screens;
 `courses/tests/test_admin.py` covers the scoping.
 
+`courses/tests/test_admin_css_contract.py` reads the stylesheet and the rendered
+screens against each other: every id `staff/admin.css` paints must exist on at
+least one console screen (an explained short list covers the ids the shell
+deliberately removes), the header's `#branding` wrapper must sit directly inside
+`#header` with the brand inside it, and `#header` / `#branding` / `#nav-sidebar`
+must stay `border-box` — those three are sized to the same rail and top-bar
+numbers the rest of the shell offsets by, so a padding or border added on top of
+them shifts every page's left edge. This is the case that catches a shell
+rewrite dropping a wrapper the CSS still paints; it fails with the id named.
+
 The outline has two suites of its own: `courses/tests/test_admin_outline.py`
 (33 tests — who may open it, what it renders, and every way a payload can be
 wrong) and `tools/checks/outline.js` (40 checks), which loads the real

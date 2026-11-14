@@ -178,6 +178,19 @@ body.ss-admin {
 
 /* ------------------------------------------------------------------ layout */
 
+/* Three boxes are measured by their *outer* edge, because the number each one
+ * is given is the same number the rest of the shell offsets by: `--ss-rail` is
+ * the space `#content-start` reserves, and `--ss-topbar` is what `#main` pads
+ * and what the rail hangs from. With the default content-box those paddings
+ * and the header's border are added on top, so the rail paints 272px wide
+ * over a 248px gutter (24px of every page's left padding disappears under
+ * it) and the header covers the first pixel of the page. */
+.ss-admin #header,
+.ss-admin #branding,
+.ss-admin #nav-sidebar {
+  box-sizing: border-box;
+}
+
 .ss-admin #container {
   min-height: 100vh;
 }
